@@ -25,6 +25,18 @@ def compute_sma(df, period):
     return df["close"].rolling(window=period).mean()
 
 
+def compute_ema(df, period):
+    """Return exponential moving average Series for the close column."""
+    return df["close"].ewm(span=period, adjust=False).mean()
+
+
+def compute_indicator(df, period, indicator_type="sma"):
+    """Return SMA or EMA Series based on indicator_type."""
+    if indicator_type == "ema":
+        return compute_ema(df, period)
+    return compute_sma(df, period)
+
+
 def _apply_exposure(above_sma, exposure):
     """Convert boolean above/below SMA signal to position based on exposure mode.
     long-cash:  above=1, below=0
@@ -39,25 +51,101 @@ def _apply_exposure(above_sma, exposure):
         return above_sma.astype(int).replace(0, -1)
 
 
-def run_single_sma_strategy(df, sma_period, initial_cash, fee=0.001, exposure="long-cash"):
-    """Trade based on price vs SMA. Signal shifted by 1 day."""
+def _compute_equity_with_liquidation(strategy_returns, initial_cash):
+    """Compute equity series with liquidation: if equity hits 0, stay at 0."""
+    equity = np.empty(len(strategy_returns))
+    val = initial_cash
+    liquidated = False
+    for i, r in enumerate(strategy_returns):
+        if liquidated:
+            equity[i] = 0.0
+        else:
+            val = val * (1 + r)
+            if val <= 0:
+                val = 0.0
+                liquidated = True
+            equity[i] = val
+    return equity, liquidated
+
+
+def _compute_equity_set_and_forget(positions, daily_returns, initial_cash, long_leverage, short_leverage, fee):
+    """Compute equity with set-and-forget leverage.
+
+    Leverage is applied at position entry and drifts naturally until the position closes.
+    Long: equity = entry_equity * (lev * cum_return - (lev - 1))
+    Short: equity = entry_equity * (1 + lev * (1 - cum_return))
+    """
+    n = len(positions)
+    equity = np.empty(n)
+    current_equity = initial_cash
+    current_pos = 0
+    cum_return = 1.0
+    entry_equity = current_equity
+    liquidated = False
+
+    for i in range(n):
+        if liquidated:
+            equity[i] = 0.0
+            continue
+
+        pos = positions[i]
+        dr = daily_returns[i]
+
+        if pos != current_pos:
+            # Position changed — apply fee, start new position
+            current_equity *= (1 - fee)
+            current_pos = pos
+            entry_equity = current_equity
+            cum_return = 1.0
+
+        if current_pos != 0:
+            cum_return *= (1 + dr)
+            if current_pos > 0:
+                lev = long_leverage
+                current_equity = entry_equity * (lev * cum_return - (lev - 1))
+            else:
+                lev = short_leverage
+                current_equity = entry_equity * (1 + lev * (1 - cum_return))
+
+        if current_equity <= 0:
+            current_equity = 0.0
+            liquidated = True
+
+        equity[i] = current_equity
+
+    return equity, liquidated
+
+
+def run_single_sma_strategy(df, sma_period, initial_cash, fee=0.001, exposure="long-cash",
+                            long_leverage=1, short_leverage=1, lev_mode="rebalance",
+                            indicator_type="sma"):
+    """Trade based on price vs SMA/EMA. Signal shifted by 1 day."""
     df = df.copy()
-    df["sma"] = compute_sma(df, sma_period)
+    df["sma"] = compute_indicator(df, sma_period, indicator_type)
 
     above_sma = df["close"] > df["sma"]
     df["position"] = _apply_exposure(above_sma, exposure).shift(1).fillna(0)
 
     daily_return = df["close"].pct_change().fillna(0)
-    df["strategy_return"] = df["position"] * daily_return
 
-    # Apply trading fee on each position change
-    trade_mask = df["position"].diff().fillna(0).abs() > 0
-    df.loc[trade_mask, "strategy_return"] -= fee
+    if lev_mode == "set-forget":
+        equity_arr, liquidated = _compute_equity_set_and_forget(
+            df["position"].values, daily_return.values, initial_cash,
+            long_leverage, short_leverage, fee)
+        df["equity"] = equity_arr
+    else:
+        leverage = np.where(df["position"] > 0, long_leverage,
+                   np.where(df["position"] < 0, short_leverage, 1))
+        df["strategy_return"] = df["position"] * daily_return * leverage
+        trade_mask = df["position"].diff().fillna(0).abs() > 0
+        df.loc[trade_mask, "strategy_return"] -= fee
+        equity_arr, liquidated = _compute_equity_with_liquidation(df["strategy_return"].values, initial_cash)
+        df["equity"] = equity_arr
 
-    df["equity"] = initial_cash * (1 + df["strategy_return"]).cumprod()
     df["buyhold"] = initial_cash * (1 + daily_return).cumprod()
 
     # Trade count: position changes
+    trade_mask = df["position"].diff().fillna(0).abs() > 0
     trades = trade_mask.sum()
 
     # Metrics
@@ -65,8 +153,10 @@ def run_single_sma_strategy(df, sma_period, initial_cash, fee=0.001, exposure="l
     buyhold_return = (df["buyhold"].iloc[-1] / initial_cash - 1) * 100
     max_drawdown = _max_drawdown(df["equity"])
 
-    mean_daily = df["strategy_return"].mean()
-    std_daily = df["strategy_return"].std()
+    # Sharpe from equity returns
+    equity_returns = pd.Series(df["equity"].values).pct_change().fillna(0)
+    mean_daily = equity_returns.mean()
+    std_daily = equity_returns.std()
     sharpe = (mean_daily / std_daily * np.sqrt(365)) if std_daily > 0 else 0.0
 
     # Buy/sell markers: position increases = buy, decreases = sell
@@ -86,37 +176,49 @@ def run_single_sma_strategy(df, sma_period, initial_cash, fee=0.001, exposure="l
         "sma_series": df["sma"],
         "buy_signals": buy_signals,
         "sell_signals": sell_signals,
-        "label": f"SMA({sma_period})",
+        "label": f"{indicator_type.upper()}({sma_period})",
     }
 
 
-def run_dual_sma_strategy(df, fast_period, slow_period, initial_cash, fee=0.001, exposure="long-cash"):
-    """Trade based on fast SMA vs slow SMA. Signal shifted by 1 day."""
+def run_dual_sma_strategy(df, fast_period, slow_period, initial_cash, fee=0.001, exposure="long-cash",
+                          long_leverage=1, short_leverage=1, lev_mode="rebalance",
+                          indicator_type="sma"):
+    """Trade based on fast vs slow SMA/EMA crossover. Signal shifted by 1 day."""
     df = df.copy()
-    df["fast_sma"] = compute_sma(df, fast_period)
-    df["slow_sma"] = compute_sma(df, slow_period)
+    df["fast_sma"] = compute_indicator(df, fast_period, indicator_type)
+    df["slow_sma"] = compute_indicator(df, slow_period, indicator_type)
 
     above_sma = df["fast_sma"] > df["slow_sma"]
     df["position"] = _apply_exposure(above_sma, exposure).shift(1).fillna(0)
 
     daily_return = df["close"].pct_change().fillna(0)
-    df["strategy_return"] = df["position"] * daily_return
 
-    # Apply trading fee on each position change
-    trade_mask = df["position"].diff().fillna(0).abs() > 0
-    df.loc[trade_mask, "strategy_return"] -= fee
+    if lev_mode == "set-forget":
+        equity_arr, liquidated = _compute_equity_set_and_forget(
+            df["position"].values, daily_return.values, initial_cash,
+            long_leverage, short_leverage, fee)
+        df["equity"] = equity_arr
+    else:
+        leverage = np.where(df["position"] > 0, long_leverage,
+                   np.where(df["position"] < 0, short_leverage, 1))
+        df["strategy_return"] = df["position"] * daily_return * leverage
+        trade_mask = df["position"].diff().fillna(0).abs() > 0
+        df.loc[trade_mask, "strategy_return"] -= fee
+        equity_arr, liquidated = _compute_equity_with_liquidation(df["strategy_return"].values, initial_cash)
+        df["equity"] = equity_arr
 
-    df["equity"] = initial_cash * (1 + df["strategy_return"]).cumprod()
     df["buyhold"] = initial_cash * (1 + daily_return).cumprod()
 
+    trade_mask = df["position"].diff().fillna(0).abs() > 0
     trades = trade_mask.sum()
 
     total_return = (df["equity"].iloc[-1] / initial_cash - 1) * 100
     buyhold_return = (df["buyhold"].iloc[-1] / initial_cash - 1) * 100
     max_drawdown = _max_drawdown(df["equity"])
 
-    mean_daily = df["strategy_return"].mean()
-    std_daily = df["strategy_return"].std()
+    equity_returns = pd.Series(df["equity"].values).pct_change().fillna(0)
+    mean_daily = equity_returns.mean()
+    std_daily = equity_returns.std()
     sharpe = (mean_daily / std_daily * np.sqrt(365)) if std_daily > 0 else 0.0
 
     pos_diff = df["position"].diff().fillna(0)
@@ -137,30 +239,30 @@ def run_dual_sma_strategy(df, fast_period, slow_period, initial_cash, fee=0.001,
         "fast_sma_series": df["fast_sma"],
         "buy_signals": buy_signals,
         "sell_signals": sell_signals,
-        "label": f"SMA({fast_period}/{slow_period})",
+        "label": f"{indicator_type.upper()}({fast_period}/{slow_period})",
     }
 
 
 def _max_drawdown(equity_series):
     """Compute max drawdown as a percentage."""
     cummax = equity_series.cummax()
-    drawdown = (equity_series - cummax) / cummax
-    return drawdown.min() * 100
+    drawdown = (equity_series - cummax) / cummax.replace(0, np.nan)
+    return drawdown.min() * 100 if not drawdown.isna().all() else -100.0
 
 
-def sweep_sma_periods(df, sma_min, sma_max, initial_cash, mode, fast_sma, fee=0.001, exposure="long-cash"):
-    """Run strategy across a range of SMA periods, return results sorted by total return."""
+def sweep_sma_periods(df, sma_min, sma_max, initial_cash, mode, fast_sma, fee=0.001, exposure="long-cash",
+                      long_leverage=1, short_leverage=1, lev_mode="rebalance", indicator_type="sma"):
+    """Run strategy across a range of periods, return results sorted by total return."""
     results = []
     periods = range(sma_min, sma_max + 1)
 
     for period in periods:
         if mode == "single":
-            result = run_single_sma_strategy(df, period, initial_cash, fee, exposure)
+            result = run_single_sma_strategy(df, period, initial_cash, fee, exposure, long_leverage, short_leverage, lev_mode, indicator_type)
         else:
-            # In dual mode, the sweep varies the slow SMA while fast stays fixed
             if period <= fast_sma:
                 continue
-            result = run_dual_sma_strategy(df, fast_sma, period, initial_cash, fee, exposure)
+            result = run_dual_sma_strategy(df, fast_sma, period, initial_cash, fee, exposure, long_leverage, short_leverage, lev_mode, indicator_type)
         results.append(result)
 
     results.sort(key=lambda r: r["total_return"], reverse=True)
@@ -216,8 +318,9 @@ def _annualized_return(total_return_pct, n_days):
     return (growth ** (365 / n_days) - 1) * 100
 
 
-def generate_sweep_chart(df, sma_min, sma_max, initial_cash, output_path, fee=0.001, exposure="long-cash"):
-    """Sweep every SMA period from sma_min to sma_max and plot annualized return vs period."""
+def generate_sweep_chart(df, sma_min, sma_max, initial_cash, output_path, fee=0.001, exposure="long-cash",
+                         long_leverage=1, short_leverage=1, lev_mode="rebalance", indicator_type="sma"):
+    """Sweep every period from sma_min to sma_max and plot annualized return vs period."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -226,10 +329,11 @@ def generate_sweep_chart(df, sma_min, sma_max, initial_cash, output_path, fee=0.
     periods = list(range(sma_min, sma_max + 1))
     annualized_returns = []
 
-    print(f"Sweeping SMA periods {sma_min} to {sma_max} ({len(periods)} strategies, exposure: {exposure})...")
+    ind = indicator_type.upper()
+    print(f"Sweeping {ind} periods {sma_min} to {sma_max} ({len(periods)} strategies, exposure: {exposure})...")
     print(f"Trading fee: {fee * 100:.2f}% per transaction")
     for period in periods:
-        result = run_single_sma_strategy(df, period, initial_cash, fee, exposure)
+        result = run_single_sma_strategy(df, period, initial_cash, fee, exposure, long_leverage, short_leverage, lev_mode, indicator_type)
         ann = _annualized_return(result["total_return"], n_days)
         annualized_returns.append(ann)
 
@@ -249,25 +353,26 @@ def generate_sweep_chart(df, sma_min, sma_max, initial_cash, output_path, fee=0.
     ax.axhline(y=bh_annualized, color="gray", linestyle="--", linewidth=1,
                label=f"Buy & Hold ({bh_annualized:.1f}%)")
     ax.scatter([best_period], [best_ann], color="red", s=60, zorder=5,
-               label=f"Best: SMA({best_period}) ({best_ann:.1f}%)")
+               label=f"Best: {ind}({best_period}) ({best_ann:.1f}%)")
 
-    ax.set_xlabel("SMA Period (days)")
+    ax.set_xlabel(f"{ind} Period (days)")
     ax.set_ylabel("Annualized Return (%)")
-    ax.set_title(f"Annualized Return by SMA Period ({sma_min}–{sma_max})")
+    ax.set_title(f"Annualized Return by {ind} Period ({sma_min}–{sma_max})")
     ax.legend(loc="best", fontsize=9)
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
     plt.savefig(output_path)
     plt.close()
-    print(f"Best: SMA({best_period}) with {best_ann:.2f}% annualized return")
+    print(f"Best: {ind}({best_period}) with {best_ann:.2f}% annualized return")
     print(f"Buy & Hold: {bh_annualized:.2f}% annualized")
     print(f"Chart saved to {output_path}")
 
 
 def generate_dual_sweep_heatmap(df, sma_min, sma_max, sma_step, initial_cash, output_path,
-                                fee=0.001, exposure="long-cash"):
-    """Sweep all fast/slow SMA permutations and generate a heatmap of annualized returns."""
+                                fee=0.001, exposure="long-cash",
+                                long_leverage=1, short_leverage=1, indicator_type="sma"):
+    """Sweep all fast/slow permutations and generate a heatmap of annualized returns."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -276,13 +381,14 @@ def generate_dual_sweep_heatmap(df, sma_min, sma_max, sma_step, initial_cash, ou
     periods = list(range(sma_min, sma_max + 1, sma_step))
     n = len(periods)
 
-    print(f"Sweeping dual SMA crossovers: {n}x{n} = {n*n} permutations "
-          f"(SMA {sma_min}-{sma_max}, step {sma_step})...")
+    ind = indicator_type.upper()
+    print(f"Sweeping dual {ind} crossovers: {n}x{n} = {n*n} permutations "
+          f"({ind} {sma_min}-{sma_max}, step {sma_step})...")
 
-    # Precompute all SMAs
+    # Precompute all indicators
     sma_cache = {}
     for p in periods:
-        sma_cache[p] = compute_sma(df, p)
+        sma_cache[p] = compute_indicator(df, p, indicator_type)
 
     daily_return = df["close"].pct_change().fillna(0)
 
@@ -297,11 +403,15 @@ def generate_dual_sweep_heatmap(df, sma_min, sma_max, sma_step, initial_cash, ou
                 continue
             above_sma = sma_cache[fast] > sma_cache[slow]
             position = _apply_exposure(above_sma, exposure).shift(1).fillna(0)
-            strat_return = position * daily_return
+            leverage = np.where(position > 0, long_leverage,
+                       np.where(position < 0, short_leverage, 1))
+            strat_return = position * daily_return * leverage
             trade_mask = position.diff().fillna(0).abs() > 0
             strat_return = strat_return.copy()
             strat_return[trade_mask] -= fee
-            equity_final = initial_cash * (1 + strat_return).prod()
+            # Use liquidation-aware equity computation
+            equity_arr, _ = _compute_equity_with_liquidation(strat_return.values, initial_cash)
+            equity_final = equity_arr[-1] if len(equity_arr) > 0 else initial_cash
             total_ret = (equity_final / initial_cash - 1) * 100
             ann = _annualized_return(total_ret, n_days)
             matrix[i, j] = ann
@@ -310,7 +420,7 @@ def generate_dual_sweep_heatmap(df, sma_min, sma_max, sma_step, initial_cash, ou
                 best_fast = fast
                 best_slow = slow
 
-    print(f"Best: SMA({best_fast}/{best_slow}) with {best_ann:.2f}% annualized return")
+    print(f"Best: {ind}({best_fast}/{best_slow}) with {best_ann:.2f}% annualized return")
 
     # Buy-and-hold reference
     bh_total = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
@@ -327,10 +437,10 @@ def generate_dual_sweep_heatmap(df, sma_min, sma_max, sma_step, initial_cash, ou
     ax.set_xticklabels(periods, rotation=90, fontsize=max(4, min(8, 200 // n)))
     ax.set_yticks(range(n))
     ax.set_yticklabels(periods, fontsize=max(4, min(8, 200 // n)))
-    ax.set_xlabel("Slow SMA Period")
-    ax.set_ylabel("Fast SMA Period")
-    ax.set_title(f"Dual SMA Crossover — Annualized Return % (step={sma_step})\n"
-                 f"Best: SMA({best_fast}/{best_slow}) = {best_ann:.1f}% | "
+    ax.set_xlabel(f"Slow {ind} Period")
+    ax.set_ylabel(f"Fast {ind} Period")
+    ax.set_title(f"Dual {ind} Crossover — Annualized Return % (step={sma_step})\n"
+                 f"Best: {ind}({best_fast}/{best_slow}) = {best_ann:.1f}% | "
                  f"B&H: {bh_ann:.1f}% | {exposure}")
 
     cbar = fig.colorbar(im, ax=ax, shrink=0.8)
@@ -376,19 +486,23 @@ def generate_chart(df, best_result, output_path):
         label=best_result["label"], color="blue", linewidth=0.8, alpha=0.8
     )
     if "fast_sma_series" in best_result:
+        # Extract indicator type from label (e.g. "EMA(20/100)" -> "EMA")
+        ind_label = best_result["label"].split("(")[0]
         ax1.plot(
             best_result["fast_sma_series"].index, best_result["fast_sma_series"],
-            label=f"SMA({best_result['fast_period']})", color="orange",
+            label=f"{ind_label}({best_result['fast_period']})", color="orange",
             linewidth=0.8, alpha=0.8
         )
 
     ax1.set_yscale("log")
     ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
+    ax1.yaxis.set_minor_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
     ax1.set_ylabel("BTC Price (log scale)")
-    ax1.set_title(f"Bitcoin SMA Backtest — Best: {best_result['label']} "
+    ax1.set_title(f"Bitcoin Backtest — Best: {best_result['label']} "
                   f"({best_result['total_return']:.1f}% return)")
     ax1.legend(loc="upper left", fontsize=8)
-    ax1.grid(True, alpha=0.3)
+    ax1.grid(True, which="major", alpha=0.3)
+    ax1.grid(True, which="minor", alpha=0.15)
 
     # Bottom panel: equity curve vs buy-and-hold
     ax2.plot(best_result["equity"].index, best_result["equity"],
@@ -396,11 +510,13 @@ def generate_chart(df, best_result, output_path):
     ax2.plot(best_result["buyhold"].index, best_result["buyhold"],
              label="Buy & Hold", color="gray", linewidth=1, alpha=0.7)
     ax2.set_yscale("log")
-    ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+    ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
+    ax2.yaxis.set_minor_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
     ax2.set_ylabel("Portfolio Value (log)")
     ax2.set_xlabel("Date")
     ax2.legend(loc="upper left", fontsize=8)
-    ax2.grid(True, alpha=0.3)
+    ax2.grid(True, which="major", alpha=0.3)
+    ax2.grid(True, which="minor", alpha=0.15)
 
     ax2.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
     ax2.xaxis.set_major_locator(mdates.YearLocator(2))
@@ -420,13 +536,22 @@ Examples:
   python backtest.py --mode sweep-chart           # annualized return vs SMA period chart
   python backtest.py --mode sweep-dual            # dual crossover heatmap (default: step=5)
   python backtest.py --mode sweep-dual --sma-step 10  # coarser grid for speed
+  python backtest.py --indicator ema              # use EMA instead of SMA
+  python backtest.py --indicator ema --sma 40     # single EMA(40) chart
+  python backtest.py --indicator ema --mode dual  # dual EMA crossover
   python backtest.py --exposure long-cash          # long above SMA, cash below (default)
   python backtest.py --exposure short-cash         # cash above SMA, short below
   python backtest.py --exposure long-short         # long above SMA, short below
   python backtest.py --fee 0.5                    # custom fee (default: 0.1%)
   python backtest.py --fee 0                      # no fees
+  python backtest.py --long-leverage 2             # 2x leverage on long positions (default: 1)
+  python backtest.py --short-leverage 3            # 3x leverage on short positions (default: 1)
+  python backtest.py --long-leverage 2 --short-leverage 2 --exposure long-short  # leveraged long-short
+  python backtest.py --lev-mode set-forget         # set leverage once, let it drift (default: rebalance)
   python backtest.py --sma-min 10 --sma-max 100   # custom SMA range (default: 2-365)
   python backtest.py --initial-cash 50000         # custom starting capital (default: 10000)
+  python backtest.py --asset ethereum             # use ethereum data (default: bitcoin)
+  python backtest.py --asset ethereum --sma 40   # ethereum with SMA 40
   python backtest.py --start-date 2017-01-01     # filter start date (default: all data)
   python backtest.py --end-date 2023-12-31       # filter end date (default: all data)
   python backtest.py --help                       # show all parameters
@@ -441,13 +566,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--examples", action="store_true", help="Show usage examples and exit")
-    parser.add_argument("--data", default="bitcoin.csv", help="CSV file path")
+    parser.add_argument("--asset", default="bitcoin",
+                        help="Asset name — looks for data/{asset}.csv (default: bitcoin)")
+    parser.add_argument("--data", default=None, help="CSV file path (overrides --asset)")
     parser.add_argument("--sma", type=int, default=None, help="Single SMA period (shorthand for --sma-min X --sma-max X)")
     parser.add_argument("--sma-min", type=int, default=2, help="Shortest SMA period (default: 2)")
     parser.add_argument("--sma-max", type=int, default=365, help="Longest SMA period (default: 365)")
     parser.add_argument("--initial-cash", type=float, default=10000, help="Starting capital")
+    parser.add_argument("--indicator", choices=["sma", "ema"], default="sma",
+                        help="Indicator type: sma or ema (default: sma)")
     parser.add_argument("--mode", choices=["single", "dual", "sweep-chart", "sweep-dual"], default="single",
-                        help="single SMA vs price, dual SMA crossover, sweep-chart, or sweep-dual heatmap")
+                        help="single vs price, dual crossover, sweep-chart, or sweep-dual heatmap")
     parser.add_argument("--sma-step", type=int, default=5,
                         help="Step for sweep-dual heatmap grid (default: 5)")
     parser.add_argument("--fast-sma", type=int, default=20, help="Fast SMA period (dual mode)")
@@ -458,6 +587,12 @@ def main():
                              "long-short: long above SMA, short below (default: long-cash)")
     parser.add_argument("--fee", type=float, default=0.1,
                         help="Trading fee per transaction in percent (default: 0.1)")
+    parser.add_argument("--long-leverage", type=float, default=1,
+                        help="Leverage multiplier for long positions (default: 1)")
+    parser.add_argument("--short-leverage", type=float, default=1,
+                        help="Leverage multiplier for short positions (default: 1)")
+    parser.add_argument("--lev-mode", choices=["rebalance", "set-forget"], default="rebalance",
+                        help="rebalance: daily adjust to maintain leverage | set-forget: enter once, let drift (default: rebalance)")
     parser.add_argument("--start-date", default="2015-01-01",
                         help="Start date YYYY-MM-DD (default: 2015-01-01)")
     parser.add_argument("--end-date", default=None,
@@ -479,17 +614,24 @@ def main():
     # Auto-generate chart filename if not specified
     if args.chart_file is None:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        asset = args.asset
+        ind = args.indicator
         exp = f"_{args.exposure}"
         if args.mode == "sweep-dual":
-            args.chart_file = os.path.join(RESULTS_DIR, f"{ts}_sweep-dual_sma{args.sma_min}-{args.sma_max}_step{args.sma_step}{exp}.png")
+            args.chart_file = os.path.join(RESULTS_DIR, f"{ts}_{asset}_sweep-dual_{ind}{args.sma_min}-{args.sma_max}_step{args.sma_step}{exp}.png")
         elif args.mode == "sweep-chart":
-            args.chart_file = os.path.join(RESULTS_DIR, f"{ts}_sweep-chart_sma{args.sma_min}-{args.sma_max}{exp}.png")
+            args.chart_file = os.path.join(RESULTS_DIR, f"{ts}_{asset}_sweep-chart_{ind}{args.sma_min}-{args.sma_max}{exp}.png")
         elif args.mode == "dual":
-            args.chart_file = os.path.join(RESULTS_DIR, f"{ts}_dual_fast{args.fast_sma}_sma{args.sma_min}-{args.sma_max}{exp}.png")
+            args.chart_file = os.path.join(RESULTS_DIR, f"{ts}_{asset}_dual_fast{args.fast_sma}_{ind}{args.sma_min}-{args.sma_max}{exp}.png")
         else:
-            args.chart_file = os.path.join(RESULTS_DIR, f"{ts}_single_sma{args.sma_min}-{args.sma_max}{exp}.png")
+            args.chart_file = os.path.join(RESULTS_DIR, f"{ts}_{asset}_single_{ind}{args.sma_min}-{args.sma_max}{exp}.png")
 
-    print(f"Loading data from {args.data}...")
+    # Resolve data file path
+    if args.data is None:
+        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+        args.data = os.path.join(data_dir, f"{args.asset}.csv")
+
+    print(f"Loading {args.asset} data from {args.data}...")
     df = load_data(args.data)
     if args.start_date:
         df = df[df.index >= pd.Timestamp(args.start_date, tz="UTC")]
@@ -499,22 +641,31 @@ def main():
 
     print(f"Trading fee: {args.fee:.2f}% per transaction | Exposure: {args.exposure}")
 
+    long_lev = args.long_leverage
+    short_lev = args.short_leverage
+    lev_mode = args.lev_mode
+
+    ind = args.indicator
+
     if args.mode == "sweep-dual":
         generate_dual_sweep_heatmap(df, args.sma_min, args.sma_max, args.sma_step,
-                                     args.initial_cash, args.chart_file, fee, args.exposure)
+                                     args.initial_cash, args.chart_file, fee, args.exposure,
+                                     long_lev, short_lev, ind)
         return
 
     if args.mode == "sweep-chart":
-        generate_sweep_chart(df, args.sma_min, args.sma_max, args.initial_cash, args.chart_file, fee, args.exposure)
+        generate_sweep_chart(df, args.sma_min, args.sma_max, args.initial_cash, args.chart_file, fee, args.exposure,
+                             long_lev, short_lev, lev_mode, ind)
         return
 
-    print(f"\nRunning {args.mode} SMA sweep (SMA {args.sma_min}-{args.sma_max})...")
+    print(f"\nRunning {args.mode} {ind.upper()} sweep ({ind.upper()} {args.sma_min}-{args.sma_max})...")
     if args.mode == "dual":
-        print(f"Fast SMA fixed at {args.fast_sma}")
+        print(f"Fast {ind.upper()} fixed at {args.fast_sma}")
 
     results = sweep_sma_periods(
         df, args.sma_min, args.sma_max,
-        args.initial_cash, args.mode, args.fast_sma, fee, args.exposure
+        args.initial_cash, args.mode, args.fast_sma, fee, args.exposure,
+        long_lev, short_lev, lev_mode, ind
     )
 
     print()
