@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Web interface for the SMA Backtesting Engine."""
+"""Web interface for the Backtesting Engine."""
 
 import os
 import base64
@@ -13,7 +13,7 @@ HTML = """\
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Bitcoin Strategy Analytics</title>
+    <title>Strategy Analytics</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -49,6 +49,7 @@ HTML = """\
         .stat-label { font-size: 0.75em; color: #9ca3af; margin-top: 2px; }
         .form-section { border: 1px solid #2a2d3a; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
         .section-title { font-size: 0.75em; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; font-weight: 600; }
+        .sep { width: 1px; background: #2a2d3a; align-self: stretch; margin: 0 4px; flex: 0 0 1px; }
         .hidden { display: none !important; }
         .spinner { display: none; }
         .loading .spinner { display: inline-block; animation: spin 1s linear infinite; }
@@ -62,7 +63,7 @@ HTML = """\
         <div class="panel">
             <form method="POST" id="form" onsubmit="document.getElementById('btn').disabled=true; document.getElementById('btn').textContent='Running...';">
                 <div class="form-section">
-                    <div class="section-title">Asset & Indicator</div>
+                    <div class="section-title">Asset & Strategy</div>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Asset</label>
@@ -78,13 +79,56 @@ HTML = """\
                                 {% endif %}
                             </select>
                         </div>
+                        <div class="sep"></div>
                         <div class="form-group">
-                            <label>Indicator</label>
-                            <select name="indicator_type">
-                                <option value="sma" {{ 'selected' if p.indicator_type=='sma' }}>SMA</option>
-                                <option value="ema" {{ 'selected' if p.indicator_type=='ema' }}>EMA</option>
+                            <label>Indicator 1</label>
+                            <select name="ind1_name" id="ind1_name" onchange="toggleFields()">
+                                <option value="price" {{ 'selected' if p.ind1_name=='price' }}>Price</option>
+                                <option value="sma" {{ 'selected' if p.ind1_name=='sma' }}>SMA (Simple Moving Average)</option>
+                                <option value="ema" {{ 'selected' if p.ind1_name=='ema' }}>EMA (Exponential Moving Average)</option>
+                                <option value="wma" {{ 'selected' if p.ind1_name=='wma' }}>WMA (Weighted Moving Average)</option>
+                                <option value="hma" {{ 'selected' if p.ind1_name=='hma' }}>HMA (Hull Moving Average)</option>
+                                <option value="dema" {{ 'selected' if p.ind1_name=='dema' }}>DEMA (Double Exponential MA)</option>
+                                <option value="tema" {{ 'selected' if p.ind1_name=='tema' }}>TEMA (Triple Exponential MA)</option>
+                                <option value="kama" {{ 'selected' if p.ind1_name=='kama' }}>KAMA (Kaufman Adaptive MA)</option>
+                                <option value="zlema" {{ 'selected' if p.ind1_name=='zlema' }}>ZLEMA (Zero-Lag EMA)</option>
+                                <option value="smma" {{ 'selected' if p.ind1_name=='smma' }}>SMMA (Smoothed Moving Average)</option>
+                                <option value="lsma" {{ 'selected' if p.ind1_name=='lsma' }}>LSMA (Least Squares MA)</option>
+                                <option value="alma" {{ 'selected' if p.ind1_name=='alma' }}>ALMA (Arnaud Legoux MA)</option>
+                                <option value="frama" {{ 'selected' if p.ind1_name=='frama' }}>FRAMA (Fractal Adaptive MA)</option>
+                                <option value="t3" {{ 'selected' if p.ind1_name=='t3' }}>T3 (Tillson T3)</option>
+                                <option value="mcginley" {{ 'selected' if p.ind1_name=='mcginley' }}>McGinley Dynamic</option>
                             </select>
                         </div>
+                        <div class="form-group" id="period1-group">
+                            <label>Period 1</label>
+                            <input type="number" name="period1" value="{{ p.ind1_period or '' }}" placeholder="e.g. 20" min="2">
+                        </div>
+                        <div class="sep"></div>
+                        <div class="form-group">
+                            <label>Indicator 2</label>
+                            <select name="ind2_name" id="ind2_name">
+                                <option value="sma" {{ 'selected' if p.ind2_name=='sma' }}>SMA (Simple Moving Average)</option>
+                                <option value="ema" {{ 'selected' if p.ind2_name=='ema' }}>EMA (Exponential Moving Average)</option>
+                                <option value="wma" {{ 'selected' if p.ind2_name=='wma' }}>WMA (Weighted Moving Average)</option>
+                                <option value="hma" {{ 'selected' if p.ind2_name=='hma' }}>HMA (Hull Moving Average)</option>
+                                <option value="dema" {{ 'selected' if p.ind2_name=='dema' }}>DEMA (Double Exponential MA)</option>
+                                <option value="tema" {{ 'selected' if p.ind2_name=='tema' }}>TEMA (Triple Exponential MA)</option>
+                                <option value="kama" {{ 'selected' if p.ind2_name=='kama' }}>KAMA (Kaufman Adaptive MA)</option>
+                                <option value="zlema" {{ 'selected' if p.ind2_name=='zlema' }}>ZLEMA (Zero-Lag EMA)</option>
+                                <option value="smma" {{ 'selected' if p.ind2_name=='smma' }}>SMMA (Smoothed Moving Average)</option>
+                                <option value="lsma" {{ 'selected' if p.ind2_name=='lsma' }}>LSMA (Least Squares MA)</option>
+                                <option value="alma" {{ 'selected' if p.ind2_name=='alma' }}>ALMA (Arnaud Legoux MA)</option>
+                                <option value="frama" {{ 'selected' if p.ind2_name=='frama' }}>FRAMA (Fractal Adaptive MA)</option>
+                                <option value="t3" {{ 'selected' if p.ind2_name=='t3' }}>T3 (Tillson T3)</option>
+                                <option value="mcginley" {{ 'selected' if p.ind2_name=='mcginley' }}>McGinley Dynamic</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="period2-group">
+                            <label>Period 2</label>
+                            <input type="number" name="period2" value="{{ p.ind2_period or '' }}" placeholder="e.g. 40" min="2">
+                        </div>
+                        <div class="sep"></div>
                         <div class="form-group" id="exposure-group">
                             <label>Exposure</label>
                             <select name="exposure" id="exposure">
@@ -93,10 +137,9 @@ HTML = """\
                                 <option value="long-short" {{ 'selected' if p.exposure=='long-short' }}>Long + Short</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label>Fee (%)</label>
-                            <input type="number" name="fee" value="{{ p.fee }}" step="0.01" min="0">
-                        </div>
+                    </div>
+                    <div id="signal-explainer" style="margin-top:8px;font-size:0.8em;color:#6b7280;line-height:1.4">
+                        Buy when <span style="color:#e0e0e0" id="explainer-ind1">Price</span> crosses above <span style="color:#e0e0e0" id="explainer-ind2">SMA</span>. Sell when it crosses below.
                     </div>
                 </div>
                 <div class="form-section">
@@ -105,41 +148,23 @@ HTML = """\
                         <div class="form-group">
                             <label>Mode</label>
                             <select name="mode" id="mode" onchange="toggleFields()">
-                                <optgroup label="Single">
-                                    <option value="sweep-chart" {{ 'selected' if p.mode=='sweep-chart' }}>Find best period</option>
-                                    <option value="sweep-lev" {{ 'selected' if p.mode=='sweep-lev' }}>Find best leverage</option>
-                                    <option value="single" {{ 'selected' if p.mode=='single' }}>Single backtest</option>
-                                </optgroup>
-                                <optgroup label="Crossover">
-                                    <option value="sweep-dual" {{ 'selected' if p.mode=='sweep-dual' }}>Find best cross</option>
-                                    <option value="sweep-cross-lev" {{ 'selected' if p.mode=='sweep-cross-lev' }}>Find best cross leverage</option>
-                                    <option value="dual" {{ 'selected' if p.mode=='dual' }}>Cross backtest</option>
-                                </optgroup>
+                                <option value="backtest" {{ 'selected' if p.mode=='backtest' }}>Backtest</option>
+                                <option value="sweep" {{ 'selected' if p.mode=='sweep' }}>Find best period</option>
+                                <option value="heatmap" {{ 'selected' if p.mode=='heatmap' }}>Find best combo</option>
+                                <option value="sweep-lev" {{ 'selected' if p.mode=='sweep-lev' }}>Find best leverage</option>
                             </select>
                         </div>
-                        <div class="form-group" id="sma-group">
-                            <label>SMA Period</label>
-                            <input type="number" name="sma" value="{{ p.sma or '' }}" placeholder="e.g. 124" min="2">
-                        </div>
-                        <div class="form-group" id="slow-sma-group">
-                            <label>Slow SMA</label>
-                            <input type="number" name="slow_sma" value="{{ p.slow_sma or '' }}" placeholder="e.g. 100" min="2">
-                        </div>
-                        <div class="form-group" id="fast-sma-group">
-                            <label>Fast SMA</label>
-                            <input type="number" name="fast_sma" value="{{ p.fast_sma }}" min="2">
-                        </div>
                         <div class="form-group" id="range-min-group">
-                            <label>SMA Min</label>
-                            <input type="number" name="sma_min" value="{{ p.sma_min }}" min="2">
+                            <label>Range Min</label>
+                            <input type="number" name="range_min" value="{{ p.range_min }}" min="2">
                         </div>
                         <div class="form-group" id="range-max-group">
-                            <label>SMA Max</label>
-                            <input type="number" name="sma_max" value="{{ p.sma_max }}" min="2">
+                            <label>Range Max</label>
+                            <input type="number" name="range_max" value="{{ p.range_max }}" min="2">
                         </div>
                         <div class="form-group" id="step-group">
                             <label>Step</label>
-                            <input type="number" name="sma_step" value="{{ p.sma_step }}" min="1">
+                            <input type="number" name="step" value="{{ p.step }}" min="1">
                         </div>
                     </div>
                 </div>
@@ -191,6 +216,10 @@ HTML = """\
                                 <input type="number" name="initial_cash" value="{{ p.initial_cash }}" min="1" style="padding-left:20px">
                             </div>
                         </div>
+                        <div class="form-group">
+                            <label>Fee per Trade (%)</label>
+                            <input type="number" name="fee" value="{{ p.fee }}" step="0.01" min="0">
+                        </div>
                         <div class="form-group" style="min-width:auto">
                             <label>&nbsp;</label>
                             <button type="submit" id="btn">Run Backtest</button>
@@ -212,11 +241,7 @@ HTML = """\
                     </tr>
                     {% if not lev_sweep|default(none) %}
                     <tr class="best">
-                        <td style="text-align:left">
-                            {% if best.get('fast_period') %}{{ p.indicator_type.upper() }}({{ best.fast_period }}/{{ best.sma_period }})
-                            {% elif best.get('sma_period') %}{{ p.indicator_type.upper() }}({{ best.sma_period }})
-                            {% else %}Strategy{% endif %}
-                        </td>
+                        <td style="text-align:left">{{ best.label }}</td>
                         <td>{{ "%.2f"|format(best.annualized) }}%</td>
                         <td>{{ "%.2f"|format(best.max_drawdown) }}%</td>
                         <td>{{ best.trades }}</td>
@@ -261,7 +286,7 @@ HTML = """\
                     <summary style="cursor:pointer;color:#9ca3af;font-size:0.9em">Show all results ({{ table_rows|length }})</summary>
                     <div style="max-height:300px;overflow-y:auto;margin-top:8px">
                     <table class="results-table">
-                        <tr><th>{{ col_header }}</th><th>Return %</th><th>B&H %</th><th>Max DD %</th><th>Trades</th></tr>
+                        <tr><th>Strategy</th><th>Return %</th><th>B&H %</th><th>Max DD %</th><th>Trades</th></tr>
                         {% for r in table_rows %}
                         <tr{% if loop.first %} class="best"{% endif %}>
                             <td>{{ r.label }}</td><td>{{ "%.2f"|format(r.total_return) }}</td>
@@ -284,14 +309,14 @@ HTML = """\
 var assetStarts = {{ asset_starts_json|tojson }};
 function toggleFields() {
     var mode = document.getElementById('mode').value;
-    var isLevSweep = mode === 'sweep-lev' || mode === 'sweep-cross-lev';
+    var ind1 = document.getElementById('ind1_name').value;
+    var isLevSweep = mode === 'sweep-lev';
     var rules = [
-        ['sma-group', mode === 'single' || mode === 'sweep-lev'],
-        ['fast-sma-group', mode === 'dual' || mode === 'sweep-cross-lev'],
-        ['slow-sma-group', mode === 'dual' || mode === 'sweep-cross-lev'],
-        ['range-min-group', mode === 'sweep-chart' || mode === 'sweep-dual'],
-        ['range-max-group', mode === 'sweep-chart' || mode === 'sweep-dual'],
-        ['step-group', mode === 'sweep-dual'],
+        ['period1-group', ind1 !== 'price' && mode !== 'heatmap'],
+        ['period2-group', mode === 'backtest' || mode === 'sweep-lev'],
+        ['range-min-group', mode === 'sweep' || mode === 'heatmap'],
+        ['range-max-group', mode === 'sweep' || mode === 'heatmap'],
+        ['step-group', mode === 'heatmap'],
         ['long-lev-group', !isLevSweep],
         ['short-lev-group', !isLevSweep],
         ['exposure-group', !isLevSweep],
@@ -306,7 +331,21 @@ function toggleFields() {
         var inputs = el.querySelectorAll('input,select');
         for (var j = 0; j < inputs.length; j++) inputs[j].disabled = !show;
     }
+    updateExplainer();
 }
+function updateExplainer() {
+    var ind1 = document.getElementById('ind1_name');
+    var ind2 = document.getElementById('ind2_name');
+    var p1 = document.querySelector('#period1-group input');
+    var p2 = document.querySelector('#period2-group input');
+    var label1 = ind1.value === 'price' ? 'Price' : ind1.value.toUpperCase() + (p1.value ? '(' + p1.value + ')' : '');
+    var label2 = ind2.value.toUpperCase() + (p2.value ? '(' + p2.value + ')' : '');
+    document.getElementById('explainer-ind1').textContent = label1;
+    document.getElementById('explainer-ind2').textContent = label2;
+}
+document.querySelector('#period1-group input').addEventListener('input', updateExplainer);
+document.querySelector('#period2-group input').addEventListener('input', updateExplainer);
+document.getElementById('ind2_name').addEventListener('change', updateExplainer);
 function setAllData() {
     var asset = document.getElementById('asset').value;
     document.getElementById('start_date').value = assetStarts[asset] || '';
@@ -327,38 +366,28 @@ toggleFields();
 """
 
 
-def _chart_to_base64(chart_func, *args, **kwargs):
-    """Run a chart function but capture to base64 instead of file."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    chart_func(*args, **kwargs)
-    return None  # we use file-based approach instead
-
-
 class Params:
     """Hold form parameters with defaults."""
     def __init__(self, form=None):
         if form:
             self.asset = form.get("asset", DEFAULT_ASSET)
-            self.mode = form.get("mode", "single")
-            self.indicator_type = form.get("indicator_type", "sma")
-            sma_val = form.get("sma", "").strip()
-            self.sma = int(sma_val) if sma_val else None
-            slow_val = form.get("slow_sma", "").strip()
-            self.slow_sma = int(slow_val) if slow_val else None
-            self.sma_min = int(form.get("sma_min", 2))
-            self.sma_max = int(form.get("sma_max", 365))
-            self.sma_step = int(form.get("sma_step", 5))
-            self.fast_sma = int(form.get("fast_sma", 20))
+            self.mode = form.get("mode", "sweep")
+            self.ind1_name = form.get("ind1_name", "price")
+            p1_val = form.get("period1", "").strip()
+            self.ind1_period = int(p1_val) if p1_val else None
+            self.ind2_name = form.get("ind2_name", "sma")
+            p2_val = form.get("period2", "").strip()
+            self.ind2_period = int(p2_val) if p2_val else None
+            self.range_min = int(form.get("range_min", 2))
+            self.range_max = int(form.get("range_max", 365))
+            self.step = int(form.get("step", 5))
             self.exposure = form.get("exposure", "long-cash")
-            if self.mode in ("sweep-lev", "sweep-cross-lev"):
+            if self.mode == "sweep-lev":
                 self.exposure = "long-short"
             self.fee = float(form.get("fee", 0.1))
             self.long_leverage = float(form.get("long_leverage", 1))
             self.short_leverage = float(form.get("short_leverage", 1))
-            self.lev_mode = form.get("lev_mode", "rebalance")
+            self.lev_mode = form.get("lev_mode", "set-forget")
             self.lev_min = float(form.get("lev_min", 0.25))
             self.lev_max = float(form.get("lev_max", 10))
             self.lev_step = float(form.get("lev_step", 0.25))
@@ -367,33 +396,32 @@ class Params:
             self.end_date = form.get("end_date", "").strip()
         else:
             self.asset = DEFAULT_ASSET
-            self.mode = "sweep-chart"
-            self.indicator_type = "sma"
-            self.sma = None
-            self.slow_sma = None
-            self.sma_min = 2
-            self.sma_max = 365
-            self.sma_step = 5
-            self.fast_sma = 20
+            self.mode = "backtest"
+            self.ind1_name = "price"
+            self.ind1_period = None
+            self.ind2_name = "sma"
+            self.ind2_period = 44
+            self.range_min = 2
+            self.range_max = 365
+            self.step = 5
             self.exposure = "long-cash"
             self.fee = 0.1
             self.long_leverage = 1
             self.short_leverage = 1
-            self.lev_mode = "rebalance"
+            self.lev_mode = "set-forget"
             self.lev_min = 0.25
             self.lev_max = 10
             self.lev_step = 0.25
             self.initial_cash = 10000
-            self.start_date = "2015-01-01"
+            self.start_date = "2018-01-01"
             self.end_date = str(ASSETS[DEFAULT_ASSET].index[-1].date())
 
 
 # Load data once at startup
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
-# Auto-detect all CSV files in data/ folder and load them at startup
-ASSETS = {}  # {name: DataFrame}
-ASSET_STARTS = {}  # {name: "YYYY-MM-DD"}
+ASSETS = {}
+ASSET_STARTS = {}
 for _fname in sorted(os.listdir(DATA_DIR)):
     if _fname.endswith(".csv"):
         _name = _fname.replace(".csv", "")
@@ -414,7 +442,6 @@ def _enrich_best(result, df):
     result["annualized"] = bt._annualized_return(result["total_return"], n_days)
     result["buyhold_annualized"] = bt._annualized_return(result["buyhold_return"], n_days)
     result["buyhold_max_drawdown"] = bt._max_drawdown(result["buyhold"])
-    # Buy-and-hold sharpe
     daily_return = df["close"].pct_change().fillna(0)
     mean_d = daily_return.mean()
     std_d = daily_return.std()
@@ -422,20 +449,39 @@ def _enrich_best(result, df):
     return result
 
 
+def _minor_usd_formatter(dollar=True):
+    """Return a formatter that shows every 2nd minor tick label."""
+    from matplotlib.ticker import FuncFormatter
+    state = {"count": 0}
+    def _fmt(x, pos):
+        state["count"] += 1
+        if state["count"] % 2 == 0:
+            return ""
+        if dollar:
+            return f"${x:,.2f}" if x < 1 else f"${x:,.0f}"
+        return f"{x:,.2f}" if x < 1 else f"{x:,.0f}"
+    return FuncFormatter(_fmt)
+
+
+def _build_strategy_label(p):
+    """Build a human-readable strategy label from params."""
+    if p.ind1_name == "price":
+        return f"Price/{p.ind2_name.upper()}"
+    return f"{p.ind1_name.upper()}/{p.ind2_name.upper()}"
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     chart_b64 = None
     best = None
     table_rows = None
-    col_header = "SMA"
+    col_header = "Strategy"
 
     if request.method == "GET":
         return render_template_string(HTML, p=Params(), chart=None, best=None, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS)
 
     p = Params(request.form)
-    ind = p.indicator_type.upper()
-    col_header = ind
     import pandas as pd_mod
     df = ASSETS.get(p.asset, ASSETS[DEFAULT_ASSET]).copy()
     if p.start_date:
@@ -447,18 +493,10 @@ def index():
     if not p.end_date:
         p.end_date = str(df.index[-1].date())
 
-    sma_min = p.sma_min
-    sma_max = p.sma_max
-    if p.mode == "single" and p.sma is not None:
-        sma_min = p.sma
-        sma_max = p.sma
-    elif p.mode == "dual" and p.slow_sma is not None:
-        sma_min = p.slow_sma
-        sma_max = p.slow_sma
-
     fee = p.fee / 100
 
-    if p.mode in ("sweep-lev", "sweep-cross-lev"):
+    # --- Leverage Sweep Mode ---
+    if p.mode == "sweep-lev":
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
@@ -467,28 +505,21 @@ def index():
         n_days = len(df)
         lev_values = [round(p.lev_min + i * p.lev_step, 4)
                       for i in range(int((p.lev_max - p.lev_min) / p.lev_step) + 1)]
-        n = len(lev_values)
 
-        if p.mode == "sweep-lev":
-            sma_period = p.sma if p.sma else 44
-            sma_series = bt.compute_indicator(df, sma_period, p.indicator_type)
-            above_sma = df["close"] > sma_series
-            position_base = bt._apply_exposure(above_sma, p.exposure).shift(1).fillna(0)
-            daily_return = df["close"].pct_change().fillna(0)
-            trade_mask = position_base.diff().fillna(0).abs() > 0
-            title_label = f"{ind}({sma_period})"
+        # Compute base position from ind1/ind2
+        ind1_series, _ = bt.compute_indicator_from_spec(df, p.ind1_name, p.ind1_period)
+        ind2_period_val = p.ind2_period if p.ind2_period else 44
+        ind2_series, _ = bt.compute_indicator_from_spec(df, p.ind2_name, ind2_period_val)
+        above = ind1_series > ind2_series
+        position_base = bt._apply_exposure(above, p.exposure).shift(1).fillna(0)
+        daily_return = df["close"].pct_change().fillna(0)
+
+        if p.ind1_name == "price":
+            title_label = f"Price/{p.ind2_name.upper()}({ind2_period_val})"
         else:
-            fast_p = p.fast_sma
-            slow_p = p.slow_sma if p.slow_sma else 100
-            fast_sma = bt.compute_indicator(df, fast_p, p.indicator_type)
-            slow_sma = bt.compute_indicator(df, slow_p, p.indicator_type)
-            above_sma = fast_sma > slow_sma
-            position_base = bt._apply_exposure(above_sma, p.exposure).shift(1).fillna(0)
-            daily_return = df["close"].pct_change().fillna(0)
-            trade_mask = position_base.diff().fillna(0).abs() > 0
-            title_label = f"{ind}({fast_p}/{slow_p})"
+            p1_str = p.ind1_period if p.ind1_period else "?"
+            title_label = f"{p.ind1_name.upper()}({p1_str})/{p.ind2_name.upper()}({ind2_period_val})"
 
-        # Helper: compute annualized return for a given long/short leverage
         def _sweep_ann(ll, sl):
             if p.lev_mode == "set-forget":
                 equity_arr, _ = bt._compute_equity_set_and_forget(
@@ -505,42 +536,26 @@ def index():
             total_ret = (equity_final / p.initial_cash - 1) * 100
             return bt._annualized_return(total_ret, n_days)
 
-        # Sweep long leverage (short fixed at 1), trim when flatlined (liquidated)
         long_sweep_full = [_sweep_ann(lv, 0) for lv in lev_values]
         short_sweep_full = [_sweep_ann(0, lv) for lv in lev_values]
 
         def _trim_flatline(values, levs):
-            """Trim trailing constant values (liquidation plateau)."""
             if len(values) < 3:
                 return values, levs
             for i in range(len(values) - 1, 1, -1):
                 if abs(values[i] - values[i - 1]) > 0.01:
-                    return values[:i + 2], levs[:i + 2]  # keep one extra point
+                    return values[:i + 2], levs[:i + 2]
             return values, levs
 
         long_sweep, long_levs = _trim_flatline(long_sweep_full, list(lev_values))
         short_sweep, short_levs = _trim_flatline(short_sweep_full, list(lev_values))
 
-        # Baseline at 1x/1x
-        baseline_ann = _sweep_ann(1, 1)
-
-        # Best across both sweeps
         best_long_idx = np.argmax(long_sweep)
         best_short_idx = np.argmax(short_sweep)
         best_long_lev = long_levs[best_long_idx]
         best_long_ann = long_sweep[best_long_idx]
         best_short_lev = short_levs[best_short_idx]
         best_short_ann = short_sweep[best_short_idx]
-
-        # Overall best
-        if best_long_ann >= best_short_ann:
-            best_ann = best_long_ann
-            best_lev_long_final = best_long_lev
-            best_lev_short_final = 1
-        else:
-            best_ann = best_short_ann
-            best_lev_long_final = 1
-            best_lev_short_final = best_short_lev
 
         bh_total = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
         bh_ann = bt._annualized_return(bh_total, n_days)
@@ -572,7 +587,7 @@ def index():
             title_parts.append(f"Best Long: {best_long_lev:.2f}x ({best_long_ann:.1f}%)")
         if show_short:
             title_parts.append(f"Best Short: {best_short_lev:.2f}x ({best_short_ann:.1f}%)")
-        ax.set_title(f"{asset_title} {title_label} — Leverage Sweep | {p.exposure}\n"
+        ax.set_title(f"{asset_title} {title_label} \u2014 Leverage Sweep | {p.exposure}\n"
                      f"{' | '.join(title_parts)}")
         ax.legend(loc="best", fontsize=9)
         ax.grid(True, alpha=0.3)
@@ -584,11 +599,8 @@ def index():
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode()
 
-        # Run combined strategy with both best leverages
-        if p.mode == "sweep-lev":
-            best_result = bt.run_single_sma_strategy(df, sma_period, p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.indicator_type)
-        else:
-            best_result = bt.run_dual_sma_strategy(df, fast_p, slow_p, p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.indicator_type)
+        best_result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, ind2_period_val,
+                                       p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode)
         best = _enrich_best(best_result, df)
 
         combined_ann = _sweep_ann(best_long_lev, best_short_lev)
@@ -604,31 +616,59 @@ def index():
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
                                       hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info)
 
-    if p.mode == "sweep-dual":
+    # --- Heatmap Mode ---
+    if p.mode == "heatmap":
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         import numpy as np
 
+        ind1_name = p.ind1_name
+        ind2_name = p.ind2_name
+
+        # Price has no period to sweep — fall back to sweep chart (1D)
+        if ind1_name == "price":
+            p.mode = "sweep"
+            # Fall through to sweep handler below
+
+    if p.mode == "heatmap":
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        ind1_name = p.ind1_name
+        ind2_name = p.ind2_name
+
         n_days = len(df)
-        periods = list(range(sma_min, sma_max + 1, p.sma_step))
+        periods = list(range(p.range_min, p.range_max + 1, p.step))
         n = len(periods)
+        same_type = (ind1_name == ind2_name)
+
+        ind1_upper = ind1_name.upper()
+        ind2_upper = ind2_name.upper()
 
         # Precompute indicators
-        sma_cache = {}
+        ind1_cache = {}
+        ind2_cache = {}
         for per in periods:
-            sma_cache[per] = bt.compute_indicator(df, per, p.indicator_type)
+            ind1_cache[per], _ = bt.compute_indicator_from_spec(df, ind1_name, per)
+            if same_type:
+                ind2_cache[per] = ind1_cache[per]
+            else:
+                ind2_cache[per], _ = bt.compute_indicator_from_spec(df, ind2_name, per)
+
         daily_return = df["close"].pct_change().fillna(0)
 
         matrix = np.full((n, n), np.nan)
         best_ann = -np.inf
-        best_fast = best_slow = None
-        for i, fast in enumerate(periods):
-            for j, slow in enumerate(periods):
-                if fast >= slow:
+        best_p1 = best_p2 = None
+        for i, p1 in enumerate(periods):
+            for j, p2 in enumerate(periods):
+                if same_type and p1 >= p2:
                     continue
-                above_sma = sma_cache[fast] > sma_cache[slow]
-                position = bt._apply_exposure(above_sma, p.exposure).shift(1).fillna(0)
+                above = ind1_cache[p1] > ind2_cache[p2]
+                position = bt._apply_exposure(above, p.exposure).shift(1).fillna(0)
                 leverage = np.where(position > 0, p.long_leverage,
                            np.where(position < 0, p.short_leverage, 1))
                 strat_return = position * daily_return * leverage
@@ -642,8 +682,8 @@ def index():
                 matrix[i, j] = ann
                 if ann > best_ann:
                     best_ann = ann
-                    best_fast = fast
-                    best_slow = slow
+                    best_p1 = p1
+                    best_p2 = p2
 
         bh_total = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
         bh_ann = bt._annualized_return(bh_total, n_days)
@@ -655,11 +695,17 @@ def index():
         ax.set_xticklabels(periods, rotation=90, fontsize=max(4, min(8, 200 // n)))
         ax.set_yticks(range(n))
         ax.set_yticklabels(periods, fontsize=max(4, min(8, 200 // n)))
-        ax.set_xlabel(f"Slow {ind} Period")
-        ax.set_ylabel(f"Fast {ind} Period")
+
+        if same_type:
+            ax.set_xlabel(f"Slow {ind1_upper} Period")
+            ax.set_ylabel(f"Fast {ind1_upper} Period")
+        else:
+            ax.set_xlabel(f"{ind2_upper} Period")
+            ax.set_ylabel(f"{ind1_upper} Period")
+
         asset_title = p.asset.capitalize()
-        ax.set_title(f"{asset_title} Dual {ind} Crossover — Annualized Return % (step={p.sma_step})\n"
-                     f"Best: {ind}({best_fast}/{best_slow}) = {best_ann:.1f}% | "
+        ax.set_title(f"{asset_title} {ind1_upper}/{ind2_upper} Crossover \u2014 Annualized Return % (step={p.step})\n"
+                     f"Best: {ind1_upper}({best_p1})/{ind2_upper}({best_p2}) = {best_ann:.1f}% | "
                      f"B&H: {bh_ann:.1f}% | {p.exposure}")
         cbar = fig.colorbar(im, ax=ax, shrink=0.8)
         cbar.set_label("Annualized Return (%)")
@@ -679,33 +725,43 @@ def index():
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode()
 
-        # Run full strategy for the best pair to get all metrics
-        best_result = bt.run_dual_sma_strategy(df, best_fast, best_slow, p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.indicator_type)
+        best_result = bt.run_strategy(df, ind1_name, best_p1, ind2_name, best_p2,
+                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode)
         best = _enrich_best(best_result, df)
 
-        return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header, asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
+        return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
                                       hide_buyhold=(p.exposure == "short-cash"))
 
-    elif p.mode == "sweep-chart":
-        # Generate sweep chart to a buffer
+    # --- Sweep Mode (Find Best Period) ---
+    if p.mode == "sweep":
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        import numpy as np
 
         n_days = len(df)
-        periods = list(range(sma_min, sma_max + 1))
+        periods = list(range(p.range_min, p.range_max + 1))
         annualized_returns = []
+
         for period in periods:
-            result = bt.run_single_sma_strategy(df, period, p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.indicator_type)
+            result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, period,
+                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode)
             ann = bt._annualized_return(result["total_return"], n_days)
             annualized_returns.append(ann)
 
-        import numpy as np
         bh_total = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
         bh_annualized = bt._annualized_return(bh_total, n_days)
         best_idx = np.argmax(annualized_returns)
         best_period = periods[best_idx]
         best_ann = annualized_returns[best_idx]
+
+        ind2_upper = p.ind2_name.upper()
+        if p.ind1_name != "price":
+            ind1_label_str = f"{p.ind1_name.upper()}({p.ind1_period})"
+            best_label = f"{ind1_label_str}/{ind2_upper}({best_period})"
+        else:
+            best_label = f"{ind2_upper}({best_period})"
 
         fig, ax = plt.subplots(figsize=(14, 7), dpi=150)
         ax.plot(periods, annualized_returns, color="steelblue", linewidth=1)
@@ -713,10 +769,12 @@ def index():
             ax.axhline(y=bh_annualized, color="gray", linestyle="--", linewidth=1,
                         label=f"Buy & Hold ({bh_annualized:.1f}%)")
         ax.scatter([best_period], [best_ann], color="red", s=60, zorder=5,
-                    label=f"Best: {ind}({best_period}) ({best_ann:.1f}%)")
-        ax.set_xlabel(f"{ind} Period (days)")
+                    label=f"Best: {best_label} ({best_ann:.1f}%)")
+        ax.set_xlabel(f"{ind2_upper} Period (days)")
         ax.set_ylabel("Annualized Return (%)")
-        ax.set_title(f"{p.asset.capitalize()} — Annualized Return by {ind} Period ({sma_min}-{sma_max}) | {p.exposure}")
+        asset_title = p.asset.capitalize()
+        title_prefix = f"{ind1_label_str} vs " if p.ind1_name != "price" else ""
+        ax.set_title(f"{asset_title} \u2014 Annualized Return by {title_prefix}{ind2_upper} Period ({p.range_min}-{p.range_max}) | {p.exposure}")
         ax.legend(loc="best", fontsize=9)
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
@@ -727,26 +785,38 @@ def index():
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode()
 
-        # Run full strategy for the best period to get comparison table
-        best_result = bt.run_single_sma_strategy(df, best_period, p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.indicator_type)
+        best_result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, best_period,
+                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode)
         best = _enrich_best(best_result, df)
 
+    # --- Backtest Mode ---
     else:
-        # Single or dual mode
-        results = bt.sweep_sma_periods(df, sma_min, sma_max, p.initial_cash, p.mode, p.fast_sma, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.indicator_type)
+        if p.ind2_period is not None:
+            # Single run with fixed period
+            result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
+                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode)
+            results = [result]
+        else:
+            # Sweep ind2 period and show table
+            results = bt.sweep_periods(df, p.ind1_name, p.ind1_period, p.ind2_name, None,
+                                        "ind2", p.range_min, p.range_max,
+                                        p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode)
+            # For same-type crossover, filter invalid combos
+            if p.ind1_name != "price" and p.ind1_name == p.ind2_name and p.ind1_period is not None:
+                results = [r for r in results if r["ind2_period"] > p.ind1_period]
+                results.sort(key=lambda r: r["total_return"], reverse=True)
+
         if results:
             best = _enrich_best(results[0], df)
-            if p.mode == "dual":
-                col_header = "Fast/Slow"
-                table_rows = [{"label": f"{r['fast_period']}/{r['sma_period']}", **r} for r in results]
-            else:
-                table_rows = [{"label": str(r["sma_period"]), **r} for r in results]
+            if len(results) > 1:
+                table_rows = [{"label": r["label"], **r} for r in results]
 
-            # Generate chart to buffer
+            # Generate chart
             import matplotlib
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
             import matplotlib.dates as mdates
+            import numpy as np
 
             asset_name = p.asset.capitalize()
             show_ratio = p.exposure != "short-cash"
@@ -756,18 +826,24 @@ def index():
             else:
                 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), dpi=150,
                                                 gridspec_kw={"height_ratios": [7, 3]}, sharex=True)
+
             ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color="black", linewidth=0.8)
-            ax1.plot(best["sma_series"].index, best["sma_series"],
-                     label=best["label"], color="blue", linewidth=0.8, alpha=0.8)
-            if "fast_sma_series" in best:
-                ax1.plot(best["fast_sma_series"].index, best["fast_sma_series"],
-                         label=f"{ind}({best['fast_period']})", color="orange", linewidth=0.8, alpha=0.8)
+
+            # Plot ind2 (main/slow indicator)
+            ax1.plot(best["ind2_series"].index, best["ind2_series"],
+                     label=best["ind2_label"], color="blue", linewidth=0.8, alpha=0.8)
+            # Plot ind1 if not price
+            if best.get("ind1_name") != "price":
+                ax1.plot(best["ind1_series"].index, best["ind1_series"],
+                         label=best["ind1_label"], color="orange", linewidth=0.8, alpha=0.8)
+
             ax1.set_yscale("log")
             _fmt_usd = plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}")
             ax1.yaxis.set_major_formatter(_fmt_usd)
-            ax1.yaxis.set_minor_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
+            ax1.yaxis.set_minor_formatter(_minor_usd_formatter())
+            ax1.tick_params(axis='y', which='minor', labelsize=6)
             ax1.set_ylabel(f"{asset_name} Price (log scale)")
-            ax1.set_title(f"{asset_name} {ind} Backtest — Best: {best['label']} "
+            ax1.set_title(f"{asset_name} Backtest \u2014 Best: {best['label']} "
                           f"({best['total_return']:.1f}% return) | {p.exposure}")
             ax1.legend(loc="upper left", fontsize=8)
             ax1.grid(True, which="major", alpha=0.3)
@@ -778,7 +854,8 @@ def index():
                 ax2.plot(best["buyhold"].index, best["buyhold"], label="Buy & Hold", color="gray", linewidth=1, alpha=0.7)
             ax2.set_yscale("log")
             ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
-            ax2.yaxis.set_minor_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
+            ax2.yaxis.set_minor_formatter(_minor_usd_formatter())
+            ax2.tick_params(axis='y', which='minor', labelsize=6)
             ax2.set_ylabel("Portfolio Value (log)")
             ax2.legend(loc="upper left", fontsize=8)
             ax2.grid(True, which="major", alpha=0.3)
@@ -786,15 +863,14 @@ def index():
 
             last_ax = ax2
             if show_ratio:
-                # Panel 3: portfolio value in base asset (strategy equity / buy-and-hold equity)
-                import numpy as np
                 ratio = best["equity"] / best["buyhold"].replace(0, np.nan)
                 ratio_normalized = ratio / ratio.dropna().iloc[0] * 100
                 ax3.plot(ratio_normalized.index, ratio_normalized, color="purple", linewidth=1, label=f"Strategy in {asset_name}")
                 ax3.axhline(y=100, color="gray", linestyle="--", linewidth=0.8, alpha=0.7)
                 ax3.set_yscale("log")
                 ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.2f}" if x < 1 else f"{x:,.0f}"))
-                ax3.yaxis.set_minor_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.2f}" if x < 1 else f"{x:,.0f}"))
+                ax3.yaxis.set_minor_formatter(_minor_usd_formatter(dollar=False))
+                ax3.tick_params(axis='y', which='minor', labelsize=6)
                 ax3.set_ylabel(f"Value in {asset_name}")
                 ax3.legend(loc="upper left", fontsize=8)
                 ax3.grid(True, which="major", alpha=0.3)
@@ -811,10 +887,11 @@ def index():
             buf.seek(0)
             chart_b64 = base64.b64encode(buf.read()).decode()
 
-    return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header, asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
+    return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
+                                  asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
                                   hide_buyhold=(p.exposure == "short-cash"))
 
 
 if __name__ == "__main__":
-    print(f"Starting Bitcoin Strategy Analytics at http://localhost:5000 (assets: {', '.join(ASSET_NAMES)})")
+    print(f"Starting Strategy Analytics at http://localhost:5000 (assets: {', '.join(ASSET_NAMES)})")
     app.run(debug=False, port=5000)
