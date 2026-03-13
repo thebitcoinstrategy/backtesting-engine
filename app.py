@@ -726,7 +726,6 @@ HTML = """\
                     <div id="tv-widget-container"
                          data-tv-symbol="{{ tv_symbol }}"
                          data-tv-studies="{{ tv_studies_json }}"
-                         data-tv-overrides="{{ tv_overrides_json }}"
                          style="height:600px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
                     </div>
                 </div>
@@ -821,7 +820,6 @@ function loadTVWidget() {
     tvWidgetLoaded = true;
     var tvSymbol = container.getAttribute('data-tv-symbol');
     var tvStudies = JSON.parse(container.getAttribute('data-tv-studies') || '[]');
-    var tvOverrides = JSON.parse(container.getAttribute('data-tv-overrides') || '{}');
     if (!tvSymbol) return;
     var config = {
         "autosize": true,
@@ -836,7 +834,6 @@ function loadTVWidget() {
         "hide_side_toolbar": false,
         "allow_symbol_change": false,
         "studies": tvStudies || [],
-        "studies_overrides": tvOverrides || {},
         "support_host": "https://www.tradingview.com"
     };
     container.innerHTML = '';
@@ -1050,14 +1047,15 @@ TV_SYMBOLS = {
     'hyperliquid': 'BYBIT:HYPEUSDT',
 }
 
-# (study_id, overrides_key) — only indicators TradingView supports natively
+# Study IDs for TradingView's free embed widget (tv-basicstudies)
+# Note: the free widget does NOT support studies_overrides — indicators use default periods
 TV_STUDIES = {
-    'sma':  ('MASimple@tv-basicstudies', 'moving average.length'),
-    'ema':  ('MAExp@tv-basicstudies', 'moving average exponential.length'),
-    'wma':  ('MAWeighted@tv-basicstudies', 'moving average weighted.length'),
-    'hma':  ('HullMA@tv-basicstudies', 'hull moving average.length'),
-    'dema': ('DEMA@tv-basicstudies', 'double ema.length'),
-    'tema': ('TEMA@tv-basicstudies', 'triple ema.length'),
+    'sma':  'MASimple@tv-basicstudies',
+    'ema':  'MAExp@tv-basicstudies',
+    'wma':  'MAWeighted@tv-basicstudies',
+    'hma':  'hullMA@tv-basicstudies',
+    'dema': 'DoubleEMA@tv-basicstudies',
+    'tema': 'TripleEMA@tv-basicstudies',
 }
 # Unsupported on TradingView: kama, zlema, smma, lsma, alma, frama, t3, mcginley
 
@@ -1069,26 +1067,27 @@ def _build_tv_config(asset, ind1_name, ind1_period, ind2_name, ind2_period):
         return None, None, None, None
 
     studies = []
-    overrides = {}
     unsupported = []
+    notes = []
 
     for ind_name, ind_period in [(ind1_name, ind1_period), (ind2_name, ind2_period)]:
         if ind_name == 'price':
             continue
         if ind_name in TV_STUDIES:
-            study_id, override_key = TV_STUDIES[ind_name]
-            studies.append(study_id)
+            studies.append(TV_STUDIES[ind_name])
             if ind_period:
-                overrides[override_key] = ind_period
+                notes.append(f'{ind_name.upper()}({ind_period})')
         else:
             unsupported.append(ind_name.upper())
 
-    # When both indicators are the same type, overrides collide — note the limitation
-    if ind1_name == ind2_name and ind1_name != 'price' and ind1_name in TV_STUDIES:
-        unsupported.append(f'{ind1_name.upper()} dual-period (widget shows both at period {ind2_period})')
+    unsupported_parts = []
+    if unsupported:
+        unsupported_parts.append(', '.join(unsupported))
+    if notes:
+        unsupported_parts.append(f'Custom periods ({", ".join(notes)}) — widget uses default periods')
 
-    unsupported_str = ', '.join(unsupported) if unsupported else None
-    return tv_symbol, studies, overrides, unsupported_str
+    unsupported_str = '; '.join(unsupported_parts) if unsupported_parts else None
+    return tv_symbol, studies, unsupported_str
 
 
 def _enrich_best(result, df):
@@ -1142,13 +1141,12 @@ def index():
             p = Params()
         return render_template_string(HTML, p=p, chart=None, best=None, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
-                                      tv_symbol=None, tv_studies_json='[]', tv_overrides_json='{}', tv_unsupported=None)
+                                      tv_symbol=None, tv_studies_json='[]', tv_unsupported=None)
 
     p = Params(request.form)
-    tv_symbol, tv_studies, tv_overrides, tv_unsupported = _build_tv_config(
+    tv_symbol, tv_studies, tv_unsupported = _build_tv_config(
         p.asset, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period)
     tv_studies_json = json.dumps(tv_studies or [])
-    tv_overrides_json = json.dumps(tv_overrides or {})
     import pandas as pd_mod
     df = ASSETS.get(p.asset, ASSETS[DEFAULT_ASSET]).copy()
     if p.start_date:
@@ -1286,7 +1284,7 @@ def index():
         return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
                                       hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info,
-                                      tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported)
+                                      tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_unsupported=tv_unsupported)
 
     # --- Heatmap Mode ---
     if p.mode == "heatmap":
@@ -1409,7 +1407,7 @@ def index():
         return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
                                       hide_buyhold=(p.exposure == "short-cash"),
-                                      tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported)
+                                      tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_unsupported=tv_unsupported)
 
     # --- Sweep Mode (Find Best Period) ---
     if p.mode == "sweep":
@@ -1571,7 +1569,7 @@ def index():
     return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
                                   asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
                                   hide_buyhold=(p.exposure == "short-cash"),
-                                  tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported)
+                                  tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_unsupported=tv_unsupported)
 
 
 if __name__ == "__main__":
