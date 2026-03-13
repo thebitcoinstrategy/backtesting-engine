@@ -692,7 +692,7 @@ function toggleFields() {
     var isLevSweep = mode === 'sweep-lev';
     var rules = [
         ['period1-group', ind1 !== 'price' && mode !== 'heatmap'],
-        ['period2-group', mode === 'backtest' || mode === 'sweep-lev'],
+        ['period2-group', (mode === 'backtest' || mode === 'sweep-lev') && document.getElementById('ind2_name').value !== 'price'],
         ['range-min-group', mode === 'sweep' || mode === 'heatmap'],
         ['range-max-group', mode === 'sweep' || mode === 'heatmap'],
         ['step-group', mode === 'heatmap'],
@@ -724,7 +724,7 @@ function updateExplainer() {
 }
 document.querySelector('#period1-group input').addEventListener('input', updateExplainer);
 document.querySelector('#period2-group input').addEventListener('input', updateExplainer);
-document.getElementById('ind2_name').addEventListener('change', updateExplainer);
+document.getElementById('ind2_name').addEventListener('change', function() { updateExplainer(); toggleFields(); });
 function setAllData() {
     var asset = document.getElementById('asset').value;
     document.getElementById('start_date').value = assetStarts[asset] || '';
