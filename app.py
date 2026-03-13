@@ -800,6 +800,9 @@ document.getElementById('form').addEventListener('submit', function(e) {
                 // Release height lock after content settles
                 requestAnimationFrame(function() { panel.style.minHeight = ''; });
             }
+            // Update URL with form params for shareable links
+            var qs = new URLSearchParams(formData).toString();
+            history.replaceState(null, '', '?' + qs);
             btn.disabled = false;
             btn.textContent = 'Run Backtest';
         })
@@ -811,7 +814,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
         });
 });
 
-// Initial load on first visit
+// Initial load on first visit or when opened via shareable URL
 {% if not chart %}
 (function() {
     var btn = document.getElementById('btn');
@@ -829,6 +832,9 @@ document.getElementById('form').addEventListener('submit', function(e) {
                 var img = panel.querySelector('.chart-img');
                 if (img) { img.style.animation = 'fadeUp 0.5s ease-out both'; }
             }
+            // Update URL with form params for shareable links
+            var qs = new URLSearchParams(formData).toString();
+            history.replaceState(null, '', '?' + qs);
             btn.disabled = false;
             btn.textContent = 'Run Backtest';
         });
@@ -953,7 +959,12 @@ def index():
     col_header = "Strategy"
 
     if request.method == "GET":
-        return render_template_string(HTML, p=Params(), chart=None, best=None, table_rows=None, col_header=col_header,
+        # If query params present, pre-fill form from them (shareable URL support)
+        if any(k in request.args for k in ('asset', 'mode', 'ind1_name', 'ind2_name', 'period1', 'period2', 'exposure')):
+            p = Params(request.args)
+        else:
+            p = Params()
+        return render_template_string(HTML, p=p, chart=None, best=None, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS)
 
     p = Params(request.form)
