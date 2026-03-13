@@ -720,10 +720,9 @@ HTML = """\
                 </div>
                 {% if tv_symbol %}
                 <div id="tradingview-chart-tab" style="display:none">
-                    <div class="tv-note">
-                        Note: Indicators use TradingView default periods (click indicator settings ⚙ to adjust)
-                        {% if tv_unsupported %}<br>{{ tv_unsupported }} not available on TradingView{% endif %}
-                    </div>
+                    {% if tv_unsupported %}
+                    <div class="tv-note">Note: {{ tv_unsupported }} not available on TradingView</div>
+                    {% endif %}
                     <div id="tv-widget-container"
                          data-tv-symbol="{{ tv_symbol }}"
                          data-tv-studies="{{ tv_studies_json }}"
@@ -824,42 +823,40 @@ function loadTVWidget() {
     var tvStudies = JSON.parse(container.getAttribute('data-tv-studies') || '[]');
     var tvOverrides = JSON.parse(container.getAttribute('data-tv-overrides') || '{}');
     if (!tvSymbol) return;
-    var config = {
-        "autosize": true,
-        "symbol": tvSymbol,
-        "interval": "D",
-        "timezone": "Etc/UTC",
-        "theme": "dark",
-        "style": "1",
-        "locale": "en",
-        "backgroundColor": "rgba(22, 25, 34, 1)",
-        "gridColor": "rgba(37, 42, 58, 1)",
-        "hide_side_toolbar": false,
-        "allow_symbol_change": false,
-        "calendar": false,
-        "hide_volume": true,
-        "studies": tvStudies || [],
-        "support_host": "https://www.tradingview.com"
-    };
-    // Note: studies_overrides is NOT supported by the free embed widget
-    // and breaks study loading entirely — omitting it intentionally
+    // Use widgetembed iframe URL — supports studies_overrides as a query param
+    var params = [];
+    params.push('symbol=' + encodeURIComponent(tvSymbol));
+    params.push('interval=D');
+    params.push('timezone=Etc%2FUTC');
+    params.push('theme=dark');
+    params.push('style=1');
+    params.push('locale=en');
+    params.push('backgroundColor=rgba(22%2C%2025%2C%2034%2C%201)');
+    params.push('gridColor=rgba(37%2C%2042%2C%2058%2C%201)');
+    params.push('hide_side_toolbar=0');
+    params.push('allow_symbol_change=0');
+    params.push('calendar=0');
+    params.push('hide_volume=1');
+    params.push('support_host=https%3A%2F%2Fwww.tradingview.com');
+    // Add each study as a separate query param
+    for (var i = 0; i < tvStudies.length; i++) {
+        params.push('studies=' + encodeURIComponent(tvStudies[i]));
+    }
+    // Add studies_overrides as URL-encoded JSON
+    if (Object.keys(tvOverrides).length > 0) {
+        params.push('studies_overrides=' + encodeURIComponent(JSON.stringify(tvOverrides)));
+    }
+    var url = 'https://s.tradingview.com/widgetembed/?' + params.join('&');
     container.innerHTML = '';
-    var wrapper = document.createElement('div');
-    wrapper.className = 'tradingview-widget-container';
-    wrapper.style.height = '100%';
-    wrapper.style.width = '100%';
-    var inner = document.createElement('div');
-    inner.className = 'tradingview-widget-container__widget';
-    inner.style.height = 'calc(100% - 32px)';
-    inner.style.width = '100%';
-    wrapper.appendChild(inner);
-    container.appendChild(wrapper);
-    var script = document.createElement('script');
-    script.type = 'text/javascript';
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.async = true;
-    script.textContent = JSON.stringify(config);
-    wrapper.appendChild(script);
+    var iframe = document.createElement('iframe');
+    iframe.src = url;
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = 'none';
+    iframe.setAttribute('allowtransparency', 'true');
+    iframe.setAttribute('frameborder', '0');
+    iframe.setAttribute('allowfullscreen', '');
+    container.appendChild(iframe);
 }
 
 // Validation before submit
