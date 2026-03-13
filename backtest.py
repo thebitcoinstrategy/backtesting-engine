@@ -491,11 +491,11 @@ def _minor_fmt():
 
 def _apply_dark_theme(fig, axes):
     """Apply the web UI's dark color palette to a matplotlib figure and axes."""
-    BG = "#0f1117"
-    PANEL = "#1a1d27"
-    TEXT = "#e0e0e0"
-    MUTED = "#9ca3af"
-    GRID = "#2a2d3a"
+    BG = "#080a10"
+    PANEL = "#161922"
+    TEXT = "#e8eaf0"
+    MUTED = "#8890a4"
+    GRID = "#252a3a"
 
     fig.patch.set_facecolor(PANEL)
     if not hasattr(axes, '__iter__'):
@@ -526,7 +526,7 @@ def generate_chart(df, best_result, output_path, asset_name="Bitcoin"):
     _apply_dark_theme(fig, [ax1, ax2])
 
     # Top panel: price + indicators + buy/sell markers
-    ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color="#e0e0e0", linewidth=0.8)
+    ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color="#e8eaf0", linewidth=0.8)
 
     # Plot ind2 (always — the main/slow indicator)
     ax1.plot(
@@ -548,26 +548,26 @@ def generate_chart(df, best_result, output_path, asset_name="Bitcoin"):
     ax1.set_ylabel(f"{asset_name} Price (log scale)")
     ax1.set_title(f"{asset_name} Backtest — Best: {best_result['label']} "
                   f"({best_result['total_return']:.1f}% return)")
-    ax1.legend(loc="upper left", fontsize=8, facecolor="#1a1d27", edgecolor="#2a2d3a",
-               labelcolor="#e0e0e0")
-    ax1.grid(True, which="major", alpha=0.3, color="#2a2d3a")
-    ax1.grid(True, which="minor", alpha=0.15, color="#2a2d3a")
+    ax1.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a",
+               labelcolor="#e8eaf0")
+    ax1.grid(True, which="major", alpha=0.3, color="#252a3a")
+    ax1.grid(True, which="minor", alpha=0.15, color="#252a3a")
 
     # Bottom panel: equity curve vs buy-and-hold
     ax2.plot(best_result["equity"].index, best_result["equity"],
              label="Strategy Equity", color="#6495ED", linewidth=1)
     ax2.plot(best_result["buyhold"].index, best_result["buyhold"],
-             label="Buy & Hold", color="#9ca3af", linewidth=1, alpha=0.7)
+             label="Buy & Hold", color="#8890a4", linewidth=1, alpha=0.7)
     ax2.set_yscale("log")
     ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
     ax2.yaxis.set_minor_formatter(_minor_fmt())
     ax2.tick_params(axis='y', which='minor', labelsize=6)
     ax2.set_ylabel("Portfolio Value (log)")
     ax2.set_xlabel("Date")
-    ax2.legend(loc="upper left", fontsize=8, facecolor="#1a1d27", edgecolor="#2a2d3a",
-               labelcolor="#e0e0e0")
-    ax2.grid(True, which="major", alpha=0.3, color="#2a2d3a")
-    ax2.grid(True, which="minor", alpha=0.15, color="#2a2d3a")
+    ax2.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a",
+               labelcolor="#e8eaf0")
+    ax2.grid(True, which="major", alpha=0.3, color="#252a3a")
+    ax2.grid(True, which="minor", alpha=0.15, color="#252a3a")
 
     ax2.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
     ax2.xaxis.set_major_locator(mdates.YearLocator(2))
@@ -622,7 +622,7 @@ def generate_sweep_chart(df, ind1_name, ind1_period, ind2_name, sweep_min, sweep
     _apply_dark_theme(fig, ax)
 
     ax.plot(periods, annualized_returns, color="#6495ED", linewidth=1)
-    ax.axhline(y=bh_annualized, color="#9ca3af", linestyle="--", linewidth=1,
+    ax.axhline(y=bh_annualized, color="#8890a4", linestyle="--", linewidth=1,
                label=f"Buy & Hold ({bh_annualized:.1f}%)")
     ax.scatter([best_period], [best_ann], color="#f7931a", s=60, zorder=5,
                label=f"Best: {best_label} ({best_ann:.1f}%)")
@@ -631,9 +631,9 @@ def generate_sweep_chart(df, ind1_name, ind1_period, ind2_name, sweep_min, sweep
     ax.set_ylabel("Annualized Return (%)")
     title_prefix = f"{ind1_label_str} vs " if ind1_name != "price" else ""
     ax.set_title(f"Annualized Return by {title_prefix}{ind2_upper} Period ({sweep_min}\u2013{sweep_max})")
-    ax.legend(loc="best", fontsize=9, facecolor="#1a1d27", edgecolor="#2a2d3a",
-              labelcolor="#e0e0e0")
-    ax.grid(True, alpha=0.3, color="#2a2d3a")
+    ax.legend(loc="best", fontsize=9, facecolor="#161922", edgecolor="#252a3a",
+              labelcolor="#e8eaf0")
+    ax.grid(True, alpha=0.3, color="#252a3a")
 
     plt.tight_layout()
     plt.savefig(output_path, facecolor=fig.get_facecolor())
@@ -733,11 +733,11 @@ def generate_dual_sweep_heatmap(df, ind1_name, ind2_name,
                  f"B&H: {bh_ann:.1f}% | {exposure}")
 
     cbar = fig.colorbar(im, ax=ax, shrink=0.8)
-    cbar.set_label("Annualized Return (%)", color="#9ca3af")
-    cbar.ax.yaxis.set_tick_params(color="#9ca3af")
-    cbar.outline.set_edgecolor("#2a2d3a")
+    cbar.set_label("Annualized Return (%)", color="#8890a4")
+    cbar.ax.yaxis.set_tick_params(color="#8890a4")
+    cbar.outline.set_edgecolor("#252a3a")
     for label in cbar.ax.get_yticklabels():
-        label.set_color("#9ca3af")
+        label.set_color("#8890a4")
 
     if n <= 30:
         for i in range(n):

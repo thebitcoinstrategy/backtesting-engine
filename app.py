@@ -112,51 +112,309 @@ HTML = """\
 <html>
 <head>
     <title>Strategy Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg-deep: #080a10;
+            --bg-base: #0f1117;
+            --bg-surface: #161922;
+            --bg-elevated: #1c2030;
+            --border: #252a3a;
+            --border-hover: #3a4060;
+            --text: #e8eaf0;
+            --text-muted: #8890a4;
+            --text-dim: #555d74;
+            --accent: #f7931a;
+            --accent-hover: #ffa940;
+            --accent-glow: rgba(247, 147, 26, 0.15);
+            --green: #34d399;
+            --green-dim: rgba(52, 211, 153, 0.12);
+            --blue: #6495ED;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-               background: #0f1117; color: #e0e0e0; min-height: 100vh; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        h1 { text-align: center; margin-bottom: 24px; color: #f7931a; font-size: 1.8em; }
-        .layout { display: flex; flex-direction: column; gap: 24px; }
-        .panel { background: #1a1d27; border-radius: 12px; padding: 24px; border: 1px solid #2a2d3a; }
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg-deep);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(247, 147, 26, 0.06), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100, 149, 237, 0.04), transparent);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+            animation: fadeDown 0.6s ease-out;
+        }
+        .header h1 {
+            font-size: 1.6em;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            display: inline-flex;
+            align-items: center;
+            gap: 0;
+        }
+        .header h1 .brand-btc {
+            background: linear-gradient(135deg, var(--blue), #4a7dd6);
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 8px 0 0 8px;
+            font-weight: 700;
+        }
+        .header h1 .brand-analytics {
+            background: var(--bg-elevated);
+            color: var(--text);
+            padding: 6px 14px;
+            border-radius: 0 8px 8px 0;
+            border: 1px solid var(--border);
+            border-left: none;
+        }
+
+        /* Layout */
+        .layout { display: flex; flex-direction: column; gap: 20px; }
+
+        /* Panels */
+        .panel {
+            background: var(--bg-surface);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--border);
+            animation: fadeUp 0.5s ease-out both;
+        }
+        .panel:nth-child(1) { animation-delay: 0.1s; }
+        .panel:nth-child(2) { animation-delay: 0.2s; }
+
+        /* Form sections */
+        .form-section {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 18px;
+            margin-bottom: 14px;
+            background: var(--bg-base);
+            transition: border-color 0.3s ease;
+        }
+        .form-section:hover { border-color: var(--border-hover); }
+        .section-title {
+            font-size: 0.7em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        /* Form elements */
         .form-group { margin-bottom: 12px; }
-        .form-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+        .form-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
         .form-row .form-group { flex: 1; min-width: 140px; margin-bottom: 0; }
-        label { display: block; font-size: 0.85em; color: #9ca3af; margin-bottom: 4px; font-weight: 500; }
-        input, select { width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #2a2d3a;
-                        background: #0f1117; color: #e0e0e0; font-size: 0.95em; }
-        input:focus, select:focus { outline: none; border-color: #f7931a; }
+        label {
+            display: block;
+            font-size: 0.8em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-deep);
+            color: var(--text);
+            font-size: 0.9em;
+            font-family: 'DM Sans', sans-serif;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        select { cursor: pointer; }
         .row { display: flex; gap: 12px; }
         .row .form-group { flex: 1; }
-        button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 1em;
-                 font-weight: 600; cursor: pointer; background: #f7931a; color: #0f1117;
-                 margin-top: 8px; transition: background 0.2s; }
-        button:hover { background: #e8850f; }
-        button:disabled { background: #555; cursor: wait; }
-        .chart-img { width: 100%; border-radius: 8px; }
-        .results-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 0.85em; }
-        .results-table th, .results-table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid #2a2d3a; }
-        .results-table th { color: #9ca3af; font-weight: 500; }
-        .results-table tr:hover { background: #22253a; }
-        .best { color: #22c55e; font-weight: 600; }
-        .placeholder { text-align: center; color: #555; padding: 80px 20px; font-size: 1.1em; }
+
+        /* Separator */
+        .sep { width: 1px; background: var(--border); align-self: stretch; margin: 0 2px; flex: 0 0 1px; opacity: 0.6; }
+
+        /* Button */
+        button[type="submit"], #btn {
+            width: 100%;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 0.95em;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            background: linear-gradient(135deg, var(--accent), #e8850f);
+            color: var(--bg-deep);
+            margin-top: 8px;
+            transition: all 0.25s ease;
+            box-shadow: 0 4px 16px rgba(247, 147, 26, 0.2);
+            letter-spacing: 0.02em;
+        }
+        button[type="submit"]:hover, #btn:hover {
+            background: linear-gradient(135deg, var(--accent-hover), var(--accent));
+            box-shadow: 0 6px 24px rgba(247, 147, 26, 0.3);
+            transform: translateY(-1px);
+        }
+        button[type="submit"]:active, #btn:active { transform: translateY(0); }
+        button:disabled, #btn:disabled {
+            background: var(--bg-elevated) !important;
+            color: var(--text-dim) !important;
+            cursor: wait;
+            box-shadow: none !important;
+            transform: none !important;
+        }
+
+        /* Results table */
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 16px;
+            font-size: 0.85em;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .results-table th, .results-table td {
+            padding: 10px 12px;
+            text-align: right;
+            border-bottom: 1px solid var(--border);
+        }
+        .results-table th {
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .results-table tr { transition: background 0.15s ease; }
+        .results-table tr:hover { background: var(--bg-elevated); }
+        .best { color: var(--green); font-weight: 600; }
+        .best td:first-child::before {
+            content: '';
+            display: inline-block;
+            width: 6px; height: 6px;
+            background: var(--green);
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+            box-shadow: 0 0 8px var(--green);
+        }
+
+        /* Chart */
+        .chart-img {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            animation: fadeUp 0.6s ease-out 0.3s both;
+        }
+
+        /* Placeholder */
+        .placeholder {
+            text-align: center;
+            color: var(--text-dim);
+            padding: 80px 20px;
+            font-size: 1em;
+            letter-spacing: 0.01em;
+        }
+
+        /* Stats */
         .stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-        .stat { flex: 1; min-width: 120px; background: #0f1117; border-radius: 8px; padding: 12px; text-align: center; }
-        .stat-value { font-size: 1.3em; font-weight: 700; color: #f7931a; }
-        .stat-label { font-size: 0.75em; color: #9ca3af; margin-top: 2px; }
-        .form-section { border: 1px solid #2a2d3a; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
-        .section-title { font-size: 0.75em; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; font-weight: 600; }
-        .sep { width: 1px; background: #2a2d3a; align-self: stretch; margin: 0 4px; flex: 0 0 1px; }
+        .stat {
+            flex: 1; min-width: 120px;
+            background: var(--bg-base);
+            border-radius: 12px;
+            padding: 14px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+        .stat-value {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: var(--accent);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .stat-label { font-size: 0.72em; color: var(--text-muted); margin-top: 4px; }
+
+        /* Signal explainer */
+        .signal-explainer {
+            margin-top: 10px;
+            font-size: 0.8em;
+            color: var(--text-dim);
+            line-height: 1.5;
+            padding: 8px 12px;
+            background: var(--bg-deep);
+            border-radius: 8px;
+            border-left: 2px solid var(--accent);
+        }
+        .signal-explainer span { color: var(--text); font-weight: 500; }
+
+        /* Details */
+        details summary {
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 0.88em;
+            padding: 8px 0;
+            transition: color 0.2s;
+        }
+        details summary:hover { color: var(--text); }
+        details[open] summary { margin-bottom: 8px; }
+
+        /* All data button */
+        .btn-all-data {
+            background: var(--bg-elevated);
+            color: var(--text-muted);
+            font-size: 0.65em;
+            padding: 2px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 6px;
+            vertical-align: middle;
+            font-family: 'DM Sans', sans-serif;
+            transition: all 0.2s ease;
+        }
+        .btn-all-data:hover { background: var(--border-hover); color: var(--text); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+        /* Animations */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeDown {
+            from { opacity: 0; transform: translateY(-12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .hidden { display: none !important; }
-        .spinner { display: none; }
-        .loading .spinner { display: inline-block; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1><span style="background:#6495ED;color:#fff;font-weight:700;padding:4px 10px">Bitcoin</span><span style="background:#000;color:#fff;font-weight:700;padding:4px 10px">Strategy Analytics</span></h1>
+    <div class="header">
+        <h1><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></h1>
+    </div>
     <div class="layout">
         <div class="panel">
             <form method="POST" id="form" onsubmit="document.getElementById('btn').disabled=true; document.getElementById('btn').textContent='Running...';">
@@ -236,8 +494,8 @@ HTML = """\
                             </select>
                         </div>
                     </div>
-                    <div id="signal-explainer" style="margin-top:8px;font-size:0.8em;color:#6b7280;line-height:1.4">
-                        Buy when <span style="color:#e0e0e0" id="explainer-ind1">Price</span> crosses above <span style="color:#e0e0e0" id="explainer-ind2">SMA</span>. Sell when it crosses below.
+                    <div class="signal-explainer" id="signal-explainer">
+                        Buy when <span id="explainer-ind1">Price</span> crosses above <span id="explainer-ind2">SMA</span>. Sell when it crosses below.
                     </div>
                 </div>
                 <div class="form-section">
@@ -299,8 +557,7 @@ HTML = """\
                     <div class="section-title">Date Range & Capital</div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Start Date <button type="button" onclick="setAllData()"
-                                    style="background:#2a2d3a;color:#e0e0e0;font-size:0.65em;padding:2px 6px;border:1px solid #444;border-radius:3px;cursor:pointer;margin-left:4px;vertical-align:middle">All data</button></label>
+                            <label>Start Date <button type="button" onclick="setAllData()" class="btn-all-data">All data</button></label>
                             <input type="date" name="start_date" id="start_date" value="{{ p.start_date }}">
                         </div>
                         <div class="form-group">
@@ -310,8 +567,8 @@ HTML = """\
                         <div class="form-group">
                             <label>Initial Cash</label>
                             <div style="position:relative">
-                                <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:0.9em">$</span>
-                                <input type="number" name="initial_cash" value="{{ p.initial_cash }}" min="1" style="padding-left:20px">
+                                <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:0.9em">$</span>
+                                <input type="number" name="initial_cash" value="{{ p.initial_cash }}" min="1" style="padding-left:22px">
                             </div>
                         </div>
                         <div class="form-group">
@@ -381,7 +638,7 @@ HTML = """\
                 {% endif %}
                 {% if table_rows %}
                 <details style="margin-bottom:16px">
-                    <summary style="cursor:pointer;color:#9ca3af;font-size:0.9em">Show all results ({{ table_rows|length }})</summary>
+                    <summary>Show all results ({{ table_rows|length }})</summary>
                     <div style="max-height:300px;overflow-y:auto;margin-top:8px">
                     <table class="results-table">
                         <tr><th>Strategy</th><th>Return %</th><th>B&H %</th><th>Max DD %</th><th>Trades</th></tr>
@@ -675,7 +932,7 @@ def index():
             all_levs.extend(short_levs)
         x_min, x_max = min(all_levs), max(all_levs)
         if p.exposure != "short-cash":
-            ax.plot([x_min, x_max], [bh_ann, bh_ann], color="#9ca3af", linestyle="--", linewidth=1,
+            ax.plot([x_min, x_max], [bh_ann, bh_ann], color="#8890a4", linestyle="--", linewidth=1,
                     label=f"Buy & Hold ({bh_ann:.1f}%)")
         ax.set_xlim(x_min, x_max)
         from matplotlib.ticker import MultipleLocator
@@ -689,8 +946,8 @@ def index():
             title_parts.append(f"Best Short: {best_short_lev:.2f}x ({best_short_ann:.1f}%)")
         ax.set_title(f"{asset_title} {title_label} \u2014 Leverage Sweep | {p.exposure}\n"
                      f"{' | '.join(title_parts)}")
-        ax.legend(loc="best", fontsize=9, facecolor="#1a1d27", edgecolor="#2a2d3a", labelcolor="#e0e0e0")
-        ax.grid(True, alpha=0.3, color="#2a2d3a")
+        ax.legend(loc="best", fontsize=9, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
+        ax.grid(True, alpha=0.3, color="#252a3a")
         plt.tight_layout()
 
         buf = BytesIO()
@@ -809,8 +1066,8 @@ def index():
                      f"Best: {ind1_upper}({best_p1})/{ind2_upper}({best_p2}) = {best_ann:.1f}% | "
                      f"B&H: {bh_ann:.1f}% | {p.exposure}")
         cbar = fig.colorbar(im, ax=ax, shrink=0.8)
-        cbar.set_label("Annualized Return (%)", color="#9ca3af")
-        cbar.ax.yaxis.set_tick_params(color="#9ca3af")
+        cbar.set_label("Annualized Return (%)", color="#8890a4")
+        cbar.ax.yaxis.set_tick_params(color="#8890a4")
         cbar.outline.set_edgecolor("#2a2d3a")
         for label in cbar.ax.get_yticklabels():
             label.set_color("#9ca3af")
@@ -872,7 +1129,7 @@ def index():
         bt._apply_dark_theme(fig, ax)
         ax.plot(periods, annualized_returns, color="#6495ED", linewidth=1)
         if p.exposure != "short-cash":
-            ax.axhline(y=bh_annualized, color="#9ca3af", linestyle="--", linewidth=1,
+            ax.axhline(y=bh_annualized, color="#8890a4", linestyle="--", linewidth=1,
                         label=f"Buy & Hold ({bh_annualized:.1f}%)")
         ax.scatter([best_period], [best_ann], color="#f7931a", s=60, zorder=5,
                     label=f"Best: {best_label} ({best_ann:.1f}%)")
@@ -881,8 +1138,8 @@ def index():
         asset_title = p.asset.capitalize()
         title_prefix = f"{ind1_label_str} vs " if p.ind1_name != "price" else ""
         ax.set_title(f"{asset_title} \u2014 Annualized Return by {title_prefix}{ind2_upper} Period ({p.range_min}-{p.range_max}) | {p.exposure}")
-        ax.legend(loc="best", fontsize=9, facecolor="#1a1d27", edgecolor="#2a2d3a", labelcolor="#e0e0e0")
-        ax.grid(True, alpha=0.3, color="#2a2d3a")
+        ax.legend(loc="best", fontsize=9, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
+        ax.grid(True, alpha=0.3, color="#252a3a")
         plt.tight_layout()
 
         buf = BytesIO()
@@ -935,7 +1192,7 @@ def index():
                                                 gridspec_kw={"height_ratios": [7, 3]}, sharex=True)
                 bt._apply_dark_theme(fig, [ax1, ax2])
 
-            ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color="#e0e0e0", linewidth=0.8)
+            ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color="#e8eaf0", linewidth=0.8)
 
             # Plot ind2 (main/slow indicator)
             ax1.plot(best["ind2_series"].index, best["ind2_series"],
@@ -953,36 +1210,36 @@ def index():
             ax1.set_ylabel(f"{asset_name} Price (log scale)")
             ax1.set_title(f"{asset_name} Backtest \u2014 Best: {best['label']} "
                           f"({best['total_return']:.1f}% return) | {p.exposure}")
-            ax1.legend(loc="upper left", fontsize=8, facecolor="#1a1d27", edgecolor="#2a2d3a", labelcolor="#e0e0e0")
-            ax1.grid(True, which="major", alpha=0.3, color="#2a2d3a")
-            ax1.grid(True, which="minor", alpha=0.15, color="#2a2d3a")
+            ax1.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
+            ax1.grid(True, which="major", alpha=0.3, color="#252a3a")
+            ax1.grid(True, which="minor", alpha=0.15, color="#252a3a")
 
             ax2.plot(best["equity"].index, best["equity"], label="Strategy Equity", color="#6495ED", linewidth=1)
             if show_ratio:
-                ax2.plot(best["buyhold"].index, best["buyhold"], label="Buy & Hold", color="#9ca3af", linewidth=1, alpha=0.7)
+                ax2.plot(best["buyhold"].index, best["buyhold"], label="Buy & Hold", color="#8890a4", linewidth=1, alpha=0.7)
             ax2.set_yscale("log")
             ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
             ax2.yaxis.set_minor_formatter(_minor_usd_formatter())
             ax2.tick_params(axis='y', which='minor', labelsize=6)
             ax2.set_ylabel("Portfolio Value (log)")
-            ax2.legend(loc="upper left", fontsize=8, facecolor="#1a1d27", edgecolor="#2a2d3a", labelcolor="#e0e0e0")
-            ax2.grid(True, which="major", alpha=0.3, color="#2a2d3a")
-            ax2.grid(True, which="minor", alpha=0.15, color="#2a2d3a")
+            ax2.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
+            ax2.grid(True, which="major", alpha=0.3, color="#252a3a")
+            ax2.grid(True, which="minor", alpha=0.15, color="#252a3a")
 
             last_ax = ax2
             if show_ratio:
                 ratio = best["equity"] / best["buyhold"].replace(0, np.nan)
                 ratio_normalized = ratio / ratio.dropna().iloc[0] * 100
                 ax3.plot(ratio_normalized.index, ratio_normalized, color="#a78bfa", linewidth=1, label=f"Strategy in {asset_name}")
-                ax3.axhline(y=100, color="#9ca3af", linestyle="--", linewidth=0.8, alpha=0.7)
+                ax3.axhline(y=100, color="#8890a4", linestyle="--", linewidth=0.8, alpha=0.7)
                 ax3.set_yscale("log")
                 ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.2f}" if x < 1 else f"{x:,.0f}"))
                 ax3.yaxis.set_minor_formatter(_minor_usd_formatter(dollar=False))
                 ax3.tick_params(axis='y', which='minor', labelsize=6)
                 ax3.set_ylabel(f"Value in {asset_name}")
-                ax3.legend(loc="upper left", fontsize=8, facecolor="#1a1d27", edgecolor="#2a2d3a", labelcolor="#e0e0e0")
-                ax3.grid(True, which="major", alpha=0.3, color="#2a2d3a")
-                ax3.grid(True, which="minor", alpha=0.15, color="#2a2d3a")
+                ax3.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
+                ax3.grid(True, which="major", alpha=0.3, color="#252a3a")
+                ax3.grid(True, which="minor", alpha=0.15, color="#252a3a")
                 last_ax = ax3
             last_ax.set_xlabel("Date")
             last_ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
