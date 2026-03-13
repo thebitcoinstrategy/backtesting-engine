@@ -171,14 +171,14 @@ HTML = """\
             background: linear-gradient(135deg, var(--blue), #4a7dd6);
             color: #fff;
             padding: 6px 14px;
-            border-radius: 8px 0 0 8px;
+            border-radius: 0;
             font-weight: 700;
         }
         .header h1 .brand-analytics {
             background: var(--bg-elevated);
             color: var(--text);
             padding: 6px 14px;
-            border-radius: 0 8px 8px 0;
+            border-radius: 0;
             border: 1px solid var(--border);
             border-left: none;
         }
