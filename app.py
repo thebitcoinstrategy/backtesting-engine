@@ -733,7 +733,12 @@ document.getElementById('form').addEventListener('submit', function(e) {
             var doc = new DOMParser().parseFromString(html, 'text/html');
             var newPanel = doc.getElementById('results-panel');
             if (newPanel) {
+                // Lock panel height to prevent scroll jump during swap
+                var oldHeight = panel.offsetHeight;
+                panel.style.minHeight = oldHeight + 'px';
+                var scrollY = window.scrollY;
                 panel.innerHTML = newPanel.innerHTML;
+                window.scrollTo(0, scrollY);
                 panel.style.opacity = '1';
                 // Re-trigger fadeUp animation on chart image
                 var img = panel.querySelector('.chart-img');
@@ -742,7 +747,8 @@ document.getElementById('form').addEventListener('submit', function(e) {
                     img.offsetHeight;
                     img.style.animation = 'fadeUp 0.5s ease-out both';
                 }
-                // no scroll — keep user's current position
+                // Release height lock after content settles
+                requestAnimationFrame(function() { panel.style.minHeight = ''; });
             }
             btn.disabled = false;
             btn.textContent = 'Run Backtest';
