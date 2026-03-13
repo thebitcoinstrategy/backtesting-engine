@@ -2,12 +2,108 @@
 """Web interface for the Backtesting Engine."""
 
 import os
+import hmac
+import hashlib
+import json
+import time
 import base64
+import functools
 from io import BytesIO
-from flask import Flask, render_template_string, request
+from datetime import timedelta
+from flask import Flask, render_template_string, request, session, redirect
 import backtest as bt
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
+ANALYTICS_SECRET = os.environ.get('ANALYTICS_SHARED_SECRET', '')
+LARAVEL_LOGIN_URL = 'https://the-bitcoin-strategy.com/app'
+SESSION_DURATION = 86400  # 24 hours
+
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') != 'development'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+
+# In-memory nonce tracking for token replay protection
+_used_nonces = {}
+_NONCE_CLEANUP_INTERVAL = 300  # clean up expired nonces every 5 min
+_last_nonce_cleanup = 0
+
+
+def _cleanup_nonces():
+    """Remove expired nonces to prevent memory growth."""
+    global _last_nonce_cleanup
+    now = time.time()
+    if now - _last_nonce_cleanup < _NONCE_CLEANUP_INTERVAL:
+        return
+    _last_nonce_cleanup = now
+    cutoff = now - 120  # nonces older than 2 min can't be valid (60s expiry + buffer)
+    expired = [n for n, t in _used_nonces.items() if t < cutoff]
+    for n in expired:
+        del _used_nonces[n]
+
+
+def _validate_token(token):
+    """Validate an HMAC-signed token. Returns payload dict or None."""
+    if not ANALYTICS_SECRET:
+        return None
+    try:
+        raw = base64.urlsafe_b64decode(token)
+        data = json.loads(raw)
+    except Exception:
+        return None
+
+    signature = data.pop('sig', None)
+    if not signature:
+        return None
+
+    # Recompute HMAC over the payload (without sig)
+    payload_bytes = json.dumps(data, sort_keys=True, separators=(',', ':')).encode()
+    expected = hmac.new(ANALYTICS_SECRET.encode(), payload_bytes, hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(expected, signature):
+        return None
+
+    # Check expiry
+    if time.time() > data.get('exp', 0):
+        return None
+
+    # Check nonce (replay protection)
+    _cleanup_nonces()
+    nonce = data.get('nonce', '')
+    if nonce in _used_nonces:
+        return None
+    _used_nonces[nonce] = time.time()
+
+    return data
+
+
+def require_auth(f):
+    """Decorator: require valid token or active session, else redirect to Laravel login."""
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        # Check for token in query string
+        token = request.args.get('token')
+        if token:
+            payload = _validate_token(token)
+            if payload:
+                session.permanent = True
+                session['user_id'] = payload.get('user_id')
+                session['email'] = payload.get('email')
+                session['auth_time'] = time.time()
+                # Redirect to clean URL (strip token from query string)
+                return redirect('/', code=302)
+            # Invalid token — fall through to session check
+
+        # Check existing session
+        auth_time = session.get('auth_time')
+        if auth_time and (time.time() - auth_time) < SESSION_DURATION:
+            return f(*args, **kwargs)
+
+        # No valid auth — redirect to Laravel
+        return redirect(LARAVEL_LOGIN_URL, code=302)
+
+    return decorated
 
 HTML = """\
 <!DOCTYPE html>
@@ -471,6 +567,7 @@ def _build_strategy_label(p):
 
 
 @app.route("/", methods=["GET", "POST"])
+@require_auth
 def index():
     chart_b64 = None
     best = None
