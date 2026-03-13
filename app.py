@@ -742,7 +742,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
                     img.offsetHeight;
                     img.style.animation = 'fadeUp 0.5s ease-out both';
                 }
-                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                // no scroll — keep user's current position
             }
             btn.disabled = false;
             btn.textContent = 'Run Backtest';
