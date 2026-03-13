@@ -559,6 +559,11 @@ def _apply_dark_theme(fig, axes):
         for spine in ax.spines.values():
             spine.set_color(GRID)
 
+    # Watermark
+    fig.text(0.5, 0.5, "Bitcoin Strategy", fontsize=48, fontweight="bold",
+             color=TEXT, alpha=0.04, ha="center", va="center",
+             rotation=30, transform=fig.transFigure, zorder=0)
+
 
 def generate_chart(df, best_result, output_path, asset_name="Bitcoin"):
     """Generate a two-panel PNG chart: price+indicators with markers, and equity curves."""
