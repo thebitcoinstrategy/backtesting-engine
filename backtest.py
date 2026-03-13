@@ -561,7 +561,7 @@ def _apply_dark_theme(fig, axes):
 
     # URL branding at bottom right
     fig.text(0.98, 0.01, "the-bitcoin-strategy.com", fontsize=9,
-             color=MUTED, alpha=0.5, ha="right", va="bottom",
+             color="#ffffff", alpha=0.5, ha="right", va="bottom",
              transform=fig.transFigure)
 
 
