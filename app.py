@@ -738,11 +738,37 @@ function onAssetChange() {
 }
 toggleFields();
 
+// Validation before submit
+function validateForm() {
+    var mode = document.getElementById('mode').value;
+    var ind1 = document.getElementById('ind1_name').value;
+    var p2 = document.querySelector('#period2-group input').value.trim();
+    var p1 = document.querySelector('#period1-group input').value.trim();
+    var errors = [];
+
+    // Period 2 required in backtest and sweep-lev modes
+    if ((mode === 'backtest' || mode === 'sweep-lev') && !p2) {
+        errors.push('Period 2 is required');
+    }
+    // Period 1 required when ind1 is not price (and not heatmap which sweeps it)
+    if (ind1 !== 'price' && mode !== 'heatmap' && !p1) {
+        errors.push('Period 1 is required when Indicator 1 is not Price');
+    }
+    return errors;
+}
+
 // AJAX form submission — only replace the results panel
 document.getElementById('form').addEventListener('submit', function(e) {
     e.preventDefault();
     var btn = document.getElementById('btn');
     var panel = document.getElementById('results-panel');
+
+    var errors = validateForm();
+    if (errors.length > 0) {
+        panel.innerHTML = '<div class="placeholder" style="color:var(--accent)">' + errors.join('<br>') + '</div>';
+        return;
+    }
+
     btn.disabled = true;
     btn.textContent = 'Running...';
     panel.style.opacity = '0.5';
