@@ -316,6 +316,44 @@ HTML = """\
             box-shadow: 0 0 8px var(--green);
         }
 
+        /* Chart tabs */
+        .chart-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 12px;
+        }
+        .chart-tab {
+            padding: 6px 16px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px 8px 0 0;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.85em;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .chart-tab:hover {
+            color: var(--text);
+            border-color: var(--border-hover);
+        }
+        .chart-tab.active {
+            background: var(--bg-elevated);
+            color: var(--text);
+            border-color: var(--accent);
+            border-bottom-color: var(--bg-elevated);
+        }
+        .tv-note {
+            color: var(--text-muted);
+            font-size: 0.82em;
+            padding: 8px 12px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
         /* Chart */
         .chart-img {
             width: 100%;
@@ -671,7 +709,28 @@ HTML = """\
                     </div>
                 </details>
                 {% endif %}
-                <img class="chart-img" src="data:image/png;base64,{{ chart }}" />
+                {% if tv_symbol %}
+                <div class="chart-tabs">
+                    <button class="chart-tab active" onclick="switchChartTab('backtest', this)">Backtest Chart</button>
+                    <button class="chart-tab" onclick="switchChartTab('tradingview', this)">TradingView</button>
+                </div>
+                {% endif %}
+                <div id="backtest-chart-tab">
+                    <img class="chart-img" src="data:image/png;base64,{{ chart }}" />
+                </div>
+                {% if tv_symbol %}
+                <div id="tradingview-chart-tab" style="display:none">
+                    {% if tv_unsupported %}
+                    <div class="tv-note">Note: {{ tv_unsupported }} not available on TradingView widget</div>
+                    {% endif %}
+                    <div id="tv-widget-container"
+                         data-tv-symbol="{{ tv_symbol }}"
+                         data-tv-studies="{{ tv_studies_json }}"
+                         data-tv-overrides="{{ tv_overrides_json }}"
+                         style="height:600px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
+                    </div>
+                </div>
+                {% endif %}
             {% else %}
                 <div class="placeholder">Configure parameters and press Run Backtest</div>
             {% endif %}
@@ -739,6 +798,66 @@ function onAssetChange() {
 }
 toggleFields();
 
+// TradingView chart tab switching
+var tvWidgetLoaded = false;
+function switchChartTab(tab, btn) {
+    var bt = document.getElementById('backtest-chart-tab');
+    var tv = document.getElementById('tradingview-chart-tab');
+    if (!bt || !tv) return;
+    bt.style.display = tab === 'backtest' ? '' : 'none';
+    tv.style.display = tab === 'tradingview' ? '' : 'none';
+    // Update active tab styling
+    var tabs = btn.parentElement.querySelectorAll('.chart-tab');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+    btn.classList.add('active');
+    // Load TV widget on first switch
+    if (tab === 'tradingview' && !tvWidgetLoaded) {
+        loadTVWidget();
+    }
+}
+function loadTVWidget() {
+    var container = document.getElementById('tv-widget-container');
+    if (!container) return;
+    tvWidgetLoaded = true;
+    var tvSymbol = container.getAttribute('data-tv-symbol');
+    var tvStudies = JSON.parse(container.getAttribute('data-tv-studies') || '[]');
+    var tvOverrides = JSON.parse(container.getAttribute('data-tv-overrides') || '{}');
+    if (!tvSymbol) return;
+    var config = {
+        "autosize": true,
+        "symbol": tvSymbol,
+        "interval": "D",
+        "timezone": "Etc/UTC",
+        "theme": "dark",
+        "style": "1",
+        "locale": "en",
+        "backgroundColor": "#161922",
+        "gridColor": "#252a3a",
+        "hide_side_toolbar": false,
+        "allow_symbol_change": false,
+        "studies": tvStudies || [],
+        "studies_overrides": tvOverrides || {},
+        "support_host": "https://www.tradingview.com"
+    };
+    container.innerHTML = '';
+    var wrapper = document.createElement('div');
+    wrapper.className = 'tradingview-widget-container';
+    wrapper.style.height = '100%';
+    wrapper.style.width = '100%';
+    var inner = document.createElement('div');
+    inner.className = 'tradingview-widget-container__widget';
+    inner.style.height = 'calc(100% - 32px)';
+    inner.style.width = '100%';
+    wrapper.appendChild(inner);
+    container.appendChild(wrapper);
+    var script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.async = true;
+    script.textContent = JSON.stringify(config);
+    wrapper.appendChild(script);
+}
+
 // Validation before submit
 function validateForm() {
     var mode = document.getElementById('mode').value;
@@ -790,6 +909,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
                 panel.innerHTML = newPanel.innerHTML;
                 window.scrollTo(0, scrollY);
                 panel.style.opacity = '1';
+                tvWidgetLoaded = false;
                 // Re-trigger fadeUp animation on chart image
                 var img = panel.querySelector('.chart-img');
                 if (img) {
@@ -829,6 +949,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
             var newPanel = doc.getElementById('results-panel');
             if (newPanel) {
                 panel.innerHTML = newPanel.innerHTML;
+                tvWidgetLoaded = false;
                 var img = panel.querySelector('.chart-img');
                 if (img) { img.style.animation = 'fadeUp 0.5s ease-out both'; }
             }
@@ -914,6 +1035,61 @@ PRIORITY_ASSETS = [a for a in _PRIORITY_ORDER if a in ASSETS]
 OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER]
 DEFAULT_ASSET = "bitcoin" if "bitcoin" in ASSETS else ASSET_NAMES[0]
 
+# TradingView widget mappings
+TV_SYMBOLS = {
+    'bitcoin': 'BITSTAMP:BTCUSD',
+    'ethereum': 'BITSTAMP:ETHUSD',
+    'solana': 'COINBASE:SOLUSD',
+    'xrp': 'BITSTAMP:XRPUSD',
+    'cardano': 'BINANCE:ADAUSDT',
+    'bnb': 'BINANCE:BNBUSDT',
+    'dogecoin': 'BINANCE:DOGEUSDT',
+    'chainlink': 'BINANCE:LINKUSDT',
+    'monero': 'KRAKEN:XMRUSD',
+    'bitcoin cash': 'COINBASE:BCHUSD',
+    'hyperliquid': 'BYBIT:HYPEUSDT',
+}
+
+# (study_id, overrides_key) — only indicators TradingView supports natively
+TV_STUDIES = {
+    'sma':  ('MASimple@tv-basicstudies', 'moving average.length'),
+    'ema':  ('MAExp@tv-basicstudies', 'moving average exponential.length'),
+    'wma':  ('MAWeighted@tv-basicstudies', 'moving average weighted.length'),
+    'hma':  ('HullMA@tv-basicstudies', 'hull moving average.length'),
+    'dema': ('DEMA@tv-basicstudies', 'double ema.length'),
+    'tema': ('TEMA@tv-basicstudies', 'triple ema.length'),
+}
+# Unsupported on TradingView: kama, zlema, smma, lsma, alma, frama, t3, mcginley
+
+
+def _build_tv_config(asset, ind1_name, ind1_period, ind2_name, ind2_period):
+    """Build TradingView widget config for the given backtest params."""
+    tv_symbol = TV_SYMBOLS.get(asset)
+    if not tv_symbol:
+        return None, None, None, None
+
+    studies = []
+    overrides = {}
+    unsupported = []
+
+    for ind_name, ind_period in [(ind1_name, ind1_period), (ind2_name, ind2_period)]:
+        if ind_name == 'price':
+            continue
+        if ind_name in TV_STUDIES:
+            study_id, override_key = TV_STUDIES[ind_name]
+            studies.append(study_id)
+            if ind_period:
+                overrides[override_key] = ind_period
+        else:
+            unsupported.append(ind_name.upper())
+
+    # When both indicators are the same type, overrides collide — note the limitation
+    if ind1_name == ind2_name and ind1_name != 'price' and ind1_name in TV_STUDIES:
+        unsupported.append(f'{ind1_name.upper()} dual-period (widget shows both at period {ind2_period})')
+
+    unsupported_str = ', '.join(unsupported) if unsupported else None
+    return tv_symbol, studies, overrides, unsupported_str
+
 
 def _enrich_best(result, df):
     """Add annualized return and buy-and-hold metrics to a result dict."""
@@ -965,9 +1141,14 @@ def index():
         else:
             p = Params()
         return render_template_string(HTML, p=p, chart=None, best=None, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS)
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
+                                      tv_symbol=None, tv_studies_json='[]', tv_overrides_json='{}', tv_unsupported=None)
 
     p = Params(request.form)
+    tv_symbol, tv_studies, tv_overrides, tv_unsupported = _build_tv_config(
+        p.asset, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period)
+    tv_studies_json = json.dumps(tv_studies or [])
+    tv_overrides_json = json.dumps(tv_overrides or {})
     import pandas as pd_mod
     df = ASSETS.get(p.asset, ASSETS[DEFAULT_ASSET]).copy()
     if p.start_date:
@@ -1104,7 +1285,8 @@ def index():
         }
         return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
-                                      hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info)
+                                      hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info,
+                                      tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported)
 
     # --- Heatmap Mode ---
     if p.mode == "heatmap":
@@ -1226,7 +1408,8 @@ def index():
 
         return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
-                                      hide_buyhold=(p.exposure == "short-cash"))
+                                      hide_buyhold=(p.exposure == "short-cash"),
+                                      tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported)
 
     # --- Sweep Mode (Find Best Period) ---
     if p.mode == "sweep":
@@ -1387,7 +1570,8 @@ def index():
 
     return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
                                   asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
-                                  hide_buyhold=(p.exposure == "short-cash"))
+                                  hide_buyhold=(p.exposure == "short-cash"),
+                                  tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported)
 
 
 if __name__ == "__main__":
