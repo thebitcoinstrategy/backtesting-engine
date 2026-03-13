@@ -720,9 +720,10 @@ HTML = """\
                 </div>
                 {% if tv_symbol %}
                 <div id="tradingview-chart-tab" style="display:none">
-                    {% if tv_unsupported %}
-                    <div class="tv-note">Note: {{ tv_unsupported }} not available on TradingView widget</div>
-                    {% endif %}
+                    <div class="tv-note">
+                        Note: Indicators use TradingView default periods (click indicator settings ⚙ to adjust)
+                        {% if tv_unsupported %}<br>{{ tv_unsupported }} not available on TradingView{% endif %}
+                    </div>
                     <div id="tv-widget-container"
                          data-tv-symbol="{{ tv_symbol }}"
                          data-tv-studies="{{ tv_studies_json }}"
@@ -831,14 +832,17 @@ function loadTVWidget() {
         "theme": "dark",
         "style": "1",
         "locale": "en",
-        "backgroundColor": "#161922",
-        "gridColor": "#252a3a",
+        "backgroundColor": "rgba(22, 25, 34, 1)",
+        "gridColor": "rgba(37, 42, 58, 1)",
         "hide_side_toolbar": false,
         "allow_symbol_change": false,
+        "calendar": false,
+        "hide_volume": true,
         "studies": tvStudies || [],
-        "studies_overrides": tvOverrides || {},
         "support_host": "https://www.tradingview.com"
     };
+    // Note: studies_overrides is NOT supported by the free embed widget
+    // and breaks study loading entirely — omitting it intentionally
     container.innerHTML = '';
     var wrapper = document.createElement('div');
     wrapper.className = 'tradingview-widget-container';
@@ -1082,10 +1086,6 @@ def _build_tv_config(asset, ind1_name, ind1_period, ind2_name, ind2_period):
                 overrides[override_key] = ind_period
         else:
             unsupported.append(ind_name.upper())
-
-    # Same indicator type used twice — overrides key collision, only last period applies
-    if ind1_name == ind2_name and ind1_name != 'price' and ind1_name in TV_STUDIES:
-        unsupported.append(f'{ind1_name.upper()} dual-period — widget shows both at period {ind2_period}')
 
     unsupported_str = ', '.join(unsupported) if unsupported else None
     return tv_symbol, studies, overrides, unsupported_str
