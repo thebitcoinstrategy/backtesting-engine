@@ -559,10 +559,16 @@ def _apply_dark_theme(fig, axes):
         for spine in ax.spines.values():
             spine.set_color(GRID)
 
-    # Watermark
-    fig.text(0.5, 0.5, "Bitcoin Strategy", fontsize=48, fontweight="bold",
-             color=TEXT, alpha=0.04, ha="center", va="center",
-             rotation=30, transform=fig.transFigure, zorder=0)
+    # Watermark on first axis — styled like the website logo
+    ax0 = axes[0]
+    ax0.text(0.48, 0.5, "Bitcoin", fontsize=36, fontweight="bold",
+             color="#ffffff", alpha=0.06, ha="right", va="center",
+             transform=ax0.transAxes, zorder=0,
+             bbox=dict(boxstyle="square,pad=0.15", facecolor="#6495ED", alpha=0.06, edgecolor="none"))
+    ax0.text(0.52, 0.5, "Strategy Analytics", fontsize=36, fontweight="bold",
+             color="#ffffff", alpha=0.06, ha="left", va="center",
+             transform=ax0.transAxes, zorder=0,
+             bbox=dict(boxstyle="square,pad=0.15", facecolor="#000000", alpha=0.06, edgecolor="none"))
 
 
 def generate_chart(df, best_result, output_path, asset_name="Bitcoin"):
