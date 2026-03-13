@@ -419,6 +419,32 @@ HTML = """\
         <div class="panel">
             <form method="POST" id="form">
                 <div class="form-section">
+                    <div class="section-title">Mode & Parameters</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Mode</label>
+                            <select name="mode" id="mode" onchange="toggleFields()">
+                                <option value="backtest" {{ 'selected' if p.mode=='backtest' }}>Backtest</option>
+                                <option value="sweep" {{ 'selected' if p.mode=='sweep' }}>Find best period</option>
+                                <option value="heatmap" {{ 'selected' if p.mode=='heatmap' }}>Find best combo</option>
+                                <option value="sweep-lev" {{ 'selected' if p.mode=='sweep-lev' }}>Find best leverage</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="range-min-group">
+                            <label>Range Min</label>
+                            <input type="number" name="range_min" value="{{ p.range_min }}" min="2">
+                        </div>
+                        <div class="form-group" id="range-max-group">
+                            <label>Range Max</label>
+                            <input type="number" name="range_max" value="{{ p.range_max }}" min="2">
+                        </div>
+                        <div class="form-group" id="step-group">
+                            <label>Step</label>
+                            <input type="number" name="step" value="{{ p.step }}" min="1">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-section">
                     <div class="section-title">Asset & Strategy</div>
                     <div class="form-row">
                         <div class="form-group">
@@ -496,32 +522,6 @@ HTML = """\
                     </div>
                     <div class="signal-explainer" id="signal-explainer">
                         Buy when <span id="explainer-ind1">Price</span> crosses above <span id="explainer-ind2">SMA</span>. Sell when it crosses below.
-                    </div>
-                </div>
-                <div class="form-section">
-                    <div class="section-title">Mode & Parameters</div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Mode</label>
-                            <select name="mode" id="mode" onchange="toggleFields()">
-                                <option value="backtest" {{ 'selected' if p.mode=='backtest' }}>Backtest</option>
-                                <option value="sweep" {{ 'selected' if p.mode=='sweep' }}>Find best period</option>
-                                <option value="heatmap" {{ 'selected' if p.mode=='heatmap' }}>Find best combo</option>
-                                <option value="sweep-lev" {{ 'selected' if p.mode=='sweep-lev' }}>Find best leverage</option>
-                            </select>
-                        </div>
-                        <div class="form-group" id="range-min-group">
-                            <label>Range Min</label>
-                            <input type="number" name="range_min" value="{{ p.range_min }}" min="2">
-                        </div>
-                        <div class="form-group" id="range-max-group">
-                            <label>Range Max</label>
-                            <input type="number" name="range_max" value="{{ p.range_max }}" min="2">
-                        </div>
-                        <div class="form-group" id="step-group">
-                            <label>Step</label>
-                            <input type="number" name="step" value="{{ p.step }}" min="1">
-                        </div>
                     </div>
                 </div>
                 <div class="form-section">
