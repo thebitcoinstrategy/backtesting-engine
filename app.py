@@ -48,7 +48,9 @@ def _validate_token(token):
     if not ANALYTICS_SECRET:
         return None
     try:
-        raw = base64.urlsafe_b64decode(token)
+        # Add padding if stripped (PHP strips trailing '=')
+        padded = token + '=' * (4 - len(token) % 4) if len(token) % 4 else token
+        raw = base64.urlsafe_b64decode(padded)
         data = json.loads(raw)
     except Exception:
         return None
