@@ -391,6 +391,17 @@ HTML = """\
         }
         .btn-all-data:hover { background: var(--border-hover); color: var(--text); }
 
+        /* Info icon */
+        .info-icon {
+            cursor: pointer;
+            color: var(--text-dim);
+            font-size: 1.1em;
+            vertical-align: middle;
+            margin-left: 4px;
+            transition: color 0.2s ease;
+        }
+        .info-icon:hover { color: var(--accent); }
+
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: var(--bg-base); }
@@ -544,13 +555,19 @@ HTML = """\
                             <input type="number" name="lev_max" value="{{ p.lev_max }}" step="any" min="0.1">
                         </div>
                         <div class="form-group" id="lev-mode-group">
-                            <label>Leverage Mode</label>
+                            <label>Leverage Mode <span class="info-icon" onclick="document.getElementById('lev-mode-info').classList.toggle('hidden')" title="Click for details">&#9432;</span></label>
                             <select name="lev_mode">
+                                <option value="optimal" {{ 'selected' if p.lev_mode=='optimal' }}>Optimal</option>
                                 <option value="rebalance" {{ 'selected' if p.lev_mode=='rebalance' }}>Daily Rebalance</option>
                                 <option value="set-forget" {{ 'selected' if p.lev_mode=='set-forget' }}>Set & Forget</option>
                             </select>
                         </div>
                         <input type="hidden" name="lev_step" value="0.25">
+                    </div>
+                    <div id="lev-mode-info" class="hidden" style="margin-top:10px;font-size:0.78em;color:var(--text-muted);line-height:1.6;padding:10px 14px;background:var(--bg-deep);border-radius:8px;border-left:2px solid var(--accent)">
+                        <strong style="color:var(--text)">Optimal</strong> — Daily rebalance for long positions, set & forget for short positions. Best of both worlds.<br>
+                        <strong style="color:var(--text)">Daily Rebalance</strong> — Leverage is reset to target every day. Consistent exposure but higher fees in volatile markets.<br>
+                        <strong style="color:var(--text)">Set & Forget</strong> — Leverage is applied at entry and drifts naturally. Lower fees but exposure changes over time.
                     </div>
                 </div>
                 <div class="form-section">
@@ -817,7 +834,7 @@ class Params:
             self.fee = float(form.get("fee", 0.1))
             self.long_leverage = float(form.get("long_leverage", 1))
             self.short_leverage = float(form.get("short_leverage", 1))
-            self.lev_mode = form.get("lev_mode", "set-forget")
+            self.lev_mode = form.get("lev_mode", "optimal")
             self.lev_min = float(form.get("lev_min", 0.25))
             self.lev_max = float(form.get("lev_max", 10))
             self.lev_step = float(form.get("lev_step", 0.25))
@@ -838,7 +855,7 @@ class Params:
             self.fee = 0.1
             self.long_leverage = 1
             self.short_leverage = 1
-            self.lev_mode = "set-forget"
+            self.lev_mode = "optimal"
             self.lev_min = 0.25
             self.lev_max = 10
             self.lev_step = 0.25
@@ -954,6 +971,9 @@ def index():
         def _sweep_ann(ll, sl):
             if p.lev_mode == "set-forget":
                 equity_arr, _ = bt._compute_equity_set_and_forget(
+                    position_base.values, daily_return.values, p.initial_cash, ll, sl, fee)
+            elif p.lev_mode == "optimal":
+                equity_arr, _ = bt._compute_equity_optimal(
                     position_base.values, daily_return.values, p.initial_cash, ll, sl, fee)
             else:
                 leverage = np.where(position_base.values > 0, ll,

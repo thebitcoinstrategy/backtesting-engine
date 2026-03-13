@@ -291,6 +291,51 @@ def _compute_equity_set_and_forget(positions, daily_returns, initial_cash, long_
     return equity, liquidated
 
 
+def _compute_equity_optimal(positions, daily_returns, initial_cash, long_leverage, short_leverage, fee):
+    """Compute equity with optimal leverage mode.
+
+    Long positions: daily rebalance (leverage reset each day).
+    Short positions: set-and-forget (leverage drifts naturally).
+    """
+    n = len(positions)
+    equity = np.empty(n)
+    current_equity = initial_cash
+    current_pos = 0
+    cum_return = 1.0
+    entry_equity = current_equity
+    liquidated = False
+
+    for i in range(n):
+        if liquidated:
+            equity[i] = 0.0
+            continue
+
+        pos = positions[i]
+        dr = daily_returns[i]
+
+        if pos != current_pos:
+            current_equity *= (1 - fee)
+            current_pos = pos
+            entry_equity = current_equity
+            cum_return = 1.0
+
+        if current_pos > 0:
+            # Long: daily rebalance
+            current_equity *= (1 + dr * long_leverage)
+        elif current_pos < 0:
+            # Short: set-and-forget
+            cum_return *= (1 + dr)
+            current_equity = entry_equity * (1 + short_leverage * (1 - cum_return))
+
+        if current_equity <= 0:
+            current_equity = 0.0
+            liquidated = True
+
+        equity[i] = current_equity
+
+    return equity, liquidated
+
+
 def _max_drawdown(equity_series):
     """Compute max drawdown as a percentage."""
     cummax = equity_series.cummax()
@@ -325,6 +370,11 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
 
     if lev_mode == "set-forget":
         equity_arr, liquidated = _compute_equity_set_and_forget(
+            df["position"].values, daily_return.values, initial_cash,
+            long_leverage, short_leverage, fee)
+        df["equity"] = equity_arr
+    elif lev_mode == "optimal":
+        equity_arr, liquidated = _compute_equity_optimal(
             df["position"].values, daily_return.values, initial_cash,
             long_leverage, short_leverage, fee)
         df["equity"] = equity_arr
@@ -788,7 +838,9 @@ Examples (classic style — still works):
   python backtest.py --long-leverage 2             # 2x leverage on long positions (default: 1)
   python backtest.py --short-leverage 3            # 3x leverage on short positions (default: 1)
   python backtest.py --long-leverage 2 --short-leverage 2 --exposure long-short  # leveraged long-short
-  python backtest.py --lev-mode set-forget         # set leverage once, let it drift (default: rebalance)
+  python backtest.py --lev-mode optimal             # rebalance long, set-forget short (default)
+  python backtest.py --lev-mode rebalance           # reset leverage daily on all positions
+  python backtest.py --lev-mode set-forget          # set leverage once, let it drift
   python backtest.py --sma-min 10 --sma-max 100   # custom SMA range (default: 2-365)
   python backtest.py --initial-cash 50000         # custom starting capital (default: 10000)
   python backtest.py --asset ethereum             # use ethereum data (default: bitcoin)
@@ -842,8 +894,8 @@ def main():
                         help="Leverage multiplier for long positions (default: 1)")
     parser.add_argument("--short-leverage", type=float, default=1,
                         help="Leverage multiplier for short positions (default: 1)")
-    parser.add_argument("--lev-mode", choices=["rebalance", "set-forget"], default="rebalance",
-                        help="rebalance | set-forget (default: rebalance)")
+    parser.add_argument("--lev-mode", choices=["rebalance", "set-forget", "optimal"], default="optimal",
+                        help="rebalance | set-forget | optimal (default: optimal)")
     parser.add_argument("--start-date", default="2015-01-01",
                         help="Start date YYYY-MM-DD (default: 2015-01-01)")
     parser.add_argument("--end-date", default=None,
