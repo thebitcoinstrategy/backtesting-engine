@@ -16,7 +16,7 @@ import backtest as bt
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
 ANALYTICS_SECRET = os.environ.get('ANALYTICS_SHARED_SECRET', '')
-LARAVEL_LOGIN_URL = 'https://the-bitcoin-strategy.com/app'
+LARAVEL_LOGIN_URL = 'https://the-bitcoin-strategy.com/app/analytics-redirect'
 SESSION_DURATION = 86400  # 24 hours
 
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') != 'development'
