@@ -417,7 +417,7 @@ HTML = """\
     </div>
     <div class="layout">
         <div class="panel">
-            <form method="POST" id="form" onsubmit="document.getElementById('btn').disabled=true; document.getElementById('btn').textContent='Running...';">
+            <form method="POST" id="form">
                 <div class="form-section">
                     <div class="section-title">Asset & Strategy</div>
                     <div class="form-row">
@@ -583,7 +583,7 @@ HTML = """\
                 </div>
             </form>
         </div>
-        <div class="panel">
+        <div class="panel" id="results-panel">
             {% if chart %}
                 {% if best %}
                 <table class="results-table" style="margin-bottom:16px">
@@ -714,7 +714,70 @@ function onAssetChange() {
     }
 }
 toggleFields();
-{% if not chart %}document.getElementById('form').submit();{% endif %}
+
+// AJAX form submission — only replace the results panel
+document.getElementById('form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var btn = document.getElementById('btn');
+    var panel = document.getElementById('results-panel');
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+    panel.style.opacity = '0.5';
+    panel.style.transition = 'opacity 0.2s ease';
+
+    var formData = new FormData(this);
+
+    fetch('/', { method: 'POST', body: formData })
+        .then(function(resp) { return resp.text(); })
+        .then(function(html) {
+            var doc = new DOMParser().parseFromString(html, 'text/html');
+            var newPanel = doc.getElementById('results-panel');
+            if (newPanel) {
+                panel.innerHTML = newPanel.innerHTML;
+                panel.style.opacity = '1';
+                // Re-trigger fadeUp animation on chart image
+                var img = panel.querySelector('.chart-img');
+                if (img) {
+                    img.style.animation = 'none';
+                    img.offsetHeight;
+                    img.style.animation = 'fadeUp 0.5s ease-out both';
+                }
+                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+            btn.disabled = false;
+            btn.textContent = 'Run Backtest';
+        })
+        .catch(function(err) {
+            panel.style.opacity = '1';
+            btn.disabled = false;
+            btn.textContent = 'Run Backtest';
+            panel.innerHTML = '<div class="placeholder">Error: ' + err.message + '</div>';
+        });
+});
+
+// Initial load on first visit
+{% if not chart %}
+(function() {
+    var btn = document.getElementById('btn');
+    var panel = document.getElementById('results-panel');
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+    var formData = new FormData(document.getElementById('form'));
+    fetch('/', { method: 'POST', body: formData })
+        .then(function(resp) { return resp.text(); })
+        .then(function(html) {
+            var doc = new DOMParser().parseFromString(html, 'text/html');
+            var newPanel = doc.getElementById('results-panel');
+            if (newPanel) {
+                panel.innerHTML = newPanel.innerHTML;
+                var img = panel.querySelector('.chart-img');
+                if (img) { img.style.animation = 'fadeUp 0.5s ease-out both'; }
+            }
+            btn.disabled = false;
+            btn.textContent = 'Run Backtest';
+        });
+})();
+{% endif %}
 </script>
 </body>
 </html>
