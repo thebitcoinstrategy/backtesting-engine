@@ -424,7 +424,7 @@ HTML = """\
 <body>
 <div class="container">
     <div class="header">
-        <h1><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></h1>
+        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
     </div>
     <div class="layout">
         <div class="panel">
