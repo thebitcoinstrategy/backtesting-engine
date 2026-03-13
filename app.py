@@ -864,7 +864,7 @@ class Params:
             self.exposure = form.get("exposure", "long-cash")
             if self.mode == "sweep-lev":
                 self.exposure = "long-short"
-            self.fee = float(form.get("fee", 0.1))
+            self.fee = float(form.get("fee", 0.05))
             self.long_leverage = float(form.get("long_leverage", 1))
             self.short_leverage = float(form.get("short_leverage", 1))
             self.lev_mode = form.get("lev_mode", "optimal")
@@ -885,7 +885,7 @@ class Params:
             self.range_max = 365
             self.step = 5
             self.exposure = "long-cash"
-            self.fee = 0.1
+            self.fee = 0.05
             self.long_leverage = 1
             self.short_leverage = 1
             self.lev_mode = "optimal"
