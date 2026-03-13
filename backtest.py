@@ -561,11 +561,11 @@ def _apply_dark_theme(fig, axes):
 
     # Watermark on first axis — styled like the website logo
     ax0 = axes[0]
-    ax0.text(0.48, 0.5, "Bitcoin", fontsize=36, fontweight="bold",
+    ax0.text(0.42, 0.5, "Bitcoin", fontsize=36, fontweight="bold",
              color="#ffffff", alpha=0.06, ha="right", va="center",
              transform=ax0.transAxes, zorder=0,
              bbox=dict(boxstyle="square,pad=0.15", facecolor="#6495ED", alpha=0.06, edgecolor="none"))
-    ax0.text(0.52, 0.5, "Strategy Analytics", fontsize=36, fontweight="bold",
+    ax0.text(0.42, 0.5, "Strategy Analytics", fontsize=36, fontweight="bold",
              color="#ffffff", alpha=0.06, ha="left", va="center",
              transform=ax0.transAxes, zorder=0,
              bbox=dict(boxstyle="square,pad=0.15", facecolor="#000000", alpha=0.06, edgecolor="none"))
