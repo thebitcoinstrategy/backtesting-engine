@@ -664,7 +664,13 @@ HTML = """\
 var assetStarts = {{ asset_starts_json|tojson }};
 function toggleFields() {
     var mode = document.getElementById('mode').value;
-    var ind1 = document.getElementById('ind1_name').value;
+    var ind1El = document.getElementById('ind1_name');
+    var ind1 = ind1El.value;
+    // Auto-promote ind1 from price to SMA in heatmap mode
+    if (mode === 'heatmap' && ind1 === 'price') {
+        ind1El.value = 'sma';
+        ind1 = 'sma';
+    }
     var isLevSweep = mode === 'sweep-lev';
     var rules = [
         ['period1-group', ind1 !== 'price' && mode !== 'heatmap'],
