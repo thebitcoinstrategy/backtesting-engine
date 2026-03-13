@@ -501,6 +501,7 @@ HTML = """\
                         <div class="form-group">
                             <label>Indicator 2</label>
                             <select name="ind2_name" id="ind2_name">
+                                <option value="price" {{ 'selected' if p.ind2_name=='price' }}>Price</option>
                                 <option value="sma" {{ 'selected' if p.ind2_name=='sma' }}>SMA (Simple Moving Average)</option>
                                 <option value="ema" {{ 'selected' if p.ind2_name=='ema' }}>EMA (Exponential Moving Average)</option>
                                 <option value="wma" {{ 'selected' if p.ind2_name=='wma' }}>WMA (Weighted Moving Average)</option>
