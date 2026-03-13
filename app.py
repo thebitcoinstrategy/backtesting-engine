@@ -661,20 +661,21 @@ def index():
 
         asset_title = p.asset.capitalize()
         fig, ax = plt.subplots(figsize=(14, 7), dpi=150)
+        bt._apply_dark_theme(fig, ax)
         show_long = p.exposure in ("long-cash", "long-short")
         show_short = p.exposure in ("short-cash", "long-short")
         all_levs = []
         if show_long:
-            ax.plot(long_levs, long_sweep, color="steelblue", linewidth=1.5, label="Long Leverage")
-            ax.scatter([best_long_lev], [best_long_ann], color="steelblue", s=60, zorder=5)
+            ax.plot(long_levs, long_sweep, color="#6495ED", linewidth=1.5, label="Long Leverage")
+            ax.scatter([best_long_lev], [best_long_ann], color="#6495ED", s=60, zorder=5)
             all_levs.extend(long_levs)
         if show_short:
-            ax.plot(short_levs, short_sweep, color="darkorange", linewidth=1.5, label="Short Leverage")
-            ax.scatter([best_short_lev], [best_short_ann], color="darkorange", s=60, zorder=5)
+            ax.plot(short_levs, short_sweep, color="#f7931a", linewidth=1.5, label="Short Leverage")
+            ax.scatter([best_short_lev], [best_short_ann], color="#f7931a", s=60, zorder=5)
             all_levs.extend(short_levs)
         x_min, x_max = min(all_levs), max(all_levs)
         if p.exposure != "short-cash":
-            ax.plot([x_min, x_max], [bh_ann, bh_ann], color="gray", linestyle="--", linewidth=1,
+            ax.plot([x_min, x_max], [bh_ann, bh_ann], color="#9ca3af", linestyle="--", linewidth=1,
                     label=f"Buy & Hold ({bh_ann:.1f}%)")
         ax.set_xlim(x_min, x_max)
         from matplotlib.ticker import MultipleLocator
@@ -688,12 +689,12 @@ def index():
             title_parts.append(f"Best Short: {best_short_lev:.2f}x ({best_short_ann:.1f}%)")
         ax.set_title(f"{asset_title} {title_label} \u2014 Leverage Sweep | {p.exposure}\n"
                      f"{' | '.join(title_parts)}")
-        ax.legend(loc="best", fontsize=9)
-        ax.grid(True, alpha=0.3)
+        ax.legend(loc="best", fontsize=9, facecolor="#1a1d27", edgecolor="#2a2d3a", labelcolor="#e0e0e0")
+        ax.grid(True, alpha=0.3, color="#2a2d3a")
         plt.tight_layout()
 
         buf = BytesIO()
-        plt.savefig(buf, format="png")
+        plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
         plt.close()
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode()
@@ -788,6 +789,7 @@ def index():
         bh_ann = bt._annualized_return(bh_total, n_days)
 
         fig, ax = plt.subplots(figsize=(14, 12), dpi=150)
+        bt._apply_dark_theme(fig, ax)
         im = ax.imshow(matrix, cmap="RdYlGn", aspect="auto", origin="lower",
                        interpolation="nearest")
         ax.set_xticks(range(n))
@@ -807,7 +809,11 @@ def index():
                      f"Best: {ind1_upper}({best_p1})/{ind2_upper}({best_p2}) = {best_ann:.1f}% | "
                      f"B&H: {bh_ann:.1f}% | {p.exposure}")
         cbar = fig.colorbar(im, ax=ax, shrink=0.8)
-        cbar.set_label("Annualized Return (%)")
+        cbar.set_label("Annualized Return (%)", color="#9ca3af")
+        cbar.ax.yaxis.set_tick_params(color="#9ca3af")
+        cbar.outline.set_edgecolor("#2a2d3a")
+        for label in cbar.ax.get_yticklabels():
+            label.set_color("#9ca3af")
         if n <= 30:
             for i in range(n):
                 for j in range(n):
@@ -819,7 +825,7 @@ def index():
         plt.tight_layout()
 
         buf = BytesIO()
-        plt.savefig(buf, format="png")
+        plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
         plt.close()
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode()
@@ -863,23 +869,24 @@ def index():
             best_label = f"{ind2_upper}({best_period})"
 
         fig, ax = plt.subplots(figsize=(14, 7), dpi=150)
-        ax.plot(periods, annualized_returns, color="steelblue", linewidth=1)
+        bt._apply_dark_theme(fig, ax)
+        ax.plot(periods, annualized_returns, color="#6495ED", linewidth=1)
         if p.exposure != "short-cash":
-            ax.axhline(y=bh_annualized, color="gray", linestyle="--", linewidth=1,
+            ax.axhline(y=bh_annualized, color="#9ca3af", linestyle="--", linewidth=1,
                         label=f"Buy & Hold ({bh_annualized:.1f}%)")
-        ax.scatter([best_period], [best_ann], color="red", s=60, zorder=5,
+        ax.scatter([best_period], [best_ann], color="#f7931a", s=60, zorder=5,
                     label=f"Best: {best_label} ({best_ann:.1f}%)")
         ax.set_xlabel(f"{ind2_upper} Period (days)")
         ax.set_ylabel("Annualized Return (%)")
         asset_title = p.asset.capitalize()
         title_prefix = f"{ind1_label_str} vs " if p.ind1_name != "price" else ""
         ax.set_title(f"{asset_title} \u2014 Annualized Return by {title_prefix}{ind2_upper} Period ({p.range_min}-{p.range_max}) | {p.exposure}")
-        ax.legend(loc="best", fontsize=9)
-        ax.grid(True, alpha=0.3)
+        ax.legend(loc="best", fontsize=9, facecolor="#1a1d27", edgecolor="#2a2d3a", labelcolor="#e0e0e0")
+        ax.grid(True, alpha=0.3, color="#2a2d3a")
         plt.tight_layout()
 
         buf = BytesIO()
-        plt.savefig(buf, format="png")
+        plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
         plt.close()
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode()
@@ -922,19 +929,21 @@ def index():
             if show_ratio:
                 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 13), dpi=150,
                                                      gridspec_kw={"height_ratios": [5, 2.5, 2.5]}, sharex=True)
+                bt._apply_dark_theme(fig, [ax1, ax2, ax3])
             else:
                 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), dpi=150,
                                                 gridspec_kw={"height_ratios": [7, 3]}, sharex=True)
+                bt._apply_dark_theme(fig, [ax1, ax2])
 
-            ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color="black", linewidth=0.8)
+            ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color="#e0e0e0", linewidth=0.8)
 
             # Plot ind2 (main/slow indicator)
             ax1.plot(best["ind2_series"].index, best["ind2_series"],
-                     label=best["ind2_label"], color="blue", linewidth=0.8, alpha=0.8)
+                     label=best["ind2_label"], color="#6495ED", linewidth=0.8, alpha=0.8)
             # Plot ind1 if not price
             if best.get("ind1_name") != "price":
                 ax1.plot(best["ind1_series"].index, best["ind1_series"],
-                         label=best["ind1_label"], color="orange", linewidth=0.8, alpha=0.8)
+                         label=best["ind1_label"], color="#f7931a", linewidth=0.8, alpha=0.8)
 
             ax1.set_yscale("log")
             _fmt_usd = plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}")
@@ -944,36 +953,36 @@ def index():
             ax1.set_ylabel(f"{asset_name} Price (log scale)")
             ax1.set_title(f"{asset_name} Backtest \u2014 Best: {best['label']} "
                           f"({best['total_return']:.1f}% return) | {p.exposure}")
-            ax1.legend(loc="upper left", fontsize=8)
-            ax1.grid(True, which="major", alpha=0.3)
-            ax1.grid(True, which="minor", alpha=0.15)
+            ax1.legend(loc="upper left", fontsize=8, facecolor="#1a1d27", edgecolor="#2a2d3a", labelcolor="#e0e0e0")
+            ax1.grid(True, which="major", alpha=0.3, color="#2a2d3a")
+            ax1.grid(True, which="minor", alpha=0.15, color="#2a2d3a")
 
-            ax2.plot(best["equity"].index, best["equity"], label="Strategy Equity", color="blue", linewidth=1)
+            ax2.plot(best["equity"].index, best["equity"], label="Strategy Equity", color="#6495ED", linewidth=1)
             if show_ratio:
-                ax2.plot(best["buyhold"].index, best["buyhold"], label="Buy & Hold", color="gray", linewidth=1, alpha=0.7)
+                ax2.plot(best["buyhold"].index, best["buyhold"], label="Buy & Hold", color="#9ca3af", linewidth=1, alpha=0.7)
             ax2.set_yscale("log")
             ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
             ax2.yaxis.set_minor_formatter(_minor_usd_formatter())
             ax2.tick_params(axis='y', which='minor', labelsize=6)
             ax2.set_ylabel("Portfolio Value (log)")
-            ax2.legend(loc="upper left", fontsize=8)
-            ax2.grid(True, which="major", alpha=0.3)
-            ax2.grid(True, which="minor", alpha=0.15)
+            ax2.legend(loc="upper left", fontsize=8, facecolor="#1a1d27", edgecolor="#2a2d3a", labelcolor="#e0e0e0")
+            ax2.grid(True, which="major", alpha=0.3, color="#2a2d3a")
+            ax2.grid(True, which="minor", alpha=0.15, color="#2a2d3a")
 
             last_ax = ax2
             if show_ratio:
                 ratio = best["equity"] / best["buyhold"].replace(0, np.nan)
                 ratio_normalized = ratio / ratio.dropna().iloc[0] * 100
-                ax3.plot(ratio_normalized.index, ratio_normalized, color="purple", linewidth=1, label=f"Strategy in {asset_name}")
-                ax3.axhline(y=100, color="gray", linestyle="--", linewidth=0.8, alpha=0.7)
+                ax3.plot(ratio_normalized.index, ratio_normalized, color="#a78bfa", linewidth=1, label=f"Strategy in {asset_name}")
+                ax3.axhline(y=100, color="#9ca3af", linestyle="--", linewidth=0.8, alpha=0.7)
                 ax3.set_yscale("log")
                 ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.2f}" if x < 1 else f"{x:,.0f}"))
                 ax3.yaxis.set_minor_formatter(_minor_usd_formatter(dollar=False))
                 ax3.tick_params(axis='y', which='minor', labelsize=6)
                 ax3.set_ylabel(f"Value in {asset_name}")
-                ax3.legend(loc="upper left", fontsize=8)
-                ax3.grid(True, which="major", alpha=0.3)
-                ax3.grid(True, which="minor", alpha=0.15)
+                ax3.legend(loc="upper left", fontsize=8, facecolor="#1a1d27", edgecolor="#2a2d3a", labelcolor="#e0e0e0")
+                ax3.grid(True, which="major", alpha=0.3, color="#2a2d3a")
+                ax3.grid(True, which="minor", alpha=0.15, color="#2a2d3a")
                 last_ax = ax3
             last_ax.set_xlabel("Date")
             last_ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
@@ -981,7 +990,7 @@ def index():
             plt.tight_layout()
 
             buf = BytesIO()
-            plt.savefig(buf, format="png")
+            plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
             plt.close()
             buf.seek(0)
             chart_b64 = base64.b64encode(buf.read()).decode()
