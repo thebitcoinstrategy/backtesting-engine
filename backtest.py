@@ -497,11 +497,11 @@ def _apply_dark_theme(fig, axes):
     MUTED = "#9ca3af"
     GRID = "#2a2d3a"
 
-    fig.patch.set_facecolor(BG)
+    fig.patch.set_facecolor(PANEL)
     if not hasattr(axes, '__iter__'):
         axes = [axes]
     for ax in axes:
-        ax.set_facecolor(PANEL)
+        ax.set_facecolor(BG)
         ax.tick_params(colors=MUTED, which="both")
         ax.xaxis.label.set_color(MUTED)
         ax.yaxis.label.set_color(MUTED)
