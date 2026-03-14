@@ -843,6 +843,7 @@ function loadTVWidget() {
         "calendar": false,
         "hide_volume": true,
         "studies": tvStudies || [],
+        "studies_overrides": tvOverrides,
         "support_host": "https://www.tradingview.com"
     };
     container.innerHTML = '';
