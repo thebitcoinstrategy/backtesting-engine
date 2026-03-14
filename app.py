@@ -296,6 +296,54 @@ HTML = """\
         .mode-card:hover .mode-card-label { color: var(--text-muted); }
         .mode-card.active:hover .mode-card-label { color: var(--text); }
 
+        /* Asset grid */
+        .asset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+            gap: 6px;
+        }
+        .asset-card {
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            padding: 8px 4px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-deep);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        .asset-card:hover {
+            border-color: var(--border-hover);
+            background: var(--bg-surface);
+        }
+        .asset-card.active {
+            border-color: var(--accent);
+            background: rgba(247, 147, 26, 0.08);
+            box-shadow: 0 0 0 1px var(--accent), 0 2px 12px rgba(247, 147, 26, 0.12);
+        }
+        .asset-card-logo {
+            width: 28px; height: 28px; object-fit: contain;
+        }
+        .asset-card-placeholder {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: var(--bg-elevated); display: flex; align-items: center;
+            justify-content: center; font-size: 0.6em; font-weight: 700;
+            color: var(--text-dim);
+        }
+        .asset-card-label {
+            font-size: 0.65em; font-weight: 600; color: var(--text-dim);
+            letter-spacing: 0.02em; line-height: 1.2; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+            transition: color 0.2s ease;
+        }
+        .asset-card.active .asset-card-label { color: var(--text); }
+        .asset-card:hover .asset-card-label { color: var(--text-muted); }
+        .asset-card.active:hover .asset-card-label { color: var(--text); }
+        .asset-section-label {
+            font-size: 0.6em; color: var(--text-dim); text-transform: uppercase;
+            letter-spacing: 0.08em; margin: 8px 0 4px; font-weight: 600;
+        }
+
         /* Separator */
         .sep { width: 1px; background: var(--border); align-self: stretch; margin: 0 2px; flex: 0 0 1px; opacity: 0.6; }
 
@@ -584,29 +632,37 @@ HTML = """\
                     </div>
                 </div>
                 <div class="form-section">
-                    <div class="section-title">Asset & Strategy</div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Asset</label>
-                            <select name="asset" id="asset" onchange="onAssetChange()">
-                                {% for a in priority_assets %}
-                                <option value="{{ a }}" {{ 'selected' if p.asset==a }}>{{ a|capitalize }}</option>
-                                {% endfor %}
-                                {% if other_assets %}
-                                <option disabled>──────────</option>
-                                {% for a in other_assets %}
-                                <option value="{{ a }}" {{ 'selected' if p.asset==a }}>{{ a|capitalize }}</option>
-                                {% endfor %}
-                                {% endif %}
-                                {% if stock_assets %}
-                                <option disabled>──────────</option>
-                                {% for a in stock_assets %}
-                                <option value="{{ a }}" {{ 'selected' if p.asset==a }}>{{ a }}</option>
-                                {% endfor %}
-                                {% endif %}
-                            </select>
+                    <div class="section-title">Asset</div>
+                    <input type="hidden" name="asset" id="asset" value="{{ p.asset }}">
+                    <div class="asset-grid">
+                        {% for a in priority_assets %}
+                        <div class="asset-card {{ 'active' if p.asset==a }}" onclick="selectAsset('{{ a }}', this)">
+                            {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                            <span class="asset-card-label">{{ a|capitalize }}</span>
                         </div>
-                        <div class="sep"></div>
+                        {% endfor %}
+                        {% for a in other_assets %}
+                        <div class="asset-card {{ 'active' if p.asset==a }}" onclick="selectAsset('{{ a }}', this)">
+                            {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                            <span class="asset-card-label">{{ a|capitalize }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if stock_assets %}
+                    <div class="asset-section-label">Stock Indices</div>
+                    <div class="asset-grid">
+                        {% for a in stock_assets %}
+                        <div class="asset-card {{ 'active' if p.asset==a }}" onclick="selectAsset('{{ a }}', this)">
+                            <div class="asset-card-placeholder">{{ a[:3]|upper }}</div>
+                            <span class="asset-card-label">{{ a }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="form-section">
+                    <div class="section-title">Indicators</div>
+                    <div class="form-row">
                         <div class="form-group">
                             <label>Indicator 1</label>
                             <select name="ind1_name" id="ind1_name" onchange="toggleFields()">
@@ -908,6 +964,13 @@ function onAssetChange() {
     if (assetStart) {
         startInput.value = assetStart;
     }
+}
+function selectAsset(name, el) {
+    document.getElementById('asset').value = name;
+    var cards = document.querySelectorAll('.asset-card');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove('active');
+    el.classList.add('active');
+    onAssetChange();
 }
 toggleFields();
 
@@ -1267,6 +1330,14 @@ PRIORITY_ASSETS = [a for a in _PRIORITY_ORDER if a in ASSETS]
 OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER and a not in _STOCK_ASSETS]
 STOCK_ASSETS = [a for a in ASSET_NAMES if a in _STOCK_ASSETS]
 DEFAULT_ASSET = "bitcoin" if "bitcoin" in ASSETS else ASSET_NAMES[0]
+ASSET_LOGOS = {
+    "bitcoin": "bitcoin-btc-logo.png", "ethereum": "ethereum-eth-logo.png",
+    "solana": "solana-sol-logo.png", "XRP": "xrp-xrp-logo.png",
+    "BNB": "bnb-bnb-logo.png", "Cardano": "cardano-ada-logo.png",
+    "Chainlink": "chainlink-link-logo.png", "Dogecoin": "dogecoin-doge-logo.png",
+    "Monero": "monero-xmr-logo.png", "Bitcoin Cash": "bitcoin-cash-bch-logo.png",
+    "Hyperliquid": None,
+}
 
 def _series_to_lw_json(series):
     """Convert pandas Series (datetime index + float values) to Lightweight Charts format."""
@@ -1326,7 +1397,7 @@ def index():
         else:
             p = Params()
         return render_template_string(HTML, p=p, chart=None, best=None, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       price_json=None, ind1_json='[]', ind2_json='[]', ind1_label='', ind2_label='')
 
     p = Params(request.form)
@@ -1468,7 +1539,7 @@ def index():
         ind1_json = _series_to_lw_json(best["ind1_series"]) if best.get("ind1_name") != "price" else "[]"
         ind2_json = _series_to_lw_json(best["ind2_series"])
         return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info,
                                       price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                       ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
@@ -1595,7 +1666,7 @@ def index():
         ind1_json = _series_to_lw_json(best["ind1_series"]) if best.get("ind1_name") != "price" else "[]"
         ind2_json = _series_to_lw_json(best["ind2_series"])
         return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       hide_buyhold=(p.exposure == "short-cash"),
                                       price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                       ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
@@ -1761,7 +1832,7 @@ def index():
     ind1_json = _series_to_lw_json(best["ind1_series"]) if best and best.get("ind1_name") != "price" else "[]"
     ind2_json = _series_to_lw_json(best["ind2_series"]) if best else "[]"
     return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
-                                  asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS,
+                                  asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                   hide_buyhold=(p.exposure == "short-cash"),
                                   price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                   ind1_label=best.get("ind1_label", "") if best else "", ind2_label=best.get("ind2_label", "") if best else "")
