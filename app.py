@@ -849,7 +849,7 @@ function loadLWChart() {
 
     var priceSeries = chart.addSeries(LightweightCharts.LineSeries, {
         color: '#e8eaf0',
-        lineWidth: 1,
+        lineWidth: 2,
         title: 'Price',
         priceLineVisible: false
     });
@@ -858,7 +858,7 @@ function loadLWChart() {
     if (ind2Data.length > 0) {
         var ind2Series = chart.addSeries(LightweightCharts.LineSeries, {
             color: '#6495ED',
-            lineWidth: 1,
+            lineWidth: 2,
             title: ind2Label,
             priceLineVisible: false
         });
@@ -868,7 +868,7 @@ function loadLWChart() {
     if (ind1Data.length > 0) {
         var ind1Series = chart.addSeries(LightweightCharts.LineSeries, {
             color: '#f7931a',
-            lineWidth: 1,
+            lineWidth: 2,
             title: ind1Label,
             priceLineVisible: false
         });
