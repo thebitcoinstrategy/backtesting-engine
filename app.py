@@ -823,33 +823,28 @@ function loadTVWidget() {
     var tvStudies = JSON.parse(container.getAttribute('data-tv-studies') || '[]');
     var tvOverrides = JSON.parse(container.getAttribute('data-tv-overrides') || '{}');
     if (!tvSymbol) return;
-    // Use widgetembed iframe URL — supports studies_overrides as a query param
-    var params = [];
-    params.push('symbol=' + encodeURIComponent(tvSymbol));
-    params.push('interval=D');
-    params.push('timezone=Etc%2FUTC');
-    params.push('theme=dark');
-    params.push('style=1');
-    params.push('locale=en');
-    params.push('backgroundColor=rgba(22%2C%2025%2C%2034%2C%201)');
-    params.push('gridColor=rgba(37%2C%2042%2C%2058%2C%201)');
-    params.push('hide_side_toolbar=0');
-    params.push('allow_symbol_change=0');
-    params.push('calendar=0');
-    params.push('hide_volume=1');
-    params.push('support_host=https%3A%2F%2Fwww.tradingview.com');
-    // Add each study as a separate query param
-    for (var i = 0; i < tvStudies.length; i++) {
-        params.push('studies=' + encodeURIComponent(tvStudies[i]));
-    }
-    // Add studies_overrides as URL-encoded JSON
-    if (Object.keys(tvOverrides).length > 0) {
-        params.push('studies_overrides=' + encodeURIComponent(JSON.stringify(tvOverrides)));
-    }
-    var url = 'https://s.tradingview.com/widgetembed/?' + params.join('&');
+    // Build widgetembed iframe URL — settings go in the hash fragment as JSON
+    var config = {
+        symbol: tvSymbol,
+        interval: 'D',
+        timezone: 'Etc/UTC',
+        theme: 'dark',
+        style: '1',
+        locale: 'en',
+        backgroundColor: 'rgba(22, 25, 34, 1)',
+        gridColor: 'rgba(37, 42, 58, 1)',
+        hide_side_toolbar: 0,
+        allow_symbol_change: 0,
+        calendar: 0,
+        hide_volume: 1,
+        studies: tvStudies,
+        studies_overrides: tvOverrides
+    };
+    var baseUrl = 'https://s.tradingview.com/widgetembed/';
+    var hash = encodeURIComponent(JSON.stringify(config));
     container.innerHTML = '';
     var iframe = document.createElement('iframe');
-    iframe.src = url;
+    iframe.src = baseUrl + '#' + hash;
     iframe.style.width = '100%';
     iframe.style.height = '100%';
     iframe.style.border = 'none';
