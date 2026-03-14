@@ -875,7 +875,20 @@ function loadLWChart() {
         ind1Series.setData(ind1Data);
     }
 
-    chart.timeScale().fitContent();
+    // Default zoom: show last 12 months
+    if (priceData.length > 0) {
+        var lastPoint = priceData[priceData.length - 1];
+        var lastDate = new Date(lastPoint.time);
+        var fromDate = new Date(lastDate);
+        fromDate.setFullYear(fromDate.getFullYear() - 1);
+        var fromStr = fromDate.toISOString().split('T')[0];
+        chart.timeScale().setVisibleRange({
+            from: fromStr,
+            to: lastPoint.time
+        });
+    } else {
+        chart.timeScale().fitContent();
+    }
 
     window.addEventListener('resize', function() {
         chart.applyOptions({ width: container.clientWidth });
