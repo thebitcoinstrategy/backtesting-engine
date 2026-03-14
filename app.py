@@ -544,7 +544,7 @@ HTML = """\
                                 <line x1="18" y1="20" x2="24" y2="26"/>
                                 <path d="M9 14h6M12 11v6"/>
                             </svg>
-                            <span class="mode-card-label">Best Period</span>
+                            <span class="mode-card-label">Single Indicator Optimization</span>
                         </div>
                         <div class="mode-card {{ 'active' if p.mode=='heatmap' }}" onclick="selectMode('heatmap', this)">
                             <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -558,17 +558,19 @@ HTML = """\
                                 <rect x="11" y="19" width="6" height="6" rx="1" fill="currentColor" opacity="0.4"/>
                                 <rect x="19" y="19" width="6" height="6" rx="1" fill="currentColor" opacity="0.6"/>
                             </svg>
-                            <span class="mode-card-label">Heatmap</span>
+                            <span class="mode-card-label">Indicator Combination</span>
                         </div>
                         <div class="mode-card {{ 'active' if p.mode=='sweep-lev' }}" onclick="selectMode('sweep-lev', this)">
                             <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M6 22V10l4-6" opacity="0.4"/>
-                                <path d="M14 22V6l4 8"/>
-                                <path d="M22 22V2" stroke-width="2"/>
-                                <line x1="4" y1="24" x2="26" y2="24" opacity="0.3"/>
-                                <polyline points="19 4 22 2 25 4" stroke-width="1.5"/>
+                                <circle cx="14" cy="12" r="2" fill="currentColor" stroke="none"/>
+                                <line x1="4" y1="12" x2="24" y2="12" stroke-width="1.5"/>
+                                <line x1="14" y1="12" x2="14" y2="22" stroke-width="1.5"/>
+                                <path d="M4 12L8 6" stroke-width="1.5"/>
+                                <path d="M24 12L20 18" stroke-width="1.5"/>
+                                <circle cx="8" cy="6" r="2" opacity="0.5"/>
+                                <circle cx="20" cy="18" r="2" opacity="0.5"/>
                             </svg>
-                            <span class="mode-card-label">Leverage</span>
+                            <span class="mode-card-label">Leverage Optimization</span>
                         </div>
                     </div>
                     <div class="section-title" style="margin-top:4px">Parameters</div>
