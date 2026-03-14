@@ -249,6 +249,53 @@ HTML = """\
         .row { display: flex; gap: 12px; }
         .row .form-group { flex: 1; }
 
+        /* Mode selector cards */
+        .mode-selector {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .mode-card {
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+            padding: 12px 6px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-deep);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            position: relative;
+        }
+        .mode-card:hover {
+            border-color: var(--border-hover);
+            background: var(--bg-surface);
+        }
+        .mode-card.active {
+            border-color: var(--accent);
+            background: rgba(247, 147, 26, 0.08);
+            box-shadow: 0 0 0 1px var(--accent), 0 2px 12px rgba(247, 147, 26, 0.12);
+        }
+        .mode-card-icon {
+            width: 28px; height: 28px;
+            color: var(--text-dim);
+            transition: color 0.2s ease;
+        }
+        .mode-card.active .mode-card-icon { color: var(--accent); }
+        .mode-card:hover .mode-card-icon { color: var(--text-muted); }
+        .mode-card.active:hover .mode-card-icon { color: var(--accent); }
+        .mode-card-label {
+            font-size: 0.7em;
+            font-weight: 600;
+            color: var(--text-dim);
+            letter-spacing: 0.02em;
+            line-height: 1.2;
+            transition: color 0.2s ease;
+        }
+        .mode-card.active .mode-card-label { color: var(--text); }
+        .mode-card:hover .mode-card-label { color: var(--text-muted); }
+        .mode-card.active:hover .mode-card-label { color: var(--text); }
+
         /* Separator */
         .sep { width: 1px; background: var(--border); align-self: stretch; margin: 0 2px; flex: 0 0 1px; opacity: 0.6; }
 
@@ -480,17 +527,52 @@ HTML = """\
         <div class="panel">
             <form method="POST" id="form">
                 <div class="form-section">
-                    <div class="section-title">Mode & Parameters</div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Mode</label>
-                            <select name="mode" id="mode" onchange="toggleFields()">
-                                <option value="backtest" {{ 'selected' if p.mode=='backtest' }}>Backtest</option>
-                                <option value="sweep" {{ 'selected' if p.mode=='sweep' }}>Find best period</option>
-                                <option value="heatmap" {{ 'selected' if p.mode=='heatmap' }}>Find best combo</option>
-                                <option value="sweep-lev" {{ 'selected' if p.mode=='sweep-lev' }}>Find best leverage</option>
-                            </select>
+                    <div class="section-title">Mode</div>
+                    <input type="hidden" name="mode" id="mode" value="{{ p.mode }}">
+                    <div class="mode-selector">
+                        <div class="mode-card {{ 'active' if p.mode=='backtest' }}" onclick="selectMode('backtest', this)">
+                            <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="4 20 10 12 16 16 24 6"/>
+                                <line x1="4" y1="24" x2="24" y2="24" opacity="0.4"/>
+                                <circle cx="24" cy="6" r="2" fill="currentColor" stroke="none"/>
+                            </svg>
+                            <span class="mode-card-label">Backtest</span>
                         </div>
+                        <div class="mode-card {{ 'active' if p.mode=='sweep' }}" onclick="selectMode('sweep', this)">
+                            <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="14" r="8" opacity="0.4"/>
+                                <line x1="18" y1="20" x2="24" y2="26"/>
+                                <path d="M9 14h6M12 11v6"/>
+                            </svg>
+                            <span class="mode-card-label">Best Period</span>
+                        </div>
+                        <div class="mode-card {{ 'active' if p.mode=='heatmap' }}" onclick="selectMode('heatmap', this)">
+                            <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="6" height="6" rx="1" fill="currentColor" opacity="0.6"/>
+                                <rect x="11" y="3" width="6" height="6" rx="1" fill="currentColor" opacity="0.3"/>
+                                <rect x="19" y="3" width="6" height="6" rx="1" fill="currentColor" opacity="0.15"/>
+                                <rect x="3" y="11" width="6" height="6" rx="1" fill="currentColor" opacity="0.3"/>
+                                <rect x="11" y="11" width="6" height="6" rx="1" fill="currentColor" opacity="0.8"/>
+                                <rect x="19" y="11" width="6" height="6" rx="1" fill="currentColor" opacity="0.4"/>
+                                <rect x="3" y="19" width="6" height="6" rx="1" fill="currentColor" opacity="0.15"/>
+                                <rect x="11" y="19" width="6" height="6" rx="1" fill="currentColor" opacity="0.4"/>
+                                <rect x="19" y="19" width="6" height="6" rx="1" fill="currentColor" opacity="0.6"/>
+                            </svg>
+                            <span class="mode-card-label">Heatmap</span>
+                        </div>
+                        <div class="mode-card {{ 'active' if p.mode=='sweep-lev' }}" onclick="selectMode('sweep-lev', this)">
+                            <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M6 22V10l4-6" opacity="0.4"/>
+                                <path d="M14 22V6l4 8"/>
+                                <path d="M22 22V2" stroke-width="2"/>
+                                <line x1="4" y1="24" x2="26" y2="24" opacity="0.3"/>
+                                <polyline points="19 4 22 2 25 4" stroke-width="1.5"/>
+                            </svg>
+                            <span class="mode-card-label">Leverage</span>
+                        </div>
+                    </div>
+                    <div class="section-title" style="margin-top:4px">Parameters</div>
+                    <div class="form-row">
                         <div class="form-group" id="range-min-group">
                             <label>Range Min</label>
                             <input type="number" name="range_min" value="{{ p.range_min }}" min="2">
@@ -767,6 +849,13 @@ HTML = """\
 </div>
 <script>
 var assetStarts = {{ asset_starts_json|tojson }};
+function selectMode(mode, el) {
+    document.getElementById('mode').value = mode;
+    var cards = document.querySelectorAll('.mode-card');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove('active');
+    el.classList.add('active');
+    toggleFields();
+}
 function toggleFields() {
     var mode = document.getElementById('mode').value;
     var ind1El = document.getElementById('ind1_name');
