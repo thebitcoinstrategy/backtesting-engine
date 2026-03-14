@@ -296,6 +296,46 @@ HTML = """\
         .mode-card:hover .mode-card-label { color: var(--text-muted); }
         .mode-card.active:hover .mode-card-label { color: var(--text); }
 
+        /* Asset selected display */
+        .asset-selected {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 14px; border-radius: 10px;
+            border: 1px solid var(--border); background: var(--bg-deep);
+            cursor: pointer; transition: all 0.2s ease;
+        }
+        .asset-selected:hover { border-color: var(--border-hover); background: var(--bg-surface); }
+        .asset-selected-logo { width: 36px; height: 36px; object-fit: contain; }
+        .asset-selected-name {
+            flex: 1; font-size: 0.95em; font-weight: 600; color: var(--text);
+        }
+        .asset-selected-chevron { color: var(--text-dim); transition: transform 0.2s ease; }
+        .asset-selected:hover .asset-selected-chevron { color: var(--text-muted); }
+
+        /* Asset modal */
+        .asset-modal-overlay {
+            display: none; position: fixed; inset: 0; z-index: 1000;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            align-items: center; justify-content: center;
+        }
+        .asset-modal-overlay.open { display: flex; animation: fadeIn 0.15s ease-out; }
+        .asset-modal {
+            background: var(--bg-base); border: 1px solid var(--border);
+            border-radius: 16px; padding: 20px 24px; width: 90%; max-width: 480px;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.4);
+            animation: fadeUp 0.2s ease-out;
+        }
+        .asset-modal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 16px;
+            font-size: 0.85em; font-weight: 600; color: var(--text);
+        }
+        .asset-modal-close {
+            background: none; border: none; color: var(--text-dim);
+            font-size: 1.4em; cursor: pointer; padding: 0 4px;
+            transition: color 0.15s ease; line-height: 1;
+        }
+        .asset-modal-close:hover { color: var(--text); }
+
         /* Asset grid */
         .asset-grid {
             display: grid;
@@ -615,7 +655,6 @@ HTML = """\
                             <span class="mode-card-label">Leverage Optimization</span>
                         </div>
                     </div>
-                    <div class="section-title" style="margin-top:4px">Parameters</div>
                     <div class="form-row">
                         <div class="form-group" id="range-min-group">
                             <label>Range Min</label>
@@ -634,31 +673,49 @@ HTML = """\
                 <div class="form-section">
                     <div class="section-title">Asset</div>
                     <input type="hidden" name="asset" id="asset" value="{{ p.asset }}">
-                    <div class="asset-grid">
-                        {% for a in priority_assets %}
-                        <div class="asset-card {{ 'active' if p.asset==a }}" onclick="selectAsset('{{ a }}', this)">
-                            {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                            <span class="asset-card-label">{{ a|capitalize }}</span>
-                        </div>
-                        {% endfor %}
-                        {% for a in other_assets %}
-                        <div class="asset-card {{ 'active' if p.asset==a }}" onclick="selectAsset('{{ a }}', this)">
-                            {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                            <span class="asset-card-label">{{ a|capitalize }}</span>
-                        </div>
-                        {% endfor %}
+                    <div class="asset-selected" id="asset-selected" onclick="openAssetModal()">
+                        {% if asset_logos.get(p.asset) %}
+                        <img class="asset-selected-logo" src="/static/logos/{{ asset_logos[p.asset] }}" alt="{{ p.asset }}">
+                        {% else %}
+                        <div class="asset-card-placeholder" style="width:36px;height:36px;font-size:0.75em">{{ p.asset[:3]|upper }}</div>
+                        {% endif %}
+                        <span class="asset-selected-name">{{ p.asset|capitalize if p.asset == p.asset|lower else p.asset }}</span>
+                        <svg class="asset-selected-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     </div>
-                    {% if stock_assets %}
-                    <div class="asset-section-label">Stock Indices</div>
-                    <div class="asset-grid">
-                        {% for a in stock_assets %}
-                        <div class="asset-card {{ 'active' if p.asset==a }}" onclick="selectAsset('{{ a }}', this)">
-                            <div class="asset-card-placeholder">{{ a[:3]|upper }}</div>
-                            <span class="asset-card-label">{{ a }}</span>
+                </div>
+                <!-- Asset picker modal -->
+                <div class="asset-modal-overlay" id="asset-modal-overlay" onclick="closeAssetModal()">
+                    <div class="asset-modal" onclick="event.stopPropagation()">
+                        <div class="asset-modal-header">
+                            <span>Select Asset</span>
+                            <button class="asset-modal-close" onclick="closeAssetModal()">&times;</button>
                         </div>
-                        {% endfor %}
+                        <div class="asset-grid">
+                            {% for a in priority_assets %}
+                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
+                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                                <span class="asset-card-label">{{ a|capitalize }}</span>
+                            </div>
+                            {% endfor %}
+                            {% for a in other_assets %}
+                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
+                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                                <span class="asset-card-label">{{ a|capitalize }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% if stock_assets %}
+                        <div class="asset-section-label">Stock Indices</div>
+                        <div class="asset-grid">
+                            {% for a in stock_assets %}
+                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
+                                <div class="asset-card-placeholder">{{ a[:3]|upper }}</div>
+                                <span class="asset-card-label">{{ a }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
-                    {% endif %}
                 </div>
                 <div class="form-section">
                     <div class="section-title">Indicators</div>
@@ -965,12 +1022,30 @@ function onAssetChange() {
         startInput.value = assetStart;
     }
 }
+var assetLogos = {{ asset_logos|tojson }};
 function selectAsset(name, el) {
     document.getElementById('asset').value = name;
     var cards = document.querySelectorAll('.asset-card');
     for (var i = 0; i < cards.length; i++) cards[i].classList.remove('active');
     el.classList.add('active');
+    // Update selected display
+    var sel = document.getElementById('asset-selected');
+    var logo = assetLogos[name];
+    var displayName = name === name.toLowerCase() ? name.charAt(0).toUpperCase() + name.slice(1) : name;
+    var logoHtml = logo
+        ? '<img class="asset-selected-logo" src="/static/logos/' + logo + '" alt="' + name + '">'
+        : '<div class="asset-card-placeholder" style="width:36px;height:36px;font-size:0.75em">' + name.slice(0,3).toUpperCase() + '</div>';
+    sel.innerHTML = logoHtml +
+        '<span class="asset-selected-name">' + displayName + '</span>' +
+        '<svg class="asset-selected-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+    closeAssetModal();
     onAssetChange();
+}
+function openAssetModal() {
+    document.getElementById('asset-modal-overlay').classList.add('open');
+}
+function closeAssetModal() {
+    document.getElementById('asset-modal-overlay').classList.remove('open');
 }
 toggleFields();
 
