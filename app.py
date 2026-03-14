@@ -500,6 +500,27 @@ HTML = """\
             color: var(--text-dim); border-bottom: 1px solid var(--border);
         }
 
+        /* Metric info tooltips */
+        .m-info {
+            font-size: 0.7em; color: var(--text-dim); cursor: help;
+            margin-left: 4px; opacity: 0.5; position: relative;
+            transition: opacity 0.2s;
+        }
+        .m-info:hover { opacity: 1; }
+        .m-info:hover::after {
+            content: attr(data-tip);
+            position: absolute; bottom: 120%; left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-elevated); color: var(--text);
+            border: 1px solid var(--border-hover);
+            border-radius: 8px; padding: 8px 12px;
+            font-size: 11px; font-family: 'DM Sans', sans-serif;
+            font-weight: 400; line-height: 1.5;
+            white-space: pre-line; width: max-content; max-width: 260px;
+            z-index: 100; pointer-events: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+
         /* Chart tabs */
         .chart-tabs {
             display: flex;
@@ -992,28 +1013,51 @@ HTML = """\
                     </tr></thead>
                     <tbody>
                     <tr class="section-row"><td colspan="3">Performance</td></tr>
-                    <tr><td class="m-label">$100 would be</td><td class="m-val {{ 'positive' if best.total_return > 0 else 'negative' }}">${{ "{:,.2f}"|format(100 * (1 + best.total_return / 100)) }}</td><td class="m-val {{ 'positive' if best.buyhold_return > 0 else 'negative' }}">${{ "{:,.2f}"|format(100 * (1 + best.buyhold_return / 100)) }}</td></tr>
-                    <tr><td class="m-label">Ann. Return</td><td class="m-val {{ 'positive' if best.annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.annualized) }}%</td><td class="m-val {{ 'positive' if best.buyhold_annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_annualized) }}%</td></tr>
-                    <tr><td class="m-label">Sharpe Ratio</td><td class="m-val">{{ "%.2f"|format(best.sharpe) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sharpe) }}</td></tr>
-                    <tr><td class="m-label">Sortino Ratio</td><td class="m-val">{{ "%.2f"|format(best.sortino) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sortino) }}</td></tr>
+                    <tr><td class="m-label">$100 would be <span class="m-info" data-tip="What $100 invested at the start would be worth today.&#10;Formula: $100 × (1 + total return)">ⓘ</span></td><td class="m-val {{ 'positive' if best.total_return > 0 else 'negative' }}">${{ "{:,.2f}"|format(100 * (1 + best.total_return / 100)) }}</td><td class="m-val {{ 'positive' if best.buyhold_return > 0 else 'negative' }}">${{ "{:,.2f}"|format(100 * (1 + best.buyhold_return / 100)) }}</td></tr>
+                    <tr><td class="m-label">Ann. Return <span class="m-info" data-tip="Yearly average return, compounded.&#10;Formula: (total growth)^(365/days) − 1">ⓘ</span></td><td class="m-val {{ 'positive' if best.annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.annualized) }}%</td><td class="m-val {{ 'positive' if best.buyhold_annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_annualized) }}%</td></tr>
+                    <tr><td class="m-label">Sharpe Ratio <span class="m-info" data-tip="Return per unit of risk — higher is better.&#10;Formula: mean daily return ÷ std dev × √365">ⓘ</span></td><td class="m-val">{{ "%.2f"|format(best.sharpe) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sharpe) }}</td></tr>
+                    <tr><td class="m-label">Sortino Ratio <span class="m-info" data-tip="Like Sharpe but only penalizes downside risk.&#10;Formula: mean daily return ÷ downside std × √365">ⓘ</span></td><td class="m-val">{{ "%.2f"|format(best.sortino) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sortino) }}</td></tr>
                     <tr class="section-row"><td colspan="3">Risk</td></tr>
-                    <tr><td class="m-label">Max Drawdown</td><td class="m-val negative">{{ "%.2f"|format(best.max_drawdown) }}%</td><td class="m-val negative">{{ "%.2f"|format(best.buyhold_max_drawdown) }}%</td></tr>
-                    <tr><td class="m-label">Drawdown Duration</td><td class="m-val">{{ best.max_dd_duration }}d</td><td class="m-val">{{ best.buyhold_max_dd_duration }}d</td></tr>
-                    <tr><td class="m-label">Volatility</td><td class="m-val">{{ "%.1f"|format(best.volatility) }}%</td><td class="m-val">{{ "%.1f"|format(best.buyhold_volatility) }}%</td></tr>
-                    <tr><td class="m-label">Beta</td><td class="m-val">{{ "%.2f"|format(best.beta) }}</td><td class="m-val muted">1.00</td></tr>
-                    <tr><td class="m-label">Calmar Ratio</td><td class="m-val">{{ "%.2f"|format(best.calmar) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_calmar) }}</td></tr>
+                    <tr><td class="m-label">Max Drawdown <span class="m-info" data-tip="Largest peak-to-trough drop.&#10;Formula: (trough − peak) ÷ peak">ⓘ</span></td><td class="m-val negative">{{ "%.2f"|format(best.max_drawdown) }}%</td><td class="m-val negative">{{ "%.2f"|format(best.buyhold_max_drawdown) }}%</td></tr>
+                    <tr><td class="m-label">Drawdown Duration <span class="m-info" data-tip="Longest time spent below a previous high.&#10;Days from peak until recovery">ⓘ</span></td><td class="m-val">{{ best.max_dd_duration }}d</td><td class="m-val">{{ best.buyhold_max_dd_duration }}d</td></tr>
+                    <tr><td class="m-label">Volatility <span class="m-info" data-tip="How much returns fluctuate day to day.&#10;Formula: annualized std dev of daily returns">ⓘ</span></td><td class="m-val">{{ "%.1f"|format(best.volatility) }}%</td><td class="m-val">{{ "%.1f"|format(best.buyhold_volatility) }}%</td></tr>
+                    <tr><td class="m-label">Beta <span class="m-info" data-tip="How much the strategy moves with the market.&#10;Formula: Cov(strategy, market) ÷ Var(market)">ⓘ</span></td><td class="m-val">{{ "%.2f"|format(best.beta) }}</td><td class="m-val muted">1.00</td></tr>
+                    <tr><td class="m-label">Calmar Ratio <span class="m-info" data-tip="Return relative to worst drawdown.&#10;Formula: Ann. return ÷ |max drawdown|">ⓘ</span></td><td class="m-val">{{ "%.2f"|format(best.calmar) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_calmar) }}</td></tr>
                     <tr class="section-row"><td colspan="3">Trades</td></tr>
-                    <tr><td class="m-label">Trades</td><td class="m-val">{{ best.trades }}</td><td class="m-val muted">&mdash;</td></tr>
-                    <tr><td class="m-label">Win Rate</td><td class="m-val">{{ "%.1f"|format(best.win_rate) }}%</td><td class="m-val muted">&mdash;</td></tr>
-                    <tr><td class="m-label">Avg Win / Loss</td><td class="m-val"><span class="positive">+{{ "%.1f"|format(best.avg_win) }}%</span> / <span class="negative">{{ "%.1f"|format(best.avg_loss) }}%</span></td><td class="m-val muted">&mdash;</td></tr>
-                    <tr><td class="m-label">Profit Factor</td><td class="m-val">{% if best.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(best.profit_factor) }}{% endif %}</td><td class="m-val muted">&mdash;</td></tr>
-                    <tr><td class="m-label">Avg Duration</td><td class="m-val">{{ "%.0f"|format(best.avg_trade_duration) }}d</td><td class="m-val muted">&mdash;</td></tr>
-                    <tr><td class="m-label">Time in Market</td><td class="m-val">{{ "%.1f"|format(best.time_in_market) }}%</td><td class="m-val muted">&mdash;</td></tr>
+                    <tr><td class="m-label">Trades <span class="m-info" data-tip="Number of position changes.&#10;Count of buy/sell signals">ⓘ</span></td><td class="m-val">{{ best.trades }}</td><td class="m-val muted">&mdash;</td></tr>
+                    <tr><td class="m-label">Win Rate <span class="m-info" data-tip="Percentage of trades that made money.&#10;Formula: winning trades ÷ total trades">ⓘ</span></td><td class="m-val">{{ "%.1f"|format(best.win_rate) }}%</td><td class="m-val muted">&mdash;</td></tr>
+                    <tr><td class="m-label">Avg Win / Loss <span class="m-info" data-tip="Average return of winning vs losing trades.&#10;Formula: mean return of wins / losses">ⓘ</span></td><td class="m-val"><span class="positive">+{{ "%.1f"|format(best.avg_win) }}%</span> / <span class="negative">{{ "%.1f"|format(best.avg_loss) }}%</span></td><td class="m-val muted">&mdash;</td></tr>
+                    <tr><td class="m-label">Profit Factor <span class="m-info" data-tip="Gross profits divided by gross losses.&#10;Formula: sum of wins ÷ sum of losses">ⓘ</span></td><td class="m-val">{% if best.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(best.profit_factor) }}{% endif %}</td><td class="m-val muted">&mdash;</td></tr>
+                    <tr><td class="m-label">Avg Duration <span class="m-info" data-tip="Average holding period per trade.&#10;Formula: total days in trades ÷ trade count">ⓘ</span></td><td class="m-val">{{ "%.0f"|format(best.avg_trade_duration) }}d</td><td class="m-val muted">&mdash;</td></tr>
+                    <tr><td class="m-label">Time in Market <span class="m-info" data-tip="Percentage of days with an active position.&#10;Formula: days with position ÷ total days">ⓘ</span></td><td class="m-val">{{ "%.1f"|format(best.time_in_market) }}%</td><td class="m-val muted">&mdash;</td></tr>
                     <tr class="section-row"><td colspan="3">Annual</td></tr>
-                    <tr><td class="m-label">Best Year</td><td class="m-val positive">{% if best.best_year[0] %}+{{ "%.1f"|format(best.best_year[1]) }}% ({{ best.best_year[0] }}){% else %}&mdash;{% endif %}</td><td class="m-val positive">{% if best.buyhold_best_year[0] %}+{{ "%.1f"|format(best.buyhold_best_year[1]) }}% ({{ best.buyhold_best_year[0] }}){% else %}&mdash;{% endif %}</td></tr>
-                    <tr><td class="m-label">Worst Year</td><td class="m-val negative">{% if best.worst_year[0] %}{{ "%.1f"|format(best.worst_year[1]) }}% ({{ best.worst_year[0] }}){% else %}&mdash;{% endif %}</td><td class="m-val negative">{% if best.buyhold_worst_year[0] %}{{ "%.1f"|format(best.buyhold_worst_year[1]) }}% ({{ best.buyhold_worst_year[0] }}){% else %}&mdash;{% endif %}</td></tr>
+                    <tr><td class="m-label">Best Year <span class="m-info" data-tip="Highest calendar year return.&#10;Max of yearly returns">ⓘ</span></td><td class="m-val positive">{% if best.best_year[0] %}+{{ "%.1f"|format(best.best_year[1]) }}% ({{ best.best_year[0] }}){% else %}&mdash;{% endif %}</td><td class="m-val positive">{% if best.buyhold_best_year[0] %}+{{ "%.1f"|format(best.buyhold_best_year[1]) }}% ({{ best.buyhold_best_year[0] }}){% else %}&mdash;{% endif %}</td></tr>
+                    <tr><td class="m-label">Worst Year <span class="m-info" data-tip="Lowest calendar year return.&#10;Min of yearly returns">ⓘ</span></td><td class="m-val negative">{% if best.worst_year[0] %}{{ "%.1f"|format(best.worst_year[1]) }}% ({{ best.worst_year[0] }}){% else %}&mdash;{% endif %}</td><td class="m-val negative">{% if best.buyhold_worst_year[0] %}{{ "%.1f"|format(best.buyhold_worst_year[1]) }}% ({{ best.buyhold_worst_year[0] }}){% else %}&mdash;{% endif %}</td></tr>
                     </tbody>
                 </table>
+                {% if ls_breakdown|default(none) %}
+                <table class="metrics-table" style="margin-top: 16px">
+                    <thead><tr>
+                        <th class="col-metric">Long vs Short Breakdown</th>
+                        <th class="col-strategy" style="color: var(--green)">Long Side</th>
+                        <th class="col-buyhold" style="color: #f7931a">Short Side</th>
+                    </tr></thead>
+                    <tbody>
+                    <tr class="section-row"><td colspan="3">Performance</td></tr>
+                    <tr><td class="m-label">$100 would be</td><td class="m-val {{ 'positive' if ls_breakdown.long.total_return > 0 else 'negative' }}">${{ "{:,.2f}"|format(100 * (1 + ls_breakdown.long.total_return / 100)) }}</td><td class="m-val {{ 'positive' if ls_breakdown.short.total_return > 0 else 'negative' }}">${{ "{:,.2f}"|format(100 * (1 + ls_breakdown.short.total_return / 100)) }}</td></tr>
+                    <tr><td class="m-label">Ann. Return</td><td class="m-val {{ 'positive' if ls_breakdown.long.annualized > 0 else 'negative' }}">{{ "%.2f"|format(ls_breakdown.long.annualized) }}%</td><td class="m-val {{ 'positive' if ls_breakdown.short.annualized > 0 else 'negative' }}">{{ "%.2f"|format(ls_breakdown.short.annualized) }}%</td></tr>
+                    <tr><td class="m-label">Sharpe Ratio</td><td class="m-val">{{ "%.2f"|format(ls_breakdown.long.sharpe) }}</td><td class="m-val">{{ "%.2f"|format(ls_breakdown.short.sharpe) }}</td></tr>
+                    <tr class="section-row"><td colspan="3">Risk</td></tr>
+                    <tr><td class="m-label">Max Drawdown</td><td class="m-val negative">{{ "%.2f"|format(ls_breakdown.long.max_drawdown) }}%</td><td class="m-val negative">{{ "%.2f"|format(ls_breakdown.short.max_drawdown) }}%</td></tr>
+                    <tr><td class="m-label">Volatility</td><td class="m-val">{{ "%.1f"|format(ls_breakdown.long.volatility) }}%</td><td class="m-val">{{ "%.1f"|format(ls_breakdown.short.volatility) }}%</td></tr>
+                    <tr class="section-row"><td colspan="3">Trades</td></tr>
+                    <tr><td class="m-label">Trades</td><td class="m-val">{{ ls_breakdown.long.trades }}</td><td class="m-val">{{ ls_breakdown.short.trades }}</td></tr>
+                    <tr><td class="m-label">Win Rate</td><td class="m-val">{{ "%.1f"|format(ls_breakdown.long.win_rate) }}%</td><td class="m-val">{{ "%.1f"|format(ls_breakdown.short.win_rate) }}%</td></tr>
+                    <tr><td class="m-label">Profit Factor</td><td class="m-val">{% if ls_breakdown.long.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(ls_breakdown.long.profit_factor) }}{% endif %}</td><td class="m-val">{% if ls_breakdown.short.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(ls_breakdown.short.profit_factor) }}{% endif %}</td></tr>
+                    <tr><td class="m-label">Time in Market</td><td class="m-val">{{ "%.1f"|format(ls_breakdown.long.time_in_market) }}%</td><td class="m-val">{{ "%.1f"|format(ls_breakdown.short.time_in_market) }}%</td></tr>
+                    </tbody>
+                </table>
+                {% endif %}
                 </div>
                 {% endif %}
             {% else %}
@@ -1336,7 +1380,10 @@ document.getElementById('form').addEventListener('submit', function(e) {
     var formData = new FormData(this);
 
     fetch('/', { method: 'POST', body: formData, signal: currentAbort.signal })
-        .then(function(resp) { return resp.text(); })
+        .then(function(resp) {
+            if (resp.redirected) { window.location.href = resp.url; throw new Error('redirect'); }
+            return resp.text();
+        })
         .then(function(html) {
             var doc = new DOMParser().parseFromString(html, 'text/html');
             var newPanel = doc.getElementById('results-panel');
@@ -1365,6 +1412,9 @@ document.getElementById('form').addEventListener('submit', function(e) {
                 }
                 // Release height lock after content settles
                 requestAnimationFrame(function() { panel.style.minHeight = ''; });
+            } else {
+                panel.style.opacity = '1';
+                panel.innerHTML = '<div class="placeholder">Error loading results. Try refreshing the page.</div>';
             }
             // Update URL with form params for shareable links
             var qs = new URLSearchParams(formData);
@@ -1378,7 +1428,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
             panel.style.opacity = '1';
             if (err.name === 'AbortError') {
                 panel.innerHTML = '<div class="placeholder">Stopped</div>';
-            } else {
+            } else if (err.message !== 'redirect') {
                 panel.innerHTML = '<div class="placeholder">Error: ' + err.message + '</div>';
             }
             resetBtn();
@@ -1395,7 +1445,10 @@ document.getElementById('form').addEventListener('submit', function(e) {
     btn.classList.add('btn-stop');
     var formData = new FormData(document.getElementById('form'));
     fetch('/', { method: 'POST', body: formData, signal: currentAbort.signal })
-        .then(function(resp) { return resp.text(); })
+        .then(function(resp) {
+            if (resp.redirected) { window.location.href = resp.url; throw new Error('redirect'); }
+            return resp.text();
+        })
         .then(function(html) {
             var doc = new DOMParser().parseFromString(html, 'text/html');
             var newPanel = doc.getElementById('results-panel');
@@ -1410,6 +1463,8 @@ document.getElementById('form').addEventListener('submit', function(e) {
                 lwChartLoaded = false;
                 var img = panel.querySelector('.chart-img');
                 if (img) { img.style.animation = 'fadeUp 0.5s ease-out both'; }
+            } else {
+                panel.innerHTML = '<div class="placeholder">Error loading results. Try refreshing the page.</div>';
             }
             var qs = new URLSearchParams(formData);
             var viewParam = new URLSearchParams(window.location.search).get('view');
@@ -1421,6 +1476,8 @@ document.getElementById('form').addEventListener('submit', function(e) {
         .catch(function(err) {
             if (err.name === 'AbortError') {
                 panel.innerHTML = '<div class="placeholder">Stopped</div>';
+            } else if (err.message !== 'redirect') {
+                panel.innerHTML = '<div class="placeholder">Error loading results. Try refreshing the page.</div>';
             }
             resetBtn();
         });
@@ -1570,6 +1627,7 @@ def index():
     best = None
     table_rows = None
     col_header = "Strategy"
+    long_short_breakdown = None
 
     if request.method == "GET":
         # If query params present, pre-fill form from them (shareable URL support)
@@ -1931,6 +1989,17 @@ def index():
             if len(results) > 1:
                 table_rows = [{"label": r["label"], **r} for r in results]
 
+            # Compute long/short breakdown for long-short exposure
+            long_short_breakdown = None
+            if p.exposure == "long-short" and p.ind2_period is not None:
+                long_only = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
+                                             p.initial_cash, fee, "long-cash", p.long_leverage, 1, p.lev_mode)
+                short_only = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
+                                              p.initial_cash, fee, "short-cash", 1, p.short_leverage, p.lev_mode)
+                long_only = _enrich_best(long_only, df)
+                short_only = _enrich_best(short_only, df)
+                long_short_breakdown = {"long": long_only, "short": short_only}
+
             # Generate chart
             import matplotlib
             matplotlib.use("Agg")
@@ -2015,6 +2084,7 @@ def index():
     return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
                                   asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                   hide_buyhold=(p.exposure == "short-cash"),
+                                  ls_breakdown=long_short_breakdown,
                                   price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                   ind1_label=best.get("ind1_label", "") if best else "", ind2_label=best.get("ind2_label", "") if best else "")
 
