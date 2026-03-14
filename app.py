@@ -843,26 +843,59 @@ function loadTVWidget() {
         "calendar": false,
         "hide_volume": true,
         "studies": tvStudies || [],
-        "studies_overrides": tvOverrides,
         "support_host": "https://www.tradingview.com"
     };
-    container.innerHTML = '';
-    var wrapper = document.createElement('div');
-    wrapper.className = 'tradingview-widget-container';
-    wrapper.style.height = '100%';
-    wrapper.style.width = '100%';
-    var inner = document.createElement('div');
-    inner.className = 'tradingview-widget-container__widget';
-    inner.style.height = 'calc(100% - 32px)';
-    inner.style.width = '100%';
-    wrapper.appendChild(inner);
-    container.appendChild(wrapper);
-    var script = document.createElement('script');
-    script.type = 'text/javascript';
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.async = true;
-    script.textContent = JSON.stringify(config);
-    wrapper.appendChild(script);
+    // Try widgetembed iframe with query params first (supports custom periods)
+    // Fall back to embed script if studies_overrides is empty
+    if (Object.keys(tvOverrides).length > 0) {
+        var params = [];
+        params.push('symbol=' + encodeURIComponent(tvSymbol));
+        params.push('interval=D');
+        params.push('timezone=Etc%2FUTC');
+        params.push('theme=dark');
+        params.push('style=1');
+        params.push('locale=en');
+        params.push('backgroundColor=rgba(22%2C%2025%2C%2034%2C%201)');
+        params.push('gridColor=rgba(37%2C%2042%2C%2058%2C%201)');
+        params.push('hide_side_toolbar=0');
+        params.push('allow_symbol_change=0');
+        params.push('calendar=0');
+        params.push('hide_volume=1');
+        params.push('support_host=https%3A%2F%2Fwww.tradingview.com');
+        for (var i = 0; i < tvStudies.length; i++) {
+            params.push('studies=' + encodeURIComponent(tvStudies[i]));
+        }
+        params.push('studies_overrides=' + encodeURIComponent(JSON.stringify(tvOverrides)));
+        var url = 'https://s.tradingview.com/widgetembed/?' + params.join('&');
+        container.innerHTML = '';
+        var iframe = document.createElement('iframe');
+        iframe.src = url;
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.setAttribute('allowtransparency', 'true');
+        iframe.setAttribute('frameborder', '0');
+        iframe.setAttribute('allowfullscreen', '');
+        container.appendChild(iframe);
+    } else {
+        container.innerHTML = '';
+        var wrapper = document.createElement('div');
+        wrapper.className = 'tradingview-widget-container';
+        wrapper.style.height = '100%';
+        wrapper.style.width = '100%';
+        var inner = document.createElement('div');
+        inner.className = 'tradingview-widget-container__widget';
+        inner.style.height = 'calc(100% - 32px)';
+        inner.style.width = '100%';
+        wrapper.appendChild(inner);
+        container.appendChild(wrapper);
+        var script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+        script.async = true;
+        script.textContent = JSON.stringify(config);
+        wrapper.appendChild(script);
+    }
 }
 
 // Validation before submit
