@@ -499,6 +499,12 @@ HTML = """\
                                 <option value="{{ a }}" {{ 'selected' if p.asset==a }}>{{ a|capitalize }}</option>
                                 {% endfor %}
                                 {% endif %}
+                                {% if stock_assets %}
+                                <option disabled>──────────</option>
+                                {% for a in stock_assets %}
+                                <option value="{{ a }}" {{ 'selected' if p.asset==a }}>{{ a }}</option>
+                                {% endfor %}
+                                {% endif %}
                             </select>
                         </div>
                         <div class="sep"></div>
@@ -1081,8 +1087,10 @@ for _fname in sorted(os.listdir(DATA_DIR)):
         ASSET_STARTS[_name] = str(_df.index[0].date())
 ASSET_NAMES = sorted(ASSETS.keys())
 _PRIORITY_ORDER = ["bitcoin", "ethereum", "solana"]
+_STOCK_ASSETS = {"Dax", "Dow Jones", "Hang Seng", "Nasdaq100", "SP500"}
 PRIORITY_ASSETS = [a for a in _PRIORITY_ORDER if a in ASSETS]
-OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER]
+OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER and a not in _STOCK_ASSETS]
+STOCK_ASSETS = [a for a in ASSET_NAMES if a in _STOCK_ASSETS]
 DEFAULT_ASSET = "bitcoin" if "bitcoin" in ASSETS else ASSET_NAMES[0]
 
 def _series_to_lw_json(series):
@@ -1143,7 +1151,7 @@ def index():
         else:
             p = Params()
         return render_template_string(HTML, p=p, chart=None, best=None, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS,
                                       price_json=None, ind1_json='[]', ind2_json='[]', ind1_label='', ind2_label='')
 
     p = Params(request.form)
@@ -1285,7 +1293,7 @@ def index():
         ind1_json = _series_to_lw_json(best["ind1_series"]) if best.get("ind1_name") != "price" else "[]"
         ind2_json = _series_to_lw_json(best["ind2_series"])
         return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS,
                                       hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info,
                                       price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                       ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
@@ -1412,7 +1420,7 @@ def index():
         ind1_json = _series_to_lw_json(best["ind1_series"]) if best.get("ind1_name") != "price" else "[]"
         ind2_json = _series_to_lw_json(best["ind2_series"])
         return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS,
                                       hide_buyhold=(p.exposure == "short-cash"),
                                       price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                       ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
@@ -1578,7 +1586,7 @@ def index():
     ind1_json = _series_to_lw_json(best["ind1_series"]) if best and best.get("ind1_name") != "price" else "[]"
     ind2_json = _series_to_lw_json(best["ind2_series"]) if best else "[]"
     return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
-                                  asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
+                                  asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, asset_starts_json=ASSET_STARTS,
                                   hide_buyhold=(p.exposure == "short-cash"),
                                   price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                   ind1_label=best.get("ind1_label", "") if best else "", ind2_label=best.get("ind2_label", "") if best else "")
