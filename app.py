@@ -992,7 +992,7 @@ HTML = """\
                     </tr></thead>
                     <tbody>
                     <tr class="section-row"><td colspan="3">Performance</td></tr>
-                    <tr><td class="m-label">Total Return</td><td class="m-val {{ 'positive' if best.total_return > 0 else 'negative' }}">{{ "%.2f"|format(best.total_return) }}%</td><td class="m-val {{ 'positive' if best.buyhold_return > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_return) }}%</td></tr>
+                    <tr><td class="m-label">$100 would be</td><td class="m-val {{ 'positive' if best.total_return > 0 else 'negative' }}">${{ "{:,.2f}"|format(100 * (1 + best.total_return / 100)) }}</td><td class="m-val {{ 'positive' if best.buyhold_return > 0 else 'negative' }}">${{ "{:,.2f}"|format(100 * (1 + best.buyhold_return / 100)) }}</td></tr>
                     <tr><td class="m-label">Ann. Return</td><td class="m-val {{ 'positive' if best.annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.annualized) }}%</td><td class="m-val {{ 'positive' if best.buyhold_annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_annualized) }}%</td></tr>
                     <tr><td class="m-label">Sharpe Ratio</td><td class="m-val">{{ "%.2f"|format(best.sharpe) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sharpe) }}</td></tr>
                     <tr><td class="m-label">Sortino Ratio</td><td class="m-val">{{ "%.2f"|format(best.sortino) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sortino) }}</td></tr>
