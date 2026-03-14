@@ -427,6 +427,13 @@ HTML = """\
             background: linear-gradient(135deg, #c0392b, #e74c3c) !important;
             box-shadow: 0 6px 24px rgba(231, 76, 60, 0.4) !important;
         }
+        #btn.btn-done {
+            background: linear-gradient(135deg, #1a6b3c, #22874b) !important;
+            color: #fff !important;
+            cursor: default !important;
+            box-shadow: 0 4px 16px rgba(34, 135, 75, 0.2) !important;
+            opacity: 0.85;
+        }
 
         /* Results table */
         .results-table {
@@ -1049,6 +1056,21 @@ function closeAssetModal() {
 }
 toggleFields();
 
+// Re-enable Run button when any form parameter changes
+(function() {
+    var form = document.getElementById('form');
+    var inputs = form.querySelectorAll('input, select');
+    for (var i = 0; i < inputs.length; i++) {
+        inputs[i].addEventListener('change', enableBtn);
+        inputs[i].addEventListener('input', enableBtn);
+    }
+    // Also hook into mode cards and asset selection
+    var origSelectMode = window.selectMode;
+    window.selectMode = function(m, el) { origSelectMode(m, el); enableBtn(); };
+    var origSelectAsset = window.selectAsset;
+    window.selectAsset = function(n, el) { origSelectAsset(n, el); enableBtn(); };
+})();
+
 // Lightweight Charts tab switching
 var lwChartLoaded = false;
 function switchChartTab(tab, btn) {
@@ -1199,12 +1221,27 @@ function validateForm() {
 // AJAX form submission — only replace the results panel
 var currentAbort = null;
 
-function resetBtn() {
+function resetBtn(done) {
     var btn = document.getElementById('btn');
-    btn.disabled = false;
-    btn.textContent = 'Run Backtest';
     btn.classList.remove('btn-stop');
     currentAbort = null;
+    if (done) {
+        btn.disabled = true;
+        btn.textContent = '\u2713  Results Ready';
+        btn.classList.add('btn-done');
+    } else {
+        btn.disabled = false;
+        btn.textContent = 'Run Backtest';
+        btn.classList.remove('btn-done');
+    }
+}
+function enableBtn() {
+    var btn = document.getElementById('btn');
+    if (btn.classList.contains('btn-done')) {
+        btn.disabled = false;
+        btn.textContent = 'Run Backtest';
+        btn.classList.remove('btn-done');
+    }
 }
 
 document.getElementById('btn').addEventListener('click', function(e) {
@@ -1276,7 +1313,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
             if (viewParam) qs.set('view', viewParam);
             history.replaceState(null, '', '?' + qs.toString());
             activateViewFromURL();
-            resetBtn();
+            resetBtn(true);
         })
         .catch(function(err) {
             panel.style.opacity = '1';
@@ -1320,7 +1357,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
             if (viewParam) qs.set('view', viewParam);
             history.replaceState(null, '', '?' + qs.toString());
             activateViewFromURL();
-            resetBtn();
+            resetBtn(true);
         })
         .catch(function(err) {
             if (err.name === 'AbortError') {
