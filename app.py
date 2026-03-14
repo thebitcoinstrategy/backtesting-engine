@@ -282,6 +282,16 @@ HTML = """\
             box-shadow: none !important;
             transform: none !important;
         }
+        #btn.btn-stop {
+            background: linear-gradient(135deg, #e74c3c, #c0392b) !important;
+            color: #fff !important;
+            cursor: pointer !important;
+            box-shadow: 0 4px 16px rgba(231, 76, 60, 0.3) !important;
+        }
+        #btn.btn-stop:hover {
+            background: linear-gradient(135deg, #c0392b, #e74c3c) !important;
+            box-shadow: 0 6px 24px rgba(231, 76, 60, 0.4) !important;
+        }
 
         /* Results table */
         .results-table {
@@ -921,10 +931,33 @@ function validateForm() {
 }
 
 // AJAX form submission — only replace the results panel
+var currentAbort = null;
+
+function resetBtn() {
+    var btn = document.getElementById('btn');
+    btn.disabled = false;
+    btn.textContent = 'Run Backtest';
+    btn.classList.remove('btn-stop');
+    currentAbort = null;
+}
+
+document.getElementById('btn').addEventListener('click', function(e) {
+    if (currentAbort) {
+        e.preventDefault();
+        currentAbort.abort();
+        return;
+    }
+});
+
 document.getElementById('form').addEventListener('submit', function(e) {
     e.preventDefault();
     var btn = document.getElementById('btn');
     var panel = document.getElementById('results-panel');
+
+    if (currentAbort) {
+        currentAbort.abort();
+        return;
+    }
 
     var errors = validateForm();
     if (errors.length > 0) {
@@ -932,14 +965,15 @@ document.getElementById('form').addEventListener('submit', function(e) {
         return;
     }
 
-    btn.disabled = true;
-    btn.textContent = 'Running...';
+    currentAbort = new AbortController();
+    btn.textContent = 'Stop';
+    btn.classList.add('btn-stop');
     panel.style.opacity = '0.5';
     panel.style.transition = 'opacity 0.2s ease';
 
     var formData = new FormData(this);
 
-    fetch('/', { method: 'POST', body: formData })
+    fetch('/', { method: 'POST', body: formData, signal: currentAbort.signal })
         .then(function(resp) { return resp.text(); })
         .then(function(html) {
             var doc = new DOMParser().parseFromString(html, 'text/html');
@@ -973,14 +1007,16 @@ document.getElementById('form').addEventListener('submit', function(e) {
             // Update URL with form params for shareable links
             var qs = new URLSearchParams(formData).toString();
             history.replaceState(null, '', '?' + qs);
-            btn.disabled = false;
-            btn.textContent = 'Run Backtest';
+            resetBtn();
         })
         .catch(function(err) {
             panel.style.opacity = '1';
-            btn.disabled = false;
-            btn.textContent = 'Run Backtest';
-            panel.innerHTML = '<div class="placeholder">Error: ' + err.message + '</div>';
+            if (err.name === 'AbortError') {
+                panel.innerHTML = '<div class="placeholder">Stopped</div>';
+            } else {
+                panel.innerHTML = '<div class="placeholder">Error: ' + err.message + '</div>';
+            }
+            resetBtn();
         });
 });
 
@@ -989,10 +1025,11 @@ document.getElementById('form').addEventListener('submit', function(e) {
 (function() {
     var btn = document.getElementById('btn');
     var panel = document.getElementById('results-panel');
-    btn.disabled = true;
-    btn.textContent = 'Running...';
+    currentAbort = new AbortController();
+    btn.textContent = 'Stop';
+    btn.classList.add('btn-stop');
     var formData = new FormData(document.getElementById('form'));
-    fetch('/', { method: 'POST', body: formData })
+    fetch('/', { method: 'POST', body: formData, signal: currentAbort.signal })
         .then(function(resp) { return resp.text(); })
         .then(function(html) {
             var doc = new DOMParser().parseFromString(html, 'text/html');
@@ -1009,11 +1046,15 @@ document.getElementById('form').addEventListener('submit', function(e) {
                 var img = panel.querySelector('.chart-img');
                 if (img) { img.style.animation = 'fadeUp 0.5s ease-out both'; }
             }
-            // Update URL with form params for shareable links
             var qs = new URLSearchParams(formData).toString();
             history.replaceState(null, '', '?' + qs);
-            btn.disabled = false;
-            btn.textContent = 'Run Backtest';
+            resetBtn();
+        })
+        .catch(function(err) {
+            if (err.name === 'AbortError') {
+                panel.innerHTML = '<div class="placeholder">Stopped</div>';
+            }
+            resetBtn();
         });
 })();
 {% endif %}
@@ -1036,7 +1077,7 @@ class Params:
             p2_val = form.get("period2", "").strip()
             self.ind2_period = int(p2_val) if p2_val else None
             self.range_min = int(form.get("range_min", 2))
-            self.range_max = int(form.get("range_max", 365))
+            self.range_max = int(form.get("range_max", 200))
             self.step = int(form.get("step", 5))
             self.exposure = form.get("exposure", "long-cash")
             if self.mode == "sweep-lev":
@@ -1059,7 +1100,7 @@ class Params:
             self.ind2_name = "sma"
             self.ind2_period = 44
             self.range_min = 2
-            self.range_max = 365
+            self.range_max = 200
             self.step = 5
             self.exposure = "long-cash"
             self.fee = 0.05
