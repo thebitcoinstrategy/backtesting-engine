@@ -469,42 +469,36 @@ HTML = """\
             box-shadow: 0 0 8px var(--green);
         }
 
-        /* Metrics cards */
+        /* Metrics table */
         .metrics-panel { margin-bottom: 16px; }
-        .metrics-section-title {
-            font-size: 0.65em; text-transform: uppercase; letter-spacing: 0.1em;
-            color: var(--text-dim); font-weight: 600; margin: 16px 0 8px;
-            padding-bottom: 4px; border-bottom: 1px solid var(--border);
+        .metrics-table {
+            width: 100%; border-collapse: collapse;
+            font-size: 0.8em; font-family: 'JetBrains Mono', monospace;
         }
-        .metrics-section-title:first-child { margin-top: 0; }
-        .metrics-columns {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+        .metrics-table th {
+            padding: 4px 8px; font-size: 0.75em; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            border-bottom: 1px solid var(--border);
         }
-        .metrics-col-header {
-            font-size: 0.7em; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.08em; padding: 6px 0; text-align: center;
+        .metrics-table th.col-metric { text-align: left; color: var(--text-muted); }
+        .metrics-table th.col-strategy { text-align: right; color: var(--green); }
+        .metrics-table th.col-buyhold { text-align: right; color: var(--blue); }
+        .metrics-table td {
+            padding: 3px 8px; border-bottom: 1px solid rgba(37,42,58,0.4);
         }
-        .metrics-col-header.strategy { color: var(--green); }
-        .metrics-col-header.buyhold { color: var(--blue); }
-        .metrics-row {
-            display: contents;
+        .metrics-table td.m-label {
+            font-size: 0.85em; color: var(--text-muted); font-family: 'DM Sans', sans-serif;
+            font-weight: 500;
         }
-        .metric-card {
-            padding: 8px 12px;
-            border-bottom: 1px solid rgba(37,42,58,0.5);
+        .metrics-table td.m-val { text-align: right; font-weight: 600; color: var(--text); }
+        .metrics-table td.m-val.positive { color: var(--green); }
+        .metrics-table td.m-val.negative { color: #ef4444; }
+        .metrics-table td.m-val.muted { color: var(--text-dim); }
+        .metrics-table tr.section-row td {
+            padding: 8px 8px 3px; font-size: 0.65em; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            color: var(--text-dim); border-bottom: 1px solid var(--border);
         }
-        .metric-card:nth-child(odd) { border-right: 1px solid rgba(37,42,58,0.5); }
-        .metric-label {
-            font-size: 0.65em; color: var(--text-dim); text-transform: uppercase;
-            letter-spacing: 0.04em; margin-bottom: 2px;
-        }
-        .metric-value {
-            font-size: 0.95em; font-weight: 600; font-family: 'JetBrains Mono', monospace;
-            color: var(--text);
-        }
-        .metric-value.positive { color: var(--green); }
-        .metric-value.negative { color: #ef4444; }
-        .metric-value.muted { color: var(--text-dim); }
 
         /* Chart tabs */
         .chart-tabs {
@@ -936,64 +930,6 @@ HTML = """\
                         <td>{{ "%.2f"|format(lev_sweep.best_long_lev) }}x / {{ "%.2f"|format(lev_sweep.best_short_lev) }}x</td>
                     </tr>
                 </table>
-                {% else %}
-                {# Standard backtest / sweep / heatmap — side-by-side metric cards #}
-                <div class="metrics-panel">
-                    <div class="metrics-columns">
-                        <div class="metrics-col-header strategy">{{ best.label }}</div>
-                        <div class="metrics-col-header buyhold">Buy & Hold</div>
-                    </div>
-                    {# Performance #}
-                    <div class="metrics-section-title">Performance</div>
-                    <div class="metrics-columns">
-                        <div class="metric-card"><div class="metric-label">Total Return</div><div class="metric-value {{ 'positive' if best.total_return > 0 else 'negative' }}">{{ "%.2f"|format(best.total_return) }}%</div></div>
-                        <div class="metric-card"><div class="metric-label">Total Return</div><div class="metric-value {{ 'positive' if best.buyhold_return > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_return) }}%</div></div>
-                        <div class="metric-card"><div class="metric-label">Ann. Return</div><div class="metric-value {{ 'positive' if best.annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.annualized) }}%</div></div>
-                        <div class="metric-card"><div class="metric-label">Ann. Return</div><div class="metric-value {{ 'positive' if best.buyhold_annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_annualized) }}%</div></div>
-                        <div class="metric-card"><div class="metric-label">Sharpe Ratio</div><div class="metric-value">{{ "%.2f"|format(best.sharpe) }}</div></div>
-                        <div class="metric-card"><div class="metric-label">Sharpe Ratio</div><div class="metric-value">{{ "%.2f"|format(best.buyhold_sharpe) }}</div></div>
-                        <div class="metric-card"><div class="metric-label">Sortino Ratio</div><div class="metric-value">{{ "%.2f"|format(best.sortino) }}</div></div>
-                        <div class="metric-card"><div class="metric-label">Sortino Ratio</div><div class="metric-value">{{ "%.2f"|format(best.buyhold_sortino) }}</div></div>
-                    </div>
-                    {# Risk #}
-                    <div class="metrics-section-title">Risk</div>
-                    <div class="metrics-columns">
-                        <div class="metric-card"><div class="metric-label">Max Drawdown</div><div class="metric-value negative">{{ "%.2f"|format(best.max_drawdown) }}%</div></div>
-                        <div class="metric-card"><div class="metric-label">Max Drawdown</div><div class="metric-value negative">{{ "%.2f"|format(best.buyhold_max_drawdown) }}%</div></div>
-                        <div class="metric-card"><div class="metric-label">DD Duration</div><div class="metric-value">{{ best.max_dd_duration }} days</div></div>
-                        <div class="metric-card"><div class="metric-label">DD Duration</div><div class="metric-value">{{ best.buyhold_max_dd_duration }} days</div></div>
-                        <div class="metric-card"><div class="metric-label">Volatility</div><div class="metric-value">{{ "%.1f"|format(best.volatility) }}%</div></div>
-                        <div class="metric-card"><div class="metric-label">Volatility</div><div class="metric-value">{{ "%.1f"|format(best.buyhold_volatility) }}%</div></div>
-                        <div class="metric-card"><div class="metric-label">Beta</div><div class="metric-value">{{ "%.2f"|format(best.beta) }}</div></div>
-                        <div class="metric-card"><div class="metric-label">Beta</div><div class="metric-value muted">1.00</div></div>
-                        <div class="metric-card"><div class="metric-label">Calmar Ratio</div><div class="metric-value">{{ "%.2f"|format(best.calmar) }}</div></div>
-                        <div class="metric-card"><div class="metric-label">Calmar Ratio</div><div class="metric-value">{{ "%.2f"|format(best.buyhold_calmar) }}</div></div>
-                    </div>
-                    {# Trades #}
-                    <div class="metrics-section-title">Trades</div>
-                    <div class="metrics-columns">
-                        <div class="metric-card"><div class="metric-label">Trades</div><div class="metric-value">{{ best.trades }}</div></div>
-                        <div class="metric-card"><div class="metric-label">Trades</div><div class="metric-value muted">&mdash;</div></div>
-                        <div class="metric-card"><div class="metric-label">Win Rate</div><div class="metric-value">{{ "%.1f"|format(best.win_rate) }}%</div></div>
-                        <div class="metric-card"><div class="metric-label">Win Rate</div><div class="metric-value muted">&mdash;</div></div>
-                        <div class="metric-card"><div class="metric-label">Avg Win / Loss</div><div class="metric-value"><span class="positive">+{{ "%.1f"|format(best.avg_win) }}%</span> / <span class="negative">{{ "%.1f"|format(best.avg_loss) }}%</span></div></div>
-                        <div class="metric-card"><div class="metric-label">Avg Win / Loss</div><div class="metric-value muted">&mdash;</div></div>
-                        <div class="metric-card"><div class="metric-label">Profit Factor</div><div class="metric-value">{% if best.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(best.profit_factor) }}{% endif %}</div></div>
-                        <div class="metric-card"><div class="metric-label">Profit Factor</div><div class="metric-value muted">&mdash;</div></div>
-                        <div class="metric-card"><div class="metric-label">Avg Duration</div><div class="metric-value">{{ "%.0f"|format(best.avg_trade_duration) }} days</div></div>
-                        <div class="metric-card"><div class="metric-label">Avg Duration</div><div class="metric-value muted">&mdash;</div></div>
-                        <div class="metric-card"><div class="metric-label">Time in Market</div><div class="metric-value">{{ "%.1f"|format(best.time_in_market) }}%</div></div>
-                        <div class="metric-card"><div class="metric-label">Time in Market</div><div class="metric-value muted">&mdash;</div></div>
-                    </div>
-                    {# Annual #}
-                    <div class="metrics-section-title">Annual</div>
-                    <div class="metrics-columns">
-                        <div class="metric-card"><div class="metric-label">Best Year</div><div class="metric-value positive">{% if best.best_year[0] %}+{{ "%.1f"|format(best.best_year[1]) }}% ({{ best.best_year[0] }}){% else %}&mdash;{% endif %}</div></div>
-                        <div class="metric-card"><div class="metric-label">Best Year</div><div class="metric-value positive">{% if best.buyhold_best_year[0] %}+{{ "%.1f"|format(best.buyhold_best_year[1]) }}% ({{ best.buyhold_best_year[0] }}){% else %}&mdash;{% endif %}</div></div>
-                        <div class="metric-card"><div class="metric-label">Worst Year</div><div class="metric-value negative">{% if best.worst_year[0] %}{{ "%.1f"|format(best.worst_year[1]) }}% ({{ best.worst_year[0] }}){% else %}&mdash;{% endif %}</div></div>
-                        <div class="metric-card"><div class="metric-label">Worst Year</div><div class="metric-value negative">{% if best.buyhold_worst_year[0] %}{{ "%.1f"|format(best.buyhold_worst_year[1]) }}% ({{ best.buyhold_worst_year[0] }}){% else %}&mdash;{% endif %}</div></div>
-                    </div>
-                </div>
                 {% endif %}
                 {% endif %}
                 {% if table_rows %}
@@ -1044,6 +980,41 @@ HTML = """\
                     ind2Label: {{ ind2_label|tojson }}
                 };
                 </script>
+                {% endif %}
+                {% if best and not lev_sweep|default(none) %}
+                {# Compact 3-column metrics table: Metric | Strategy | Buy & Hold #}
+                <div class="metrics-panel">
+                <table class="metrics-table">
+                    <thead><tr>
+                        <th class="col-metric">Metric</th>
+                        <th class="col-strategy">{{ best.label }}</th>
+                        <th class="col-buyhold">Buy & Hold</th>
+                    </tr></thead>
+                    <tbody>
+                    <tr class="section-row"><td colspan="3">Performance</td></tr>
+                    <tr><td class="m-label">Total Return</td><td class="m-val {{ 'positive' if best.total_return > 0 else 'negative' }}">{{ "%.2f"|format(best.total_return) }}%</td><td class="m-val {{ 'positive' if best.buyhold_return > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_return) }}%</td></tr>
+                    <tr><td class="m-label">Ann. Return</td><td class="m-val {{ 'positive' if best.annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.annualized) }}%</td><td class="m-val {{ 'positive' if best.buyhold_annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_annualized) }}%</td></tr>
+                    <tr><td class="m-label">Sharpe Ratio</td><td class="m-val">{{ "%.2f"|format(best.sharpe) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sharpe) }}</td></tr>
+                    <tr><td class="m-label">Sortino Ratio</td><td class="m-val">{{ "%.2f"|format(best.sortino) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sortino) }}</td></tr>
+                    <tr class="section-row"><td colspan="3">Risk</td></tr>
+                    <tr><td class="m-label">Max Drawdown</td><td class="m-val negative">{{ "%.2f"|format(best.max_drawdown) }}%</td><td class="m-val negative">{{ "%.2f"|format(best.buyhold_max_drawdown) }}%</td></tr>
+                    <tr><td class="m-label">DD Duration</td><td class="m-val">{{ best.max_dd_duration }}d</td><td class="m-val">{{ best.buyhold_max_dd_duration }}d</td></tr>
+                    <tr><td class="m-label">Volatility</td><td class="m-val">{{ "%.1f"|format(best.volatility) }}%</td><td class="m-val">{{ "%.1f"|format(best.buyhold_volatility) }}%</td></tr>
+                    <tr><td class="m-label">Beta</td><td class="m-val">{{ "%.2f"|format(best.beta) }}</td><td class="m-val muted">1.00</td></tr>
+                    <tr><td class="m-label">Calmar Ratio</td><td class="m-val">{{ "%.2f"|format(best.calmar) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_calmar) }}</td></tr>
+                    <tr class="section-row"><td colspan="3">Trades</td></tr>
+                    <tr><td class="m-label">Trades</td><td class="m-val">{{ best.trades }}</td><td class="m-val muted">&mdash;</td></tr>
+                    <tr><td class="m-label">Win Rate</td><td class="m-val">{{ "%.1f"|format(best.win_rate) }}%</td><td class="m-val muted">&mdash;</td></tr>
+                    <tr><td class="m-label">Avg Win / Loss</td><td class="m-val"><span class="positive">+{{ "%.1f"|format(best.avg_win) }}%</span> / <span class="negative">{{ "%.1f"|format(best.avg_loss) }}%</span></td><td class="m-val muted">&mdash;</td></tr>
+                    <tr><td class="m-label">Profit Factor</td><td class="m-val">{% if best.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(best.profit_factor) }}{% endif %}</td><td class="m-val muted">&mdash;</td></tr>
+                    <tr><td class="m-label">Avg Duration</td><td class="m-val">{{ "%.0f"|format(best.avg_trade_duration) }}d</td><td class="m-val muted">&mdash;</td></tr>
+                    <tr><td class="m-label">Time in Market</td><td class="m-val">{{ "%.1f"|format(best.time_in_market) }}%</td><td class="m-val muted">&mdash;</td></tr>
+                    <tr class="section-row"><td colspan="3">Annual</td></tr>
+                    <tr><td class="m-label">Best Year</td><td class="m-val positive">{% if best.best_year[0] %}+{{ "%.1f"|format(best.best_year[1]) }}% ({{ best.best_year[0] }}){% else %}&mdash;{% endif %}</td><td class="m-val positive">{% if best.buyhold_best_year[0] %}+{{ "%.1f"|format(best.buyhold_best_year[1]) }}% ({{ best.buyhold_best_year[0] }}){% else %}&mdash;{% endif %}</td></tr>
+                    <tr><td class="m-label">Worst Year</td><td class="m-val negative">{% if best.worst_year[0] %}{{ "%.1f"|format(best.worst_year[1]) }}% ({{ best.worst_year[0] }}){% else %}&mdash;{% endif %}</td><td class="m-val negative">{% if best.buyhold_worst_year[0] %}{{ "%.1f"|format(best.buyhold_worst_year[1]) }}% ({{ best.buyhold_worst_year[0] }}){% else %}&mdash;{% endif %}</td></tr>
+                    </tbody>
+                </table>
+                </div>
                 {% endif %}
             {% else %}
                 <div class="placeholder">Configure parameters and press Run Backtest</div>
