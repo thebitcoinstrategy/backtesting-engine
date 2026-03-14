@@ -710,16 +710,20 @@ HTML = """\
                     <img class="chart-img" src="data:image/png;base64,{{ chart }}" />
                 </div>
                 {% if price_json %}
-                <div id="livechart-tab" style="display:none"
-                     data-price="{{ price_json }}"
-                     data-ind1="{{ ind1_json }}"
-                     data-ind2="{{ ind2_json }}"
-                     data-ind1-label="{{ ind1_label }}"
-                     data-ind2-label="{{ ind2_label }}">
+                <div id="livechart-tab" style="display:none">
                     <div id="lw-chart-container"
                          style="height:600px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
                     </div>
                 </div>
+                <script>
+                var __lwData = {
+                    price: {{ price_json|safe }},
+                    ind1: {{ ind1_json|safe }},
+                    ind2: {{ ind2_json|safe }},
+                    ind1Label: {{ ind1_label|tojson }},
+                    ind2Label: {{ ind2_label|tojson }}
+                };
+                </script>
                 {% endif %}
             {% else %}
                 <div class="placeholder">Configure parameters and press Run Backtest</div>
@@ -804,17 +808,16 @@ function switchChartTab(tab, btn) {
     }
 }
 function loadLWChart() {
-    var tabDiv = document.getElementById('livechart-tab');
     var container = document.getElementById('lw-chart-container');
-    if (!tabDiv || !container) return;
+    if (!container || typeof __lwData === 'undefined') return;
     lwChartLoaded = true;
     container.innerHTML = '';
 
-    var priceData = JSON.parse(tabDiv.getAttribute('data-price') || '[]');
-    var ind1Data = JSON.parse(tabDiv.getAttribute('data-ind1') || '[]');
-    var ind2Data = JSON.parse(tabDiv.getAttribute('data-ind2') || '[]');
-    var ind1Label = tabDiv.getAttribute('data-ind1-label') || '';
-    var ind2Label = tabDiv.getAttribute('data-ind2-label') || '';
+    var priceData = __lwData.price || [];
+    var ind1Data = __lwData.ind1 || [];
+    var ind2Data = __lwData.ind2 || [];
+    var ind1Label = __lwData.ind1Label || '';
+    var ind2Label = __lwData.ind2Label || '';
 
     if (priceData.length === 0) return;
 
@@ -928,6 +931,13 @@ document.getElementById('form').addEventListener('submit', function(e) {
                 panel.style.minHeight = oldHeight + 'px';
                 var scrollY = window.scrollY;
                 panel.innerHTML = newPanel.innerHTML;
+                // Execute inline scripts (DOMParser doesn't run them)
+                var scripts = panel.querySelectorAll('script');
+                for (var si = 0; si < scripts.length; si++) {
+                    var ns = document.createElement('script');
+                    ns.textContent = scripts[si].textContent;
+                    scripts[si].replaceWith(ns);
+                }
                 window.scrollTo(0, scrollY);
                 panel.style.opacity = '1';
                 lwChartLoaded = false;
@@ -970,6 +980,12 @@ document.getElementById('form').addEventListener('submit', function(e) {
             var newPanel = doc.getElementById('results-panel');
             if (newPanel) {
                 panel.innerHTML = newPanel.innerHTML;
+                var scripts = panel.querySelectorAll('script');
+                for (var si = 0; si < scripts.length; si++) {
+                    var ns = document.createElement('script');
+                    ns.textContent = scripts[si].textContent;
+                    scripts[si].replaceWith(ns);
+                }
                 lwChartLoaded = false;
                 var img = panel.querySelector('.chart-img');
                 if (img) { img.style.animation = 'fadeUp 0.5s ease-out both'; }
