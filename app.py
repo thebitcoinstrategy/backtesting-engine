@@ -363,6 +363,17 @@ HTML = """\
             animation: fadeUp 0.6s ease-out 0.3s both;
         }
 
+        .chart-download-btn {
+            position: absolute; top: 12px; right: 12px;
+            background: var(--bg-surface); color: var(--text-secondary);
+            border: 1px solid var(--border); border-radius: 8px;
+            padding: 6px 8px; cursor: pointer; opacity: 0;
+            transition: opacity 0.2s ease, background 0.15s ease, color 0.15s ease;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .chart-download-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+        div:hover > .chart-download-btn { opacity: 1; }
+
         /* Placeholder */
         .placeholder {
             text-align: center;
@@ -723,7 +734,14 @@ HTML = """\
                 </div>
                 {% endif %}
                 <div id="backtest-chart-tab">
-                    <img class="chart-img" src="data:image/png;base64,{{ chart }}" />
+                    <div style="position:relative">
+                        <img class="chart-img" id="backtest-chart-img" src="data:image/png;base64,{{ chart }}" />
+                        <button onclick="downloadChart()" class="chart-download-btn" title="Download chart as PNG">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12h10"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 {% if price_json %}
                 <div id="livechart-tab" style="display:none">
@@ -837,6 +855,16 @@ function activateViewFromURL() {
         var tabs = document.querySelectorAll('.chart-tab');
         if (tabs.length >= 2) switchChartTab('livechart', tabs[1]);
     }
+}
+function downloadChart() {
+    var img = document.getElementById('backtest-chart-img');
+    if (!img) return;
+    var asset = document.getElementById('asset');
+    var assetName = asset ? asset.value : 'chart';
+    var a = document.createElement('a');
+    a.href = img.src;
+    a.download = assetName + '_backtest.png';
+    a.click();
 }
 function loadLWChart() {
     var container = document.getElementById('lw-chart-container');
