@@ -723,9 +723,6 @@ HTML = """\
                     {% if tv_unsupported %}
                     <div class="tv-note">{{ tv_unsupported }}</div>
                     {% endif %}
-                    {% if tv_periods_note %}
-                    <div class="tv-note">{{ tv_periods_note }} — click ⚙ on each indicator to set</div>
-                    {% endif %}
                     <div id="tv-widget-container"
                          data-tv-symbol="{{ tv_symbol }}"
                          data-tv-studies="{{ tv_studies_json }}"
@@ -1113,21 +1110,33 @@ def _build_tv_config(asset, ind1_name, ind1_period, ind2_name, ind2_period):
     overrides = {}
     unsupported = []
     period_notes = []
+    same_type = (ind1_name == ind2_name and ind1_name != 'price')
 
-    for ind_name, ind_period in [(ind1_name, ind1_period), (ind2_name, ind2_period)]:
-        if ind_name == 'price':
-            continue
-        if ind_name in TV_STUDIES:
-            study_id, override_key = TV_STUDIES[ind_name]
+    if same_type:
+        # Same indicator type: can only show one instance (global override applies to all)
+        if ind1_name in TV_STUDIES:
+            study_id, override_key = TV_STUDIES[ind1_name]
             studies.append(study_id)
-            if ind_period:
-                overrides[override_key] = ind_period
-                period_notes.append(f'{ind_name.upper()} = {ind_period}')
+            if ind2_period:
+                overrides[override_key] = ind2_period
+            unsupported.append(
+                f'{ind1_name.upper()}({ind1_period}) not shown — TradingView can only set one period per indicator type')
         else:
-            unsupported.append(ind_name.upper())
+            unsupported.append(ind1_name.upper())
+    else:
+        for ind_name, ind_period in [(ind1_name, ind1_period), (ind2_name, ind2_period)]:
+            if ind_name == 'price':
+                continue
+            if ind_name in TV_STUDIES:
+                study_id, override_key = TV_STUDIES[ind_name]
+                studies.append(study_id)
+                if ind_period:
+                    overrides[override_key] = ind_period
+            else:
+                unsupported.append(ind_name.upper())
 
     unsupported_str = ', '.join(unsupported) if unsupported else None
-    periods_note = 'Set periods: ' + ', '.join(period_notes) if period_notes else None
+    periods_note = None
     return tv_symbol, studies, overrides, unsupported_str, periods_note
 
 
@@ -1182,10 +1191,10 @@ def index():
             p = Params()
         return render_template_string(HTML, p=p, chart=None, best=None, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
-                                      tv_symbol=None, tv_studies_json='[]', tv_overrides_json='{}', tv_unsupported=None, tv_periods_note=None)
+                                      tv_symbol=None, tv_studies_json='[]', tv_overrides_json='{}', tv_unsupported=None)
 
     p = Params(request.form)
-    tv_symbol, tv_studies, tv_overrides, tv_unsupported, tv_periods_note = _build_tv_config(
+    tv_symbol, tv_studies, tv_overrides, tv_unsupported, _ = _build_tv_config(
         p.asset, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period)
     tv_studies_json = json.dumps(tv_studies or [])
     tv_overrides_json = json.dumps(tv_overrides or {})
@@ -1326,7 +1335,7 @@ def index():
         return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
                                       hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info,
-                                      tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported, tv_periods_note=tv_periods_note)
+                                      tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported)
 
     # --- Heatmap Mode ---
     if p.mode == "heatmap":
@@ -1449,7 +1458,7 @@ def index():
         return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
                                       hide_buyhold=(p.exposure == "short-cash"),
-                                      tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported, tv_periods_note=tv_periods_note)
+                                      tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported)
 
     # --- Sweep Mode (Find Best Period) ---
     if p.mode == "sweep":
@@ -1611,7 +1620,7 @@ def index():
     return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
                                   asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
                                   hide_buyhold=(p.exposure == "short-cash"),
-                                  tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported, tv_periods_note=tv_periods_note)
+                                  tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported)
 
 
 if __name__ == "__main__":
