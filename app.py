@@ -862,8 +862,9 @@ function loadTVWidget() {
         params.push('calendar=0');
         params.push('hide_volume=1');
         params.push('support_host=https%3A%2F%2Fwww.tradingview.com');
-        for (var i = 0; i < tvStudies.length; i++) {
-            params.push('studies=' + encodeURIComponent(tvStudies[i]));
+        // Join multiple studies with %1F (unit separator) in a single param
+        if (tvStudies.length > 0) {
+            params.push('studies=' + tvStudies.map(function(s) { return encodeURIComponent(s); }).join('%1F'));
         }
         params.push('studies_overrides=' + encodeURIComponent(JSON.stringify(tvOverrides)));
         var url = 'https://s.tradingview.com/widgetembed/?' + params.join('&');
