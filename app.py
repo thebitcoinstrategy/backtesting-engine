@@ -1073,17 +1073,30 @@ def _build_tv_config(asset, ind1_name, ind1_period, ind2_name, ind2_period):
     studies = []
     overrides = {}
     unsupported = []
+    same_type = (ind1_name == ind2_name and ind1_name != 'price')
 
-    for ind_name, ind_period in [(ind1_name, ind1_period), (ind2_name, ind2_period)]:
-        if ind_name == 'price':
-            continue
-        if ind_name in TV_STUDIES:
-            study_id, override_key = TV_STUDIES[ind_name]
-            studies.append(study_id)
-            if ind_period:
-                overrides[override_key] = ind_period
-        else:
-            unsupported.append(ind_name.upper())
+    if same_type and ind1_name in TV_STUDIES:
+        # Same indicator type: widget can only show one instance with one period
+        study_id, override_key = TV_STUDIES[ind1_name]
+        studies.append(study_id)
+        # Use ind2 period (the slower/main signal)
+        if ind2_period:
+            overrides[override_key] = ind2_period
+        unsupported.append(
+            f'{ind1_name.upper()}({ind1_period}) — widget can only show one {ind1_name.upper()} at a time')
+    elif same_type:
+        unsupported.append(ind1_name.upper())
+    else:
+        for ind_name, ind_period in [(ind1_name, ind1_period), (ind2_name, ind2_period)]:
+            if ind_name == 'price':
+                continue
+            if ind_name in TV_STUDIES:
+                study_id, override_key = TV_STUDIES[ind_name]
+                studies.append(study_id)
+                if ind_period:
+                    overrides[override_key] = ind_period
+            else:
+                unsupported.append(ind_name.upper())
 
     unsupported_str = ', '.join(unsupported) if unsupported else None
     return tv_symbol, studies, overrides, unsupported_str
