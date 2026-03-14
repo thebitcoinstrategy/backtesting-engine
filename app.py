@@ -732,7 +732,7 @@ HTML = """\
                     <div class="asset-modal" onclick="event.stopPropagation()">
                         <div class="asset-modal-header">
                             <span>Select Asset</span>
-                            <button class="asset-modal-close" onclick="closeAssetModal()">&times;</button>
+                            <button type="button" class="asset-modal-close" onclick="closeAssetModal()">&times;</button>
                         </div>
                         <div class="asset-grid">
                             {% for a in priority_assets %}
@@ -978,7 +978,7 @@ HTML = """\
                         <div class="metric-card"><div class="metric-label">Win Rate</div><div class="metric-value muted">&mdash;</div></div>
                         <div class="metric-card"><div class="metric-label">Avg Win / Loss</div><div class="metric-value"><span class="positive">+{{ "%.1f"|format(best.avg_win) }}%</span> / <span class="negative">{{ "%.1f"|format(best.avg_loss) }}%</span></div></div>
                         <div class="metric-card"><div class="metric-label">Avg Win / Loss</div><div class="metric-value muted">&mdash;</div></div>
-                        <div class="metric-card"><div class="metric-label">Profit Factor</div><div class="metric-value">{% if best.profit_factor == float('inf') %}&infin;{% else %}{{ "%.2f"|format(best.profit_factor) }}{% endif %}</div></div>
+                        <div class="metric-card"><div class="metric-label">Profit Factor</div><div class="metric-value">{% if best.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(best.profit_factor) }}{% endif %}</div></div>
                         <div class="metric-card"><div class="metric-label">Profit Factor</div><div class="metric-value muted">&mdash;</div></div>
                         <div class="metric-card"><div class="metric-label">Avg Duration</div><div class="metric-value">{{ "%.0f"|format(best.avg_trade_duration) }} days</div></div>
                         <div class="metric-card"><div class="metric-label">Avg Duration</div><div class="metric-value muted">&mdash;</div></div>
