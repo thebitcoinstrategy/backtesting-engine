@@ -822,6 +822,21 @@ function switchChartTab(tab, btn) {
     if (tab === 'livechart' && !lwChartLoaded) {
         loadLWChart();
     }
+    // Update URL with view parameter
+    var url = new URL(window.location);
+    if (tab === 'livechart') {
+        url.searchParams.set('view', 'livechart');
+    } else {
+        url.searchParams.delete('view');
+    }
+    history.replaceState(null, '', url.toString());
+}
+function activateViewFromURL() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'livechart') {
+        var tabs = document.querySelectorAll('.chart-tab');
+        if (tabs.length >= 2) switchChartTab('livechart', tabs[1]);
+    }
 }
 function loadLWChart() {
     var container = document.getElementById('lw-chart-container');
@@ -1005,8 +1020,11 @@ document.getElementById('form').addEventListener('submit', function(e) {
                 requestAnimationFrame(function() { panel.style.minHeight = ''; });
             }
             // Update URL with form params for shareable links
-            var qs = new URLSearchParams(formData).toString();
-            history.replaceState(null, '', '?' + qs);
+            var qs = new URLSearchParams(formData);
+            var viewParam = new URLSearchParams(window.location.search).get('view');
+            if (viewParam) qs.set('view', viewParam);
+            history.replaceState(null, '', '?' + qs.toString());
+            activateViewFromURL();
             resetBtn();
         })
         .catch(function(err) {
@@ -1046,8 +1064,11 @@ document.getElementById('form').addEventListener('submit', function(e) {
                 var img = panel.querySelector('.chart-img');
                 if (img) { img.style.animation = 'fadeUp 0.5s ease-out both'; }
             }
-            var qs = new URLSearchParams(formData).toString();
-            history.replaceState(null, '', '?' + qs);
+            var qs = new URLSearchParams(formData);
+            var viewParam = new URLSearchParams(window.location.search).get('view');
+            if (viewParam) qs.set('view', viewParam);
+            history.replaceState(null, '', '?' + qs.toString());
+            activateViewFromURL();
             resetBtn();
         })
         .catch(function(err) {
