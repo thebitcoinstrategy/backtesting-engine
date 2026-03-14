@@ -351,6 +351,87 @@ def _annualized_return(total_return_pct, n_days):
     return (growth ** (365 / n_days) - 1) * 100
 
 
+def _sortino_ratio(daily_returns):
+    """Sortino ratio: mean / downside deviation, annualized with sqrt(365)."""
+    mean_d = daily_returns.mean()
+    downside = daily_returns[daily_returns < 0]
+    down_std = downside.std() if len(downside) > 1 else 0.0
+    return (mean_d / down_std * np.sqrt(365)) if down_std > 0 else 0.0
+
+
+def _beta(strategy_returns, market_returns):
+    """Beta: covariance(strategy, market) / variance(market)."""
+    if len(strategy_returns) < 2:
+        return 0.0
+    cov = np.cov(strategy_returns, market_returns)
+    var_market = cov[1, 1]
+    return float(cov[0, 1] / var_market) if var_market > 0 else 0.0
+
+
+def _max_drawdown_duration(equity_series):
+    """Longest peak-to-recovery period in days."""
+    cummax = equity_series.cummax()
+    in_dd = equity_series < cummax
+    max_dur = 0
+    cur_dur = 0
+    for v in in_dd:
+        if v:
+            cur_dur += 1
+            if cur_dur > max_dur:
+                max_dur = cur_dur
+        else:
+            cur_dur = 0
+    return max_dur
+
+
+def _yearly_returns(equity_series):
+    """Return dict of {year: return_pct} for each calendar year."""
+    if len(equity_series) < 2:
+        return {}
+    years = {}
+    eq = equity_series
+    grouped = eq.groupby(eq.index.year)
+    for year, grp in grouped:
+        start_val = grp.iloc[0]
+        end_val = grp.iloc[-1]
+        if start_val > 0:
+            years[year] = (end_val / start_val - 1) * 100
+    return years
+
+
+def _trade_stats(equity_series, position_series):
+    """Compute trade-level statistics from equity and position series."""
+    pos = position_series.values
+    eq = equity_series.values
+    # Find trade boundaries (where position changes)
+    changes = np.where(np.diff(pos, prepend=pos[0] - 1) != 0)[0]
+    trades = []
+    for i in range(len(changes)):
+        start = changes[i]
+        end = changes[i + 1] if i + 1 < len(changes) else len(pos)
+        if pos[start] == 0:
+            continue  # skip cash periods
+        entry_eq = eq[start]
+        exit_eq = eq[end - 1]
+        if entry_eq > 0:
+            ret = (exit_eq / entry_eq - 1) * 100
+            trades.append({"return": ret, "days": end - start})
+    if not trades:
+        return {"win_rate": 0, "avg_win": 0, "avg_loss": 0,
+                "profit_factor": 0, "avg_trade_duration": 0}
+    wins = [t for t in trades if t["return"] > 0]
+    losses = [t for t in trades if t["return"] <= 0]
+    win_rate = len(wins) / len(trades) * 100
+    avg_win = np.mean([t["return"] for t in wins]) if wins else 0.0
+    avg_loss = np.mean([t["return"] for t in losses]) if losses else 0.0
+    gross_profit = sum(t["return"] for t in wins)
+    gross_loss = abs(sum(t["return"] for t in losses))
+    profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
+    avg_duration = np.mean([t["days"] for t in trades])
+    return {"win_rate": win_rate, "avg_win": avg_win, "avg_loss": avg_loss,
+            "profit_factor": profit_factor, "avg_trade_duration": avg_duration}
+
+
 # --- Core Strategy Functions ---
 
 def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
@@ -401,6 +482,20 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
     std_daily = equity_returns.std()
     sharpe = (mean_daily / std_daily * np.sqrt(365)) if std_daily > 0 else 0.0
 
+    # Additional metrics
+    volatility = std_daily * np.sqrt(365) * 100
+    sortino = _sortino_ratio(equity_returns)
+    beta_val = _beta(equity_returns.values, daily_return.values)
+    n_days = len(df)
+    ann_ret = _annualized_return(total_return, n_days)
+    calmar = abs(ann_ret / max_drawdown) if max_drawdown != 0 else 0.0
+    dd_duration = _max_drawdown_duration(df["equity"])
+    yearly = _yearly_returns(df["equity"])
+    best_year = max(yearly.items(), key=lambda x: x[1]) if yearly else (None, 0)
+    worst_year = min(yearly.items(), key=lambda x: x[1]) if yearly else (None, 0)
+    tstats = _trade_stats(df["equity"], df["position"])
+    time_in_market = (df["position"] != 0).sum() / len(df) * 100
+
     pos_diff = df["position"].diff().fillna(0)
     buy_signals = df.index[pos_diff > 0]
     sell_signals = df.index[pos_diff < 0]
@@ -420,6 +515,19 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
         "max_drawdown": max_drawdown,
         "trades": int(trades),
         "sharpe": sharpe,
+        "volatility": volatility,
+        "sortino": sortino,
+        "beta": beta_val,
+        "calmar": calmar,
+        "max_dd_duration": dd_duration,
+        "win_rate": tstats["win_rate"],
+        "avg_win": tstats["avg_win"],
+        "avg_loss": tstats["avg_loss"],
+        "profit_factor": tstats["profit_factor"],
+        "avg_trade_duration": tstats["avg_trade_duration"],
+        "time_in_market": time_in_market,
+        "best_year": best_year,
+        "worst_year": worst_year,
         "equity": df["equity"],
         "buyhold": df["buyhold"],
         "buy_signals": buy_signals,
