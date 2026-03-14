@@ -473,10 +473,10 @@ HTML = """\
         .metrics-panel { margin-bottom: 16px; }
         .metrics-table {
             width: 100%; border-collapse: collapse;
-            font-size: 0.8em; font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em; font-family: 'JetBrains Mono', monospace;
         }
         .metrics-table th {
-            padding: 4px 8px; font-size: 0.75em; font-weight: 600;
+            padding: 6px 10px; font-size: 0.8em; font-weight: 600;
             text-transform: uppercase; letter-spacing: 0.06em;
             border-bottom: 1px solid var(--border);
         }
@@ -484,10 +484,10 @@ HTML = """\
         .metrics-table th.col-strategy { text-align: right; color: var(--green); }
         .metrics-table th.col-buyhold { text-align: right; color: var(--blue); }
         .metrics-table td {
-            padding: 3px 8px; border-bottom: 1px solid rgba(37,42,58,0.4);
+            padding: 5px 10px; border-bottom: 1px solid rgba(37,42,58,0.4);
         }
         .metrics-table td.m-label {
-            font-size: 0.85em; color: var(--text-muted); font-family: 'DM Sans', sans-serif;
+            font-size: 0.95em; color: var(--text-muted); font-family: 'DM Sans', sans-serif;
             font-weight: 500;
         }
         .metrics-table td.m-val { text-align: right; font-weight: 600; color: var(--text); }
@@ -998,7 +998,7 @@ HTML = """\
                     <tr><td class="m-label">Sortino Ratio</td><td class="m-val">{{ "%.2f"|format(best.sortino) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sortino) }}</td></tr>
                     <tr class="section-row"><td colspan="3">Risk</td></tr>
                     <tr><td class="m-label">Max Drawdown</td><td class="m-val negative">{{ "%.2f"|format(best.max_drawdown) }}%</td><td class="m-val negative">{{ "%.2f"|format(best.buyhold_max_drawdown) }}%</td></tr>
-                    <tr><td class="m-label">DD Duration</td><td class="m-val">{{ best.max_dd_duration }}d</td><td class="m-val">{{ best.buyhold_max_dd_duration }}d</td></tr>
+                    <tr><td class="m-label">Drawdown Duration</td><td class="m-val">{{ best.max_dd_duration }}d</td><td class="m-val">{{ best.buyhold_max_dd_duration }}d</td></tr>
                     <tr><td class="m-label">Volatility</td><td class="m-val">{{ "%.1f"|format(best.volatility) }}%</td><td class="m-val">{{ "%.1f"|format(best.buyhold_volatility) }}%</td></tr>
                     <tr><td class="m-label">Beta</td><td class="m-val">{{ "%.2f"|format(best.beta) }}</td><td class="m-val muted">1.00</td></tr>
                     <tr><td class="m-label">Calmar Ratio</td><td class="m-val">{{ "%.2f"|format(best.calmar) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_calmar) }}</td></tr>
