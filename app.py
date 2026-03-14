@@ -823,31 +823,28 @@ function loadTVWidget() {
     var tvStudies = JSON.parse(container.getAttribute('data-tv-studies') || '[]');
     var tvOverrides = JSON.parse(container.getAttribute('data-tv-overrides') || '{}');
     if (!tvSymbol) return;
-    // Build widgetembed iframe URL with query params
-    // studies_overrides as URL-encoded JSON query param (confirmed working)
-    var params = [];
-    params.push('symbol=' + encodeURIComponent(tvSymbol));
-    params.push('interval=D');
-    params.push('timezone=Etc%2FUTC');
-    params.push('theme=dark');
-    params.push('style=1');
-    params.push('locale=en');
-    params.push('backgroundColor=rgba(22%2C%2025%2C%2034%2C%201)');
-    params.push('gridColor=rgba(37%2C%2042%2C%2058%2C%201)');
-    params.push('hide_side_toolbar=0');
-    params.push('allow_symbol_change=0');
-    params.push('calendar=0');
-    params.push('hide_volume=1');
-    params.push('support_host=https%3A%2F%2Fwww.tradingview.com');
-    // Add each study as a separate query param (confirmed working format)
-    for (var i = 0; i < tvStudies.length; i++) {
-        params.push('studies=' + encodeURIComponent(tvStudies[i]));
-    }
-    // Add studies_overrides as URL-encoded JSON
-    if (Object.keys(tvOverrides).length > 0) {
-        params.push('studies_overrides=' + encodeURIComponent(JSON.stringify(tvOverrides)));
-    }
-    var url = 'https://s.tradingview.com/widgetembed/?' + params.join('&');
+    // Build iframe URL matching the embed widget script's own format:
+    // base: tradingview-widget.com/embed-widget/advanced-chart/?locale=en
+    // hash: JSON-encoded config object with all settings
+    var config = {
+        "symbol": tvSymbol,
+        "interval": "D",
+        "timezone": "Etc/UTC",
+        "theme": "dark",
+        "style": "1",
+        "backgroundColor": "rgba(22, 25, 34, 1)",
+        "gridColor": "rgba(37, 42, 58, 1)",
+        "hide_side_toolbar": false,
+        "allow_symbol_change": false,
+        "calendar": false,
+        "hide_volume": true,
+        "studies": tvStudies,
+        "studies_overrides": tvOverrides,
+        "support_host": "https://www.tradingview.com",
+        "width": "100%",
+        "height": "100%"
+    };
+    var url = 'https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=en#' + encodeURIComponent(JSON.stringify(config));
     container.innerHTML = '';
     var iframe = document.createElement('iframe');
     iframe.src = url;
@@ -1073,30 +1070,22 @@ def _build_tv_config(asset, ind1_name, ind1_period, ind2_name, ind2_period):
     studies = []
     overrides = {}
     unsupported = []
-    same_type = (ind1_name == ind2_name and ind1_name != 'price')
 
-    if same_type and ind1_name in TV_STUDIES:
-        # Same indicator type: widget can only show one instance with one period
-        study_id, override_key = TV_STUDIES[ind1_name]
-        studies.append(study_id)
-        # Use ind2 period (the slower/main signal)
-        if ind2_period:
-            overrides[override_key] = ind2_period
+    for ind_name, ind_period in [(ind1_name, ind1_period), (ind2_name, ind2_period)]:
+        if ind_name == 'price':
+            continue
+        if ind_name in TV_STUDIES:
+            study_id, override_key = TV_STUDIES[ind_name]
+            studies.append(study_id)
+            if ind_period:
+                overrides[override_key] = ind_period
+        else:
+            unsupported.append(ind_name.upper())
+
+    # Same type crossover: override key collision means both get ind2's period
+    if ind1_name == ind2_name and ind1_name != 'price' and ind1_name in TV_STUDIES:
         unsupported.append(
-            f'{ind1_name.upper()}({ind1_period}) — widget can only show one {ind1_name.upper()} at a time')
-    elif same_type:
-        unsupported.append(ind1_name.upper())
-    else:
-        for ind_name, ind_period in [(ind1_name, ind1_period), (ind2_name, ind2_period)]:
-            if ind_name == 'price':
-                continue
-            if ind_name in TV_STUDIES:
-                study_id, override_key = TV_STUDIES[ind_name]
-                studies.append(study_id)
-                if ind_period:
-                    overrides[override_key] = ind_period
-            else:
-                unsupported.append(ind_name.upper())
+            f'{ind1_name.upper()}({ind1_period}) shows as {ind1_name.upper()}({ind2_period}) — widget limitation')
 
     unsupported_str = ', '.join(unsupported) if unsupported else None
     return tv_symbol, studies, overrides, unsupported_str
