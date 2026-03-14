@@ -562,13 +562,10 @@ HTML = """\
                         </div>
                         <div class="mode-card {{ 'active' if p.mode=='sweep-lev' }}" onclick="selectMode('sweep-lev', this)">
                             <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="14" cy="12" r="2" fill="currentColor" stroke="none"/>
-                                <line x1="4" y1="12" x2="24" y2="12" stroke-width="1.5"/>
-                                <line x1="14" y1="12" x2="14" y2="22" stroke-width="1.5"/>
-                                <path d="M4 12L8 6" stroke-width="1.5"/>
-                                <path d="M24 12L20 18" stroke-width="1.5"/>
-                                <circle cx="8" cy="6" r="2" opacity="0.5"/>
-                                <circle cx="20" cy="18" r="2" opacity="0.5"/>
+                                <path d="M7 4L4 7l3 3"/>
+                                <path d="M4 7h6a4 4 0 0 1 4 4v2"/>
+                                <path d="M14 13l8 8"/>
+                                <circle cx="23.5" cy="22.5" r="2.5"/>
                             </svg>
                             <span class="mode-card-label">Leverage Optimization</span>
                         </div>
