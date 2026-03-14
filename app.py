@@ -839,9 +839,9 @@ function loadTVWidget() {
     params.push('calendar=0');
     params.push('hide_volume=1');
     params.push('support_host=https%3A%2F%2Fwww.tradingview.com');
-    // Encode studies as JSON array
-    if (tvStudies.length > 0) {
-        params.push('studies=' + encodeURIComponent(JSON.stringify(tvStudies)));
+    // Add each study as a separate query param (confirmed working format)
+    for (var i = 0; i < tvStudies.length; i++) {
+        params.push('studies=' + encodeURIComponent(tvStudies[i]));
     }
     // Add studies_overrides as URL-encoded JSON
     if (Object.keys(tvOverrides).length > 0) {
