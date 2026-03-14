@@ -807,7 +807,14 @@ HTML = """\
                             <label>Period 2</label>
                             <input type="number" name="period2" value="{{ p.ind2_period or '' }}" placeholder="e.g. 40" min="2">
                         </div>
-                        <div class="sep"></div>
+                    </div>
+                    <div class="signal-explainer" id="signal-explainer">
+                        Buy when <span id="explainer-ind1">Price</span> crosses above <span id="explainer-ind2">SMA</span>. Sell when it crosses below.
+                    </div>
+                </div>
+                <div class="form-section">
+                    <div class="section-title">Exposure & Leverage</div>
+                    <div class="form-row">
                         <div class="form-group" id="exposure-group">
                             <label>Exposure</label>
                             <select name="exposure" id="exposure">
@@ -816,14 +823,7 @@ HTML = """\
                                 <option value="long-short" {{ 'selected' if p.exposure=='long-short' }}>Long + Short</option>
                             </select>
                         </div>
-                    </div>
-                    <div class="signal-explainer" id="signal-explainer">
-                        Buy when <span id="explainer-ind1">Price</span> crosses above <span id="explainer-ind2">SMA</span>. Sell when it crosses below.
-                    </div>
-                </div>
-                <div class="form-section">
-                    <div class="section-title">Leverage</div>
-                    <div class="form-row">
+                        <div class="sep"></div>
                         <div class="form-group" id="long-lev-group">
                             <label>Long Leverage</label>
                             <input type="number" name="long_leverage" value="{{ p.long_leverage }}" step="any" min="0.1">
