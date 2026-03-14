@@ -115,6 +115,7 @@ HTML = """\
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         :root {
             --bg-deep: #080a10;
@@ -344,16 +345,6 @@ HTML = """\
             border-color: var(--accent);
             border-bottom-color: var(--bg-elevated);
         }
-        .tv-note {
-            color: var(--text-muted);
-            font-size: 0.82em;
-            padding: 8px 12px;
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            margin-bottom: 8px;
-        }
-
         /* Chart */
         .chart-img {
             width: 100%;
@@ -709,24 +700,23 @@ HTML = """\
                     </div>
                 </details>
                 {% endif %}
-                {% if tv_symbol %}
+                {% if price_json %}
                 <div class="chart-tabs">
                     <button class="chart-tab active" onclick="switchChartTab('backtest', this)">Backtest Chart</button>
-                    <button class="chart-tab" onclick="switchChartTab('tradingview', this)">TradingView</button>
+                    <button class="chart-tab" onclick="switchChartTab('livechart', this)">Live Chart</button>
                 </div>
                 {% endif %}
                 <div id="backtest-chart-tab">
                     <img class="chart-img" src="data:image/png;base64,{{ chart }}" />
                 </div>
-                {% if tv_symbol %}
-                <div id="tradingview-chart-tab" style="display:none">
-                    {% if tv_unsupported %}
-                    <div class="tv-note">{{ tv_unsupported }}</div>
-                    {% endif %}
-                    <div id="tv-widget-container"
-                         data-tv-symbol="{{ tv_symbol }}"
-                         data-tv-studies="{{ tv_studies_json }}"
-                         data-tv-overrides="{{ tv_overrides_json }}"
+                {% if price_json %}
+                <div id="livechart-tab" style="display:none"
+                     data-price="{{ price_json }}"
+                     data-ind1="{{ ind1_json }}"
+                     data-ind2="{{ ind2_json }}"
+                     data-ind1-label="{{ ind1_label }}"
+                     data-ind2-label="{{ ind2_label }}">
+                    <div id="lw-chart-container"
                          style="height:600px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
                     </div>
                 </div>
@@ -798,102 +788,95 @@ function onAssetChange() {
 }
 toggleFields();
 
-// TradingView chart tab switching
-var tvWidgetLoaded = false;
+// Lightweight Charts tab switching
+var lwChartLoaded = false;
 function switchChartTab(tab, btn) {
     var bt = document.getElementById('backtest-chart-tab');
-    var tv = document.getElementById('tradingview-chart-tab');
-    if (!bt || !tv) return;
+    var lw = document.getElementById('livechart-tab');
+    if (!bt || !lw) return;
     bt.style.display = tab === 'backtest' ? '' : 'none';
-    tv.style.display = tab === 'tradingview' ? '' : 'none';
-    // Update active tab styling
+    lw.style.display = tab === 'livechart' ? '' : 'none';
     var tabs = btn.parentElement.querySelectorAll('.chart-tab');
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
     btn.classList.add('active');
-    // Load TV widget on first switch
-    if (tab === 'tradingview' && !tvWidgetLoaded) {
-        loadTVWidget();
+    if (tab === 'livechart' && !lwChartLoaded) {
+        loadLWChart();
     }
 }
-function loadTVWidget() {
-    var container = document.getElementById('tv-widget-container');
-    if (!container) return;
-    tvWidgetLoaded = true;
-    var tvSymbol = container.getAttribute('data-tv-symbol');
-    var tvStudies = JSON.parse(container.getAttribute('data-tv-studies') || '[]');
-    var tvOverrides = JSON.parse(container.getAttribute('data-tv-overrides') || '{}');
-    if (!tvSymbol) return;
-    // Use embed-widget-advanced-chart.js script (confirmed to show studies)
-    // with studies_overrides passed via the script config
-    var config = {
-        "autosize": true,
-        "symbol": tvSymbol,
-        "interval": "D",
-        "timezone": "Etc/UTC",
-        "theme": "dark",
-        "style": "1",
-        "locale": "en",
-        "backgroundColor": "rgba(22, 25, 34, 1)",
-        "gridColor": "rgba(37, 42, 58, 1)",
-        "hide_side_toolbar": false,
-        "allow_symbol_change": false,
-        "calendar": false,
-        "hide_volume": true,
-        "studies": tvStudies || [],
-        "support_host": "https://www.tradingview.com"
-    };
-    // Try widgetembed iframe with query params first (supports custom periods)
-    // Fall back to embed script if studies_overrides is empty
-    if (Object.keys(tvOverrides).length > 0) {
-        var params = [];
-        params.push('symbol=' + encodeURIComponent(tvSymbol));
-        params.push('interval=D');
-        params.push('timezone=Etc%2FUTC');
-        params.push('theme=dark');
-        params.push('style=1');
-        params.push('locale=en');
-        params.push('backgroundColor=rgba(22%2C%2025%2C%2034%2C%201)');
-        params.push('gridColor=rgba(37%2C%2042%2C%2058%2C%201)');
-        params.push('hide_side_toolbar=0');
-        params.push('allow_symbol_change=0');
-        params.push('calendar=0');
-        params.push('hide_volume=1');
-        params.push('support_host=https%3A%2F%2Fwww.tradingview.com');
-        // Join multiple studies with %1F (unit separator) in a single param
-        if (tvStudies.length > 0) {
-            params.push('studies=' + tvStudies.map(function(s) { return encodeURIComponent(s); }).join('%1F'));
+function loadLWChart() {
+    var tabDiv = document.getElementById('livechart-tab');
+    var container = document.getElementById('lw-chart-container');
+    if (!tabDiv || !container) return;
+    lwChartLoaded = true;
+    container.innerHTML = '';
+
+    var priceData = JSON.parse(tabDiv.getAttribute('data-price') || '[]');
+    var ind1Data = JSON.parse(tabDiv.getAttribute('data-ind1') || '[]');
+    var ind2Data = JSON.parse(tabDiv.getAttribute('data-ind2') || '[]');
+    var ind1Label = tabDiv.getAttribute('data-ind1-label') || '';
+    var ind2Label = tabDiv.getAttribute('data-ind2-label') || '';
+
+    if (priceData.length === 0) return;
+
+    var chart = LightweightCharts.createChart(container, {
+        width: container.clientWidth,
+        height: 600,
+        layout: {
+            background: { color: '#161922' },
+            textColor: '#8890a4',
+            fontFamily: "'DM Sans', sans-serif"
+        },
+        grid: {
+            vertLines: { color: '#252a3a' },
+            horzLines: { color: '#252a3a' }
+        },
+        rightPriceScale: {
+            mode: LightweightCharts.PriceScaleMode.Logarithmic,
+            borderColor: '#252a3a'
+        },
+        timeScale: {
+            borderColor: '#252a3a',
+            timeVisible: false
+        },
+        crosshair: {
+            horzLine: { color: '#555d74', labelBackgroundColor: '#252a3a' },
+            vertLine: { color: '#555d74', labelBackgroundColor: '#252a3a' }
         }
-        params.push('studies_overrides=' + encodeURIComponent(JSON.stringify(tvOverrides)));
-        var url = 'https://s.tradingview.com/widgetembed/?' + params.join('&');
-        container.innerHTML = '';
-        var iframe = document.createElement('iframe');
-        iframe.src = url;
-        iframe.style.width = '100%';
-        iframe.style.height = '100%';
-        iframe.style.border = 'none';
-        iframe.setAttribute('allowtransparency', 'true');
-        iframe.setAttribute('frameborder', '0');
-        iframe.setAttribute('allowfullscreen', '');
-        container.appendChild(iframe);
-    } else {
-        container.innerHTML = '';
-        var wrapper = document.createElement('div');
-        wrapper.className = 'tradingview-widget-container';
-        wrapper.style.height = '100%';
-        wrapper.style.width = '100%';
-        var inner = document.createElement('div');
-        inner.className = 'tradingview-widget-container__widget';
-        inner.style.height = 'calc(100% - 32px)';
-        inner.style.width = '100%';
-        wrapper.appendChild(inner);
-        container.appendChild(wrapper);
-        var script = document.createElement('script');
-        script.type = 'text/javascript';
-        script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-        script.async = true;
-        script.textContent = JSON.stringify(config);
-        wrapper.appendChild(script);
+    });
+
+    var priceSeries = chart.addLineSeries({
+        color: '#e8eaf0',
+        lineWidth: 1,
+        title: 'Price',
+        priceLineVisible: false
+    });
+    priceSeries.setData(priceData);
+
+    if (ind2Data.length > 0) {
+        var ind2Series = chart.addLineSeries({
+            color: '#6495ED',
+            lineWidth: 1,
+            title: ind2Label,
+            priceLineVisible: false
+        });
+        ind2Series.setData(ind2Data);
     }
+
+    if (ind1Data.length > 0) {
+        var ind1Series = chart.addLineSeries({
+            color: '#f7931a',
+            lineWidth: 1,
+            title: ind1Label,
+            priceLineVisible: false
+        });
+        ind1Series.setData(ind1Data);
+    }
+
+    chart.timeScale().fitContent();
+
+    window.addEventListener('resize', function() {
+        chart.applyOptions({ width: container.clientWidth });
+    });
 }
 
 // Validation before submit
@@ -947,7 +930,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
                 panel.innerHTML = newPanel.innerHTML;
                 window.scrollTo(0, scrollY);
                 panel.style.opacity = '1';
-                tvWidgetLoaded = false;
+                lwChartLoaded = false;
                 // Re-trigger fadeUp animation on chart image
                 var img = panel.querySelector('.chart-img');
                 if (img) {
@@ -987,7 +970,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
             var newPanel = doc.getElementById('results-panel');
             if (newPanel) {
                 panel.innerHTML = newPanel.innerHTML;
-                tvWidgetLoaded = false;
+                lwChartLoaded = false;
                 var img = panel.querySelector('.chart-img');
                 if (img) { img.style.animation = 'fadeUp 0.5s ease-out both'; }
             }
@@ -1073,71 +1056,12 @@ PRIORITY_ASSETS = [a for a in _PRIORITY_ORDER if a in ASSETS]
 OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER]
 DEFAULT_ASSET = "bitcoin" if "bitcoin" in ASSETS else ASSET_NAMES[0]
 
-# TradingView widget mappings
-TV_SYMBOLS = {
-    'bitcoin': 'BITSTAMP:BTCUSD',
-    'ethereum': 'BITSTAMP:ETHUSD',
-    'solana': 'COINBASE:SOLUSD',
-    'xrp': 'BITSTAMP:XRPUSD',
-    'cardano': 'BINANCE:ADAUSDT',
-    'bnb': 'BINANCE:BNBUSDT',
-    'dogecoin': 'BINANCE:DOGEUSDT',
-    'chainlink': 'BINANCE:LINKUSDT',
-    'monero': 'KRAKEN:XMRUSD',
-    'bitcoin cash': 'COINBASE:BCHUSD',
-    'hyperliquid': 'BYBIT:HYPEUSDT',
-}
-
-# (study_id, studies_overrides key for length) per indicator
-TV_STUDIES = {
-    'sma':  ('MASimple@tv-basicstudies',  'moving average.length'),
-    'ema':  ('MAExp@tv-basicstudies',      'moving average exponential.length'),
-    'wma':  ('MAWeighted@tv-basicstudies', 'moving average weighted.length'),
-    'hma':  ('hullMA@tv-basicstudies',     'hull moving average.length'),
-    'dema': ('DoubleEMA@tv-basicstudies',  'double EMA.length'),
-    'tema': ('TripleEMA@tv-basicstudies',  'triple EMA.length'),
-}
-# Unsupported on TradingView: kama, zlema, smma, lsma, alma, frama, t3, mcginley
-
-
-def _build_tv_config(asset, ind1_name, ind1_period, ind2_name, ind2_period):
-    """Build TradingView widget config for the given backtest params."""
-    tv_symbol = TV_SYMBOLS.get(asset)
-    if not tv_symbol:
-        return None, None, None, None
-
-    studies = []
-    overrides = {}
-    unsupported = []
-    period_notes = []
-    same_type = (ind1_name == ind2_name and ind1_name != 'price')
-
-    if same_type:
-        # Same indicator type: can only show one instance (global override applies to all)
-        if ind1_name in TV_STUDIES:
-            study_id, override_key = TV_STUDIES[ind1_name]
-            studies.append(study_id)
-            if ind2_period:
-                overrides[override_key] = ind2_period
-            unsupported.append(
-                f'{ind1_name.upper()}({ind1_period}) not shown — TradingView can only set one period per indicator type')
-        else:
-            unsupported.append(ind1_name.upper())
-    else:
-        for ind_name, ind_period in [(ind1_name, ind1_period), (ind2_name, ind2_period)]:
-            if ind_name == 'price':
-                continue
-            if ind_name in TV_STUDIES:
-                study_id, override_key = TV_STUDIES[ind_name]
-                studies.append(study_id)
-                if ind_period:
-                    overrides[override_key] = ind_period
-            else:
-                unsupported.append(ind_name.upper())
-
-    unsupported_str = ', '.join(unsupported) if unsupported else None
-    periods_note = None
-    return tv_symbol, studies, overrides, unsupported_str, periods_note
+def _series_to_lw_json(series):
+    """Convert pandas Series (datetime index + float values) to Lightweight Charts format."""
+    return json.dumps([
+        {"time": str(idx.date()), "value": round(float(val), 2)}
+        for idx, val in series.dropna().items()
+    ])
 
 
 def _enrich_best(result, df):
@@ -1191,13 +1115,9 @@ def index():
             p = Params()
         return render_template_string(HTML, p=p, chart=None, best=None, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
-                                      tv_symbol=None, tv_studies_json='[]', tv_overrides_json='{}', tv_unsupported=None)
+                                      price_json=None, ind1_json='[]', ind2_json='[]', ind1_label='', ind2_label='')
 
     p = Params(request.form)
-    tv_symbol, tv_studies, tv_overrides, tv_unsupported, _ = _build_tv_config(
-        p.asset, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period)
-    tv_studies_json = json.dumps(tv_studies or [])
-    tv_overrides_json = json.dumps(tv_overrides or {})
     import pandas as pd_mod
     df = ASSETS.get(p.asset, ASSETS[DEFAULT_ASSET]).copy()
     if p.start_date:
@@ -1332,10 +1252,14 @@ def index():
             "combined_ann": combined_ann,
             "combined_label": f"{title_label} with long {best_long_lev:.2f}x / short {best_short_lev:.2f}x",
         }
+        price_json = _series_to_lw_json(df["close"])
+        ind1_json = _series_to_lw_json(best["ind1_series"]) if best.get("ind1_name") != "price" else "[]"
+        ind2_json = _series_to_lw_json(best["ind2_series"])
         return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
                                       hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info,
-                                      tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported)
+                                      price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
+                                      ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
 
     # --- Heatmap Mode ---
     if p.mode == "heatmap":
@@ -1455,10 +1379,14 @@ def index():
                                        p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode)
         best = _enrich_best(best_result, df)
 
+        price_json = _series_to_lw_json(df["close"])
+        ind1_json = _series_to_lw_json(best["ind1_series"]) if best.get("ind1_name") != "price" else "[]"
+        ind2_json = _series_to_lw_json(best["ind2_series"])
         return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
                                       hide_buyhold=(p.exposure == "short-cash"),
-                                      tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported)
+                                      price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
+                                      ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
 
     # --- Sweep Mode (Find Best Period) ---
     if p.mode == "sweep":
@@ -1617,10 +1545,14 @@ def index():
             buf.seek(0)
             chart_b64 = base64.b64encode(buf.read()).decode()
 
+    price_json = _series_to_lw_json(df["close"]) if best else None
+    ind1_json = _series_to_lw_json(best["ind1_series"]) if best and best.get("ind1_name") != "price" else "[]"
+    ind2_json = _series_to_lw_json(best["ind2_series"]) if best else "[]"
     return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
                                   asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, asset_starts_json=ASSET_STARTS,
                                   hide_buyhold=(p.exposure == "short-cash"),
-                                  tv_symbol=tv_symbol, tv_studies_json=tv_studies_json, tv_overrides_json=tv_overrides_json, tv_unsupported=tv_unsupported)
+                                  price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
+                                  ind1_label=best.get("ind1_label", "") if best else "", ind2_label=best.get("ind2_label", "") if best else "")
 
 
 if __name__ == "__main__":
