@@ -827,7 +827,6 @@ HTML = """\
                         <div class="form-group">
                             <label>Indicator 2</label>
                             <select name="ind2_name" id="ind2_name">
-                                <option value="price" {{ 'selected' if p.ind2_name=='price' }}>Price</option>
                                 <option value="sma" {{ 'selected' if p.ind2_name=='sma' }}>SMA (Simple Moving Average)</option>
                                 <option value="ema" {{ 'selected' if p.ind2_name=='ema' }}>EMA (Exponential Moving Average)</option>
                                 <option value="wma" {{ 'selected' if p.ind2_name=='wma' }}>WMA (Weighted Moving Average)</option>
@@ -850,8 +849,11 @@ HTML = """\
                         </div>
                     </div>
                     <div class="signal-explainer" id="signal-explainer">
-                        Buy when <span id="explainer-ind1">Price</span> crosses above <span id="explainer-ind2">SMA</span>. Sell when it crosses below.
+                        <span id="explainer-text">Buy when <span id="explainer-ind1">Price</span> crosses above <span id="explainer-ind2">SMA</span>. Sell when it crosses below.</span>
                     </div>
+                    <label style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:0.82em;color:var(--text-muted)">
+                        <input type="checkbox" name="reverse" id="reverse" value="1" {{ 'checked' if p.reverse }} onchange="updateExplainer()" style="accent-color:var(--accent)"> Reverse signal logic
+                    </label>
                 </div>
                 <div class="form-section">
                     <div class="section-title">Exposure & Leverage</div>
@@ -1109,10 +1111,17 @@ function updateExplainer() {
     var ind2 = document.getElementById('ind2_name');
     var p1 = document.querySelector('#period1-group input');
     var p2 = document.querySelector('#period2-group input');
+    var rev = document.getElementById('reverse').checked;
     var label1 = ind1.value === 'price' ? 'Price' : ind1.value.toUpperCase() + (p1.value ? '(' + p1.value + ')' : '');
     var label2 = ind2.value.toUpperCase() + (p2.value ? '(' + p2.value + ')' : '');
     document.getElementById('explainer-ind1').textContent = label1;
     document.getElementById('explainer-ind2').textContent = label2;
+    var el = document.getElementById('explainer-text');
+    if (rev) {
+        el.innerHTML = '<b>Sell</b> when <span id="explainer-ind1">' + label1 + '</span> crosses above <span id="explainer-ind2">' + label2 + '</span>. <b>Buy</b> when it crosses below.';
+    } else {
+        el.innerHTML = 'Buy when <span id="explainer-ind1">' + label1 + '</span> crosses above <span id="explainer-ind2">' + label2 + '</span>. Sell when it crosses below.';
+    }
 }
 document.querySelector('#period1-group input').addEventListener('input', updateExplainer);
 document.querySelector('#period2-group input').addEventListener('input', updateExplainer);
@@ -1514,6 +1523,7 @@ class Params:
             self.initial_cash = float(form.get("initial_cash", 10000))
             self.start_date = form.get("start_date", "").strip()
             self.end_date = form.get("end_date", "").strip()
+            self.reverse = bool(form.get("reverse"))
         else:
             self.asset = DEFAULT_ASSET
             self.mode = "backtest"
@@ -1535,6 +1545,7 @@ class Params:
             self.initial_cash = 10000
             self.start_date = "2018-01-01"
             self.end_date = str(ASSETS[DEFAULT_ASSET].index[-1].date())
+            self.reverse = False
 
 
 # Load data once at startup
@@ -1669,6 +1680,8 @@ def index():
         ind2_period_val = p.ind2_period if p.ind2_period else 44
         ind2_series, _ = bt.compute_indicator_from_spec(df, p.ind2_name, ind2_period_val)
         above = ind1_series > ind2_series
+        if p.reverse:
+            above = ~above
         position_base = bt._apply_exposure(above, p.exposure).shift(1).fillna(0)
         daily_return = df["close"].pct_change().fillna(0)
 
@@ -1762,7 +1775,7 @@ def index():
         chart_b64 = base64.b64encode(buf.read()).decode()
 
         best_result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, ind2_period_val,
-                                       p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode)
+                                       p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.reverse)
         best = _enrich_best(best_result, df)
 
         combined_ann = _sweep_ann(best_long_lev, best_short_lev)
@@ -1835,6 +1848,8 @@ def index():
                 if same_type and p1 >= p2:
                     continue
                 above = ind1_cache[p1] > ind2_cache[p2]
+                if p.reverse:
+                    above = ~above
                 position = bt._apply_exposure(above, p.exposure).shift(1).fillna(0)
                 leverage = np.where(position > 0, p.long_leverage,
                            np.where(position < 0, p.short_leverage, 1))
@@ -1898,7 +1913,7 @@ def index():
         chart_b64 = base64.b64encode(buf.read()).decode()
 
         best_result = bt.run_strategy(df, ind1_name, best_p1, ind2_name, best_p2,
-                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode)
+                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse)
         best = _enrich_best(best_result, df)
 
         price_json = _series_to_lw_json(df["close"])
@@ -1923,7 +1938,7 @@ def index():
 
         for period in periods:
             result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, period,
-                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode)
+                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse)
             ann = bt._annualized_return(result["total_return"], n_days)
             annualized_returns.append(ann)
 
@@ -1964,7 +1979,7 @@ def index():
         chart_b64 = base64.b64encode(buf.read()).decode()
 
         best_result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, best_period,
-                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode)
+                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse)
         best = _enrich_best(best_result, df)
 
     # --- Backtest Mode ---
@@ -1972,7 +1987,7 @@ def index():
         if p.ind2_period is not None:
             # Single run with fixed period
             result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode)
+                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse)
             results = [result]
         else:
             # Sweep ind2 period and show table
@@ -1993,9 +2008,9 @@ def index():
             long_short_breakdown = None
             if p.exposure == "long-short" and p.ind2_period is not None:
                 long_only = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                             p.initial_cash, fee, "long-cash", p.long_leverage, 1, p.lev_mode)
+                                             p.initial_cash, fee, "long-cash", p.long_leverage, 1, p.lev_mode, p.reverse)
                 short_only = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                              p.initial_cash, fee, "short-cash", 1, p.short_leverage, p.lev_mode)
+                                              p.initial_cash, fee, "short-cash", 1, p.short_leverage, p.lev_mode, p.reverse)
                 long_only = _enrich_best(long_only, df)
                 short_only = _enrich_best(short_only, df)
                 long_short_breakdown = {"long": long_only, "short": short_only}

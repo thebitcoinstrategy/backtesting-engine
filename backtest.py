@@ -436,7 +436,8 @@ def _trade_stats(equity_series, position_series):
 
 def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
                  initial_cash, fee=0.001, exposure="long-cash",
-                 long_leverage=1, short_leverage=1, lev_mode="rebalance"):
+                 long_leverage=1, short_leverage=1, lev_mode="rebalance",
+                 reverse=False):
     """Unified strategy: go long when ind1 > ind2, apply exposure mode.
     Returns dict with ind1/ind2 series, labels, and all metrics."""
     df = df.copy()
@@ -445,6 +446,8 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
     ind2_series, ind2_label = compute_indicator_from_spec(df, ind2_name, ind2_period)
 
     above = ind1_series > ind2_series
+    if reverse:
+        above = ~above
     df["position"] = _apply_exposure(above, exposure).shift(1).fillna(0)
 
     daily_return = df["close"].pct_change().fillna(0)
