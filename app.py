@@ -229,7 +229,7 @@ HTML = """\
             font-weight: 500;
             letter-spacing: 0.01em;
         }
-        input, select {
+        input:not([type="checkbox"]), select {
             width: 100%;
             padding: 10px 14px;
             border-radius: 10px;
@@ -240,7 +240,7 @@ HTML = """\
             font-family: 'DM Sans', sans-serif;
             transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
-        input:focus, select:focus {
+        input:not([type="checkbox"]):focus, select:focus {
             outline: none;
             border-color: var(--accent);
             box-shadow: 0 0 0 3px var(--accent-glow);
