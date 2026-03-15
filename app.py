@@ -891,12 +891,23 @@ HTML = """\
                                 <option value="set-forget" {{ 'selected' if p.lev_mode=='set-forget' }}>Set & Forget</option>
                             </select>
                         </div>
+                        <div class="form-group" id="sizing-group">
+                            <label>Position Sizing <span class="info-icon" onclick="document.getElementById('sizing-info').classList.toggle('hidden')" title="Click for details">&#9432;</span></label>
+                            <select name="sizing">
+                                <option value="compound" {{ 'selected' if p.sizing=='compound' }}>Compounding</option>
+                                <option value="fixed" {{ 'selected' if p.sizing=='fixed' }}>Fixed</option>
+                            </select>
+                        </div>
                         <input type="hidden" name="lev_step" value="0.25">
                     </div>
                     <div id="lev-mode-info" class="hidden" style="margin-top:10px;font-size:0.78em;color:var(--text-muted);line-height:1.6;padding:10px 14px;background:var(--bg-deep);border-radius:8px;border-left:2px solid var(--accent)">
                         <strong style="color:var(--text)">Optimal</strong> — Daily rebalance for long positions, set & forget for short positions. Best of both worlds.<br>
                         <strong style="color:var(--text)">Daily Rebalance</strong> — Leverage is reset to target every day. Consistent exposure but higher fees in volatile markets.<br>
                         <strong style="color:var(--text)">Set & Forget</strong> — Leverage is applied at entry and drifts naturally. Lower fees but exposure changes over time.
+                    </div>
+                    <div id="sizing-info" class="hidden" style="margin-top:10px;font-size:0.78em;color:var(--text-muted);line-height:1.6;padding:10px 14px;background:var(--bg-deep);border-radius:8px;border-left:2px solid var(--accent)">
+                        <strong style="color:var(--text)">Compounding</strong> — Position size scales with equity. Gains compound but so do losses (volatility drag).<br>
+                        <strong style="color:var(--text)">Fixed</strong> — Always trade the initial capital amount. No volatility drag — reversing the signal gives exactly the opposite P&L. Useful for measuring pure signal quality.
                     </div>
                 </div>
                 <div class="form-section">
@@ -1094,6 +1105,7 @@ function toggleFields() {
         ['short-lev-group', !isLevSweep],
         ['exposure-group', !isLevSweep],
         ['lev-mode-group', true],
+        ['sizing-group', true],
         ['lev-min-group', isLevSweep],
         ['lev-max-group', isLevSweep],
     ];
@@ -1524,6 +1536,7 @@ class Params:
             self.start_date = form.get("start_date", "").strip()
             self.end_date = form.get("end_date", "").strip()
             self.reverse = bool(form.get("reverse"))
+            self.sizing = form.get("sizing", "compound")
         else:
             self.asset = DEFAULT_ASSET
             self.mode = "backtest"
@@ -1546,6 +1559,7 @@ class Params:
             self.start_date = "2018-01-01"
             self.end_date = str(ASSETS[DEFAULT_ASSET].index[-1].date())
             self.reverse = False
+            self.sizing = "compound"
 
 
 # Load data once at startup
@@ -1692,7 +1706,15 @@ def index():
             title_label = f"{p.ind1_name.upper()}({p1_str})/{p.ind2_name.upper()}({ind2_period_val})"
 
         def _sweep_ann(ll, sl):
-            if p.lev_mode == "set-forget":
+            if p.sizing == "fixed":
+                leverage = np.where(position_base.values > 0, ll,
+                           np.where(position_base.values < 0, sl, 1))
+                daily_pnl = p.initial_cash * position_base.values * daily_return.values * leverage
+                daily_pnl = daily_pnl.copy()
+                trade_changes = np.diff(position_base.values, prepend=0)
+                daily_pnl[np.abs(trade_changes) > 0] -= p.initial_cash * fee
+                equity_arr = p.initial_cash + np.cumsum(daily_pnl)
+            elif p.lev_mode == "set-forget":
                 equity_arr, _ = bt._compute_equity_set_and_forget(
                     position_base.values, daily_return.values, p.initial_cash, ll, sl, fee)
             elif p.lev_mode == "optimal":
@@ -1775,7 +1797,7 @@ def index():
         chart_b64 = base64.b64encode(buf.read()).decode()
 
         best_result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, ind2_period_val,
-                                       p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.reverse)
+                                       p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.reverse, p.sizing)
         best = _enrich_best(best_result, df)
 
         combined_ann = _sweep_ann(best_long_lev, best_short_lev)
@@ -1853,11 +1875,18 @@ def index():
                 position = bt._apply_exposure(above, p.exposure).shift(1).fillna(0)
                 leverage = np.where(position > 0, p.long_leverage,
                            np.where(position < 0, p.short_leverage, 1))
-                strat_return = position * daily_return * leverage
-                trade_mask = position.diff().fillna(0).abs() > 0
-                strat_return = strat_return.copy()
-                strat_return[trade_mask] -= fee
-                equity_arr, _ = bt._compute_equity_with_liquidation(strat_return.values, p.initial_cash)
+                if p.sizing == "fixed":
+                    daily_pnl = p.initial_cash * position * daily_return * leverage
+                    trade_mask = position.diff().fillna(0).abs() > 0
+                    daily_pnl = daily_pnl.copy()
+                    daily_pnl[trade_mask] -= p.initial_cash * fee
+                    equity_arr = p.initial_cash + daily_pnl.cumsum().values
+                else:
+                    strat_return = position * daily_return * leverage
+                    trade_mask = position.diff().fillna(0).abs() > 0
+                    strat_return = strat_return.copy()
+                    strat_return[trade_mask] -= fee
+                    equity_arr, _ = bt._compute_equity_with_liquidation(strat_return.values, p.initial_cash)
                 equity_final = equity_arr[-1] if len(equity_arr) > 0 else p.initial_cash
                 total_ret = (equity_final / p.initial_cash - 1) * 100
                 ann = bt._annualized_return(total_ret, n_days)
@@ -1913,7 +1942,7 @@ def index():
         chart_b64 = base64.b64encode(buf.read()).decode()
 
         best_result = bt.run_strategy(df, ind1_name, best_p1, ind2_name, best_p2,
-                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse)
+                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
         best = _enrich_best(best_result, df)
 
         price_json = _series_to_lw_json(df["close"])
@@ -1938,7 +1967,7 @@ def index():
 
         for period in periods:
             result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, period,
-                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse)
+                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
             ann = bt._annualized_return(result["total_return"], n_days)
             annualized_returns.append(ann)
 
@@ -1979,7 +2008,7 @@ def index():
         chart_b64 = base64.b64encode(buf.read()).decode()
 
         best_result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, best_period,
-                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse)
+                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
         best = _enrich_best(best_result, df)
 
     # --- Backtest Mode ---
@@ -1987,13 +2016,14 @@ def index():
         if p.ind2_period is not None:
             # Single run with fixed period
             result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse)
+                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
             results = [result]
         else:
             # Sweep ind2 period and show table
             results = bt.sweep_periods(df, p.ind1_name, p.ind1_period, p.ind2_name, None,
                                         "ind2", p.range_min, p.range_max,
-                                        p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode)
+                                        p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode,
+                                        sizing=p.sizing)
             # For same-type crossover, filter invalid combos
             if p.ind1_name != "price" and p.ind1_name == p.ind2_name and p.ind1_period is not None:
                 results = [r for r in results if r["ind2_period"] > p.ind1_period]
@@ -2008,9 +2038,9 @@ def index():
             long_short_breakdown = None
             if p.exposure == "long-short" and p.ind2_period is not None:
                 long_only = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                             p.initial_cash, fee, "long-cash", p.long_leverage, 1, p.lev_mode, p.reverse)
+                                             p.initial_cash, fee, "long-cash", p.long_leverage, 1, p.lev_mode, p.reverse, p.sizing)
                 short_only = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                              p.initial_cash, fee, "short-cash", 1, p.short_leverage, p.lev_mode, p.reverse)
+                                              p.initial_cash, fee, "short-cash", 1, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
                 long_only = _enrich_best(long_only, df)
                 short_only = _enrich_best(short_only, df)
                 long_short_breakdown = {"long": long_only, "short": short_only}

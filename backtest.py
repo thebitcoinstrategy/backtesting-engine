@@ -437,7 +437,7 @@ def _trade_stats(equity_series, position_series):
 def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
                  initial_cash, fee=0.001, exposure="long-cash",
                  long_leverage=1, short_leverage=1, lev_mode="rebalance",
-                 reverse=False):
+                 reverse=False, sizing="compound"):
     """Unified strategy: go long when ind1 > ind2, apply exposure mode.
     Returns dict with ind1/ind2 series, labels, and all metrics."""
     df = df.copy()
@@ -452,7 +452,16 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
 
     daily_return = df["close"].pct_change().fillna(0)
 
-    if lev_mode == "set-forget":
+    if sizing == "fixed":
+        leverage = np.where(df["position"] > 0, long_leverage,
+                   np.where(df["position"] < 0, short_leverage, 1))
+        daily_pnl = initial_cash * df["position"] * daily_return * leverage
+        trade_mask = df["position"].diff().fillna(0).abs() > 0
+        daily_pnl[trade_mask] -= initial_cash * fee
+        equity_arr = initial_cash + daily_pnl.cumsum().values
+        liquidated = False
+        df["equity"] = equity_arr
+    elif lev_mode == "set-forget":
         equity_arr, liquidated = _compute_equity_set_and_forget(
             df["position"].values, daily_return.values, initial_cash,
             long_leverage, short_leverage, fee)
@@ -571,14 +580,16 @@ def run_dual_sma_strategy(df, fast_period, slow_period, initial_cash, fee=0.001,
 def sweep_periods(df, ind1_name, ind1_period, ind2_name, ind2_period,
                   sweep_target, sweep_min, sweep_max,
                   initial_cash, fee=0.001, exposure="long-cash",
-                  long_leverage=1, short_leverage=1, lev_mode="rebalance"):
+                  long_leverage=1, short_leverage=1, lev_mode="rebalance",
+                  sizing="compound"):
     """Sweep one indicator's period across a range. sweep_target: 'ind1' or 'ind2'."""
     results = []
     for period in range(sweep_min, sweep_max + 1):
         p1 = period if sweep_target == "ind1" else ind1_period
         p2 = period if sweep_target == "ind2" else ind2_period
         r = run_strategy(df, ind1_name, p1, ind2_name, p2,
-                         initial_cash, fee, exposure, long_leverage, short_leverage, lev_mode)
+                         initial_cash, fee, exposure, long_leverage, short_leverage, lev_mode,
+                         sizing=sizing)
         results.append(r)
     results.sort(key=lambda r: r["total_return"], reverse=True)
     return results
@@ -812,7 +823,7 @@ def generate_sweep_chart(df, ind1_name, ind1_period, ind2_name, sweep_min, sweep
 def generate_dual_sweep_heatmap(df, ind1_name, ind2_name,
                                  period_min, period_max, period_step,
                                  initial_cash, output_path, fee=0.001, exposure="long-cash",
-                                 long_leverage=1, short_leverage=1):
+                                 long_leverage=1, short_leverage=1, sizing="compound"):
     """Sweep all ind1/ind2 period permutations and generate a heatmap of annualized returns."""
     import matplotlib
     matplotlib.use("Agg")
@@ -854,11 +865,18 @@ def generate_dual_sweep_heatmap(df, ind1_name, ind2_name,
             position = _apply_exposure(above, exposure).shift(1).fillna(0)
             leverage = np.where(position > 0, long_leverage,
                        np.where(position < 0, short_leverage, 1))
-            strat_return = position * daily_return * leverage
-            trade_mask = position.diff().fillna(0).abs() > 0
-            strat_return = strat_return.copy()
-            strat_return[trade_mask] -= fee
-            equity_arr, _ = _compute_equity_with_liquidation(strat_return.values, initial_cash)
+            if sizing == "fixed":
+                daily_pnl = initial_cash * position * daily_return * leverage
+                trade_mask = position.diff().fillna(0).abs() > 0
+                daily_pnl = daily_pnl.copy()
+                daily_pnl[trade_mask] -= initial_cash * fee
+                equity_arr = initial_cash + daily_pnl.cumsum().values
+            else:
+                strat_return = position * daily_return * leverage
+                trade_mask = position.diff().fillna(0).abs() > 0
+                strat_return = strat_return.copy()
+                strat_return[trade_mask] -= fee
+                equity_arr, _ = _compute_equity_with_liquidation(strat_return.values, initial_cash)
             equity_final = equity_arr[-1] if len(equity_arr) > 0 else initial_cash
             total_ret = (equity_final / initial_cash - 1) * 100
             ann = _annualized_return(total_ret, n_days)
