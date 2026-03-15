@@ -677,7 +677,7 @@ HTML = """\
 <div class="container">
     <div class="header">
         <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
-        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px;font-family:'DM Sans',sans-serif">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a> at the-bitcoin-strategy.com</div>
+        <div style="font-size:0.8em;color:var(--text);margin-top:2px;font-family:'DM Sans',sans-serif">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a> at the-bitcoin-strategy.com</div>
     </div>
     <div class="layout">
         <div class="panel">
