@@ -852,7 +852,7 @@ HTML = """\
                         <span id="explainer-text">Buy when <span id="explainer-ind1">Price</span> crosses above <span id="explainer-ind2">SMA</span>. Sell when it crosses below.</span>
                     </div>
                     <label style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:0.82em;color:var(--text-muted)">
-                        <input type="checkbox" name="reverse" id="reverse" value="1" {{ 'checked' if p.reverse }} onchange="updateExplainer()" style="accent-color:var(--accent)"> Reverse signal logic
+                        <input type="checkbox" name="reverse" id="reverse" value="1" {{ 'checked' if p.reverse }} onchange="updateExplainer(); enableBtn();" style="accent-color:var(--accent)"> Reverse signal logic
                     </label>
                 </div>
                 <div class="form-section">
@@ -1642,7 +1642,7 @@ def index():
 
     if request.method == "GET":
         # If query params present, pre-fill form from them (shareable URL support)
-        if any(k in request.args for k in ('asset', 'mode', 'ind1_name', 'ind2_name', 'period1', 'period2', 'exposure')):
+        if any(k in request.args for k in ('asset', 'mode', 'ind1_name', 'ind2_name', 'period1', 'period2', 'exposure', 'reverse')):
             p = Params(request.args)
         else:
             p = Params()
