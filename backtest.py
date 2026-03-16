@@ -205,6 +205,325 @@ def compute_indicator_from_spec(df, name, period=None):
     return series, label
 
 
+# --- Oscillator Functions ---
+
+def compute_rsi(df, period=14):
+    """Return Relative Strength Index (0-100)."""
+    delta = df["close"].diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = (-delta).where(delta < 0, 0.0)
+    avg_gain = gain.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+
+def compute_macd(df, fast=12, slow=26, signal=9):
+    """Return MACD line, signal line, and histogram."""
+    ema_fast = df["close"].ewm(span=fast, adjust=False).mean()
+    ema_slow = df["close"].ewm(span=slow, adjust=False).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=signal, adjust=False).mean()
+    histogram = macd_line - signal_line
+    return macd_line, signal_line, histogram
+
+
+def compute_stochastic(df, period=14, smooth_k=3):
+    """Return Stochastic %K (smoothed) and %D. Uses rolling high/low of close."""
+    high = df["close"].rolling(window=period).max()
+    low = df["close"].rolling(window=period).min()
+    raw_k = 100 * (df["close"] - low) / (high - low).replace(0, np.nan)
+    k = raw_k.rolling(window=smooth_k).mean()
+    d = k.rolling(window=3).mean()
+    return k, d
+
+
+def compute_cci(df, period=20):
+    """Return Commodity Channel Index. Uses close as typical price proxy."""
+    tp = df["close"]
+    sma_tp = tp.rolling(window=period).mean()
+    mad = tp.rolling(window=period).apply(lambda x: np.mean(np.abs(x - x.mean())), raw=True)
+    cci = (tp - sma_tp) / (0.015 * mad.replace(0, np.nan))
+    return cci
+
+
+def compute_roc(df, period=12):
+    """Return Rate of Change as percentage."""
+    roc = (df["close"] / df["close"].shift(period) - 1) * 100
+    return roc
+
+
+def compute_momentum(df, period=10):
+    """Return raw price momentum (close - close[N])."""
+    return df["close"] - df["close"].shift(period)
+
+
+def compute_williams_r(df, period=14):
+    """Return Williams %R (-100 to 0). Uses rolling high/low of close."""
+    high = df["close"].rolling(window=period).max()
+    low = df["close"].rolling(window=period).min()
+    wr = -100 * (high - df["close"]) / (high - low).replace(0, np.nan)
+    return wr
+
+
+# --- Oscillator Registry ---
+
+OSCILLATORS = {
+    "rsi": {
+        "fn": lambda df, period: (compute_rsi(df, period),),
+        "period": 14,
+        "buy_threshold": 30,
+        "sell_threshold": 70,
+        "range": (0, 100),
+        "lines": ["RSI"],
+        "label": "RSI",
+        "description": "Relative Strength Index — buy when oversold (<30), sell when overbought (>70)",
+    },
+    "macd": {
+        "fn": lambda df, period: compute_macd(df, fast=12, slow=26, signal=period),
+        "period": 9,
+        "buy_threshold": 0,
+        "sell_threshold": 0,
+        "range": None,
+        "lines": ["MACD", "Signal"],
+        "label": "MACD",
+        "signal_mode": "crossover",
+        "description": "MACD — buy when MACD crosses above signal line, sell when below",
+    },
+    "stochastic": {
+        "fn": lambda df, period: compute_stochastic(df, period),
+        "period": 14,
+        "buy_threshold": 20,
+        "sell_threshold": 80,
+        "range": (0, 100),
+        "lines": ["%K", "%D"],
+        "label": "Stochastic",
+        "description": "Stochastic Oscillator — buy when %K exits oversold (<20), sell when overbought (>80)",
+    },
+    "cci": {
+        "fn": lambda df, period: (compute_cci(df, period),),
+        "period": 20,
+        "buy_threshold": -100,
+        "sell_threshold": 100,
+        "range": None,
+        "lines": ["CCI"],
+        "label": "CCI",
+        "description": "Commodity Channel Index — buy above -100, sell below +100",
+    },
+    "roc": {
+        "fn": lambda df, period: (compute_roc(df, period),),
+        "period": 12,
+        "buy_threshold": 0,
+        "sell_threshold": 0,
+        "range": None,
+        "lines": ["ROC"],
+        "label": "ROC",
+        "description": "Rate of Change — buy when positive, sell when negative",
+    },
+    "momentum": {
+        "fn": lambda df, period: (compute_momentum(df, period),),
+        "period": 10,
+        "buy_threshold": 0,
+        "sell_threshold": 0,
+        "range": None,
+        "lines": ["MOM"],
+        "label": "Momentum",
+        "description": "Price Momentum — buy when positive, sell when negative",
+    },
+    "williams_r": {
+        "fn": lambda df, period: (compute_williams_r(df, period),),
+        "period": 14,
+        "buy_threshold": -80,
+        "sell_threshold": -20,
+        "range": (-100, 0),
+        "lines": ["%R"],
+        "label": "Williams %R",
+        "description": "Williams %R — buy when exits oversold (>-80), sell when overbought (<-20)",
+    },
+}
+
+
+def compute_oscillator(df, osc_name, period=None):
+    """Compute oscillator series. Returns dict with 'primary' series (for signals),
+    all component series, and metadata."""
+    spec = OSCILLATORS[osc_name]
+    p = period if period is not None else spec["period"]
+    result = spec["fn"](df, p)
+
+    if osc_name == "macd":
+        macd_line, signal_line, histogram = result
+        return {
+            "primary": macd_line,
+            "series": {"MACD": macd_line, "Signal": signal_line, "Histogram": histogram},
+            "label": f"MACD(12,26,{p})",
+            "spec": spec,
+        }
+    elif osc_name == "stochastic":
+        k, d = result
+        return {
+            "primary": k,
+            "series": {"%K": k, "%D": d},
+            "label": f"Stoch({p})",
+            "spec": spec,
+        }
+    else:
+        series = result[0]
+        return {
+            "primary": series,
+            "series": {spec["lines"][0]: series},
+            "label": f"{spec['label']}({p})",
+            "spec": spec,
+        }
+
+
+def _oscillator_signal(osc_data, buy_threshold, sell_threshold):
+    """Generate buy/sell boolean signal from oscillator using hysteresis.
+    Buy when oscillator crosses above buy_threshold.
+    Sell when oscillator crosses below sell_threshold.
+    Hold position between thresholds."""
+    spec = osc_data["spec"]
+    primary = osc_data["primary"]
+
+    if spec.get("signal_mode") == "crossover":
+        # MACD: signal is MACD > signal line, thresholds ignored for signal generation
+        signal_line = osc_data["series"]["Signal"]
+        above = primary > signal_line
+        return above
+
+    # Threshold-based hysteresis: buy when crossing above buy_threshold,
+    # sell when crossing below sell_threshold
+    n = len(primary)
+    position = np.zeros(n, dtype=int)
+    in_position = False
+    for i in range(n):
+        val = primary.iloc[i]
+        if np.isnan(val):
+            position[i] = 0
+            continue
+        if not in_position:
+            if val > buy_threshold:
+                in_position = True
+                position[i] = 1
+            else:
+                position[i] = 0
+        else:
+            if val < sell_threshold:
+                in_position = False
+                position[i] = 0
+            else:
+                position[i] = 1
+    return pd.Series(position, index=primary.index).astype(bool)
+
+
+def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_threshold,
+                            initial_cash, fee=0.001, exposure="long-cash",
+                            long_leverage=1, short_leverage=1, lev_mode="rebalance",
+                            reverse=False, sizing="compound"):
+    """Run strategy based on oscillator threshold signals.
+    Returns dict compatible with run_strategy output."""
+    df = df.copy()
+
+    osc_data = compute_oscillator(df, osc_name, osc_period)
+    above = _oscillator_signal(osc_data, buy_threshold, sell_threshold)
+
+    if reverse:
+        above = ~above
+    df["position"] = _apply_exposure(above, exposure).shift(1).fillna(0)
+
+    daily_return = df["close"].pct_change().fillna(0)
+
+    if sizing == "fixed":
+        leverage = np.where(df["position"] > 0, long_leverage,
+                   np.where(df["position"] < 0, short_leverage, 1))
+        daily_pnl = initial_cash * df["position"] * daily_return * leverage
+        trade_mask = df["position"].diff().fillna(0).abs() > 0
+        daily_pnl[trade_mask] -= initial_cash * fee
+        equity_arr = initial_cash + daily_pnl.cumsum().values
+        liquidated = False
+        df["equity"] = equity_arr
+    elif lev_mode == "set-forget":
+        equity_arr, liquidated = _compute_equity_set_and_forget(
+            df["position"].values, daily_return.values, initial_cash,
+            long_leverage, short_leverage, fee)
+        df["equity"] = equity_arr
+    elif lev_mode == "optimal":
+        equity_arr, liquidated = _compute_equity_optimal(
+            df["position"].values, daily_return.values, initial_cash,
+            long_leverage, short_leverage, fee)
+        df["equity"] = equity_arr
+    else:
+        leverage = np.where(df["position"] > 0, long_leverage,
+                   np.where(df["position"] < 0, short_leverage, 1))
+        df["strategy_return"] = df["position"] * daily_return * leverage
+        trade_mask = df["position"].diff().fillna(0).abs() > 0
+        df.loc[trade_mask, "strategy_return"] -= fee
+        equity_arr, liquidated = _compute_equity_with_liquidation(df["strategy_return"].values, initial_cash)
+        df["equity"] = equity_arr
+
+    df["buyhold"] = initial_cash * (1 + daily_return).cumprod()
+
+    trade_mask = df["position"].diff().fillna(0).abs() > 0
+    trades = trade_mask.sum()
+
+    total_return = (df["equity"].iloc[-1] / initial_cash - 1) * 100
+    buyhold_return = (df["buyhold"].iloc[-1] / initial_cash - 1) * 100
+    max_drawdown_val = _max_drawdown(df["equity"])
+
+    equity_returns = pd.Series(df["equity"].values).pct_change().fillna(0)
+    mean_daily = equity_returns.mean()
+    std_daily = equity_returns.std()
+    sharpe = (mean_daily / std_daily * np.sqrt(365)) if std_daily > 0 else 0.0
+
+    volatility = std_daily * np.sqrt(365) * 100
+    sortino = _sortino_ratio(equity_returns)
+    beta_val = _beta(equity_returns.values, daily_return.values)
+    n_days = len(df)
+    ann_ret = _annualized_return(total_return, n_days)
+    calmar = abs(ann_ret / max_drawdown_val) if max_drawdown_val != 0 else 0.0
+    dd_duration = _max_drawdown_duration(df["equity"])
+    yearly = _yearly_returns(df["equity"])
+    best_year = max(yearly.items(), key=lambda x: x[1]) if yearly else (None, 0)
+    worst_year = min(yearly.items(), key=lambda x: x[1]) if yearly else (None, 0)
+    tstats = _trade_stats(df["equity"], df["position"])
+    time_in_market = (df["position"] != 0).sum() / len(df) * 100
+
+    pos_diff = df["position"].diff().fillna(0)
+    buy_signals = df.index[pos_diff > 0]
+    sell_signals = df.index[pos_diff < 0]
+
+    return {
+        "osc_name": osc_name,
+        "osc_period": osc_period if osc_period is not None else OSCILLATORS[osc_name]["period"],
+        "osc_data": osc_data,
+        "buy_threshold": buy_threshold,
+        "sell_threshold": sell_threshold,
+        "label": osc_data["label"],
+        "total_return": total_return,
+        "buyhold_return": buyhold_return,
+        "max_drawdown": max_drawdown_val,
+        "trades": int(trades),
+        "sharpe": sharpe,
+        "volatility": volatility,
+        "sortino": sortino,
+        "beta": beta_val,
+        "calmar": calmar,
+        "max_dd_duration": dd_duration,
+        "win_rate": tstats["win_rate"],
+        "avg_win": tstats["avg_win"],
+        "avg_loss": tstats["avg_loss"],
+        "profit_factor": tstats["profit_factor"],
+        "avg_trade_duration": tstats["avg_trade_duration"],
+        "time_in_market": time_in_market,
+        "best_year": best_year,
+        "worst_year": worst_year,
+        "equity": df["equity"],
+        "buyhold": df["buyhold"],
+        "buy_signals": buy_signals,
+        "sell_signals": sell_signals,
+    }
+
+
 def compute_indicator(df, period, indicator_type="sma"):
     """Return SMA or EMA Series based on indicator_type. (Legacy wrapper)"""
     if indicator_type == "ema":
@@ -986,6 +1305,18 @@ Examples (classic style — still works):
   python backtest.py --end-date 2023-12-31       # filter end date (default: all data)
   python backtest.py --help                       # show all parameters
   python app.py                                   # launch web interface on port 5000
+
+Examples (oscillators — threshold-based signals):
+
+  python backtest.py --oscillator rsi                           # RSI(14) with default thresholds (buy>30, sell<70)
+  python backtest.py --oscillator rsi --osc-period 21           # RSI(21) custom period
+  python backtest.py --oscillator rsi --buy-threshold 25 --sell-threshold 75  # Custom thresholds
+  python backtest.py --oscillator macd                          # MACD(12,26,9) signal line crossover
+  python backtest.py --oscillator stochastic                    # Stochastic(14) buy>20, sell<80
+  python backtest.py --oscillator cci --osc-period 20           # CCI(20) buy>-100, sell<100
+  python backtest.py --oscillator roc                           # ROC(12) zero-line crossover
+  python backtest.py --oscillator momentum                      # Momentum(10) zero-line crossover
+  python backtest.py --oscillator williams_r                    # Williams %R(14) buy>-80, sell<-20
 """
 
 
@@ -1039,10 +1370,49 @@ def main():
                         help="End date YYYY-MM-DD (default: end of data)")
     parser.add_argument("--chart-file", default=None,
                         help="Output chart filename (auto-generated if omitted)")
+
+    # Oscillator args
+    parser.add_argument("--oscillator", choices=list(OSCILLATORS.keys()), default=None,
+                        help="Oscillator type: rsi, macd, stochastic, cci, roc, momentum, williams_r")
+    parser.add_argument("--osc-period", type=int, default=None,
+                        help="Oscillator period (default varies by oscillator)")
+    parser.add_argument("--buy-threshold", type=float, default=None,
+                        help="Buy when oscillator crosses above this threshold")
+    parser.add_argument("--sell-threshold", type=float, default=None,
+                        help="Sell when oscillator crosses below this threshold")
     args = parser.parse_args()
 
     if args.examples:
         print(EXAMPLES)
+        return
+
+    # --- Oscillator mode ---
+    if args.oscillator:
+        osc_name = args.oscillator
+        osc_spec = OSCILLATORS[osc_name]
+        osc_period = args.osc_period if args.osc_period is not None else osc_spec["period"]
+        buy_thr = args.buy_threshold if args.buy_threshold is not None else osc_spec["buy_threshold"]
+        sell_thr = args.sell_threshold if args.sell_threshold is not None else osc_spec["sell_threshold"]
+
+        data_path = args.data or os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "data", f"{args.asset}.csv"
+        )
+        df = load_data(data_path)
+        if args.start_date:
+            df = df[df.index >= pd.Timestamp(args.start_date, tz="UTC")]
+        if args.end_date:
+            df = df[df.index <= pd.Timestamp(args.end_date, tz="UTC")]
+
+        fee = args.fee / 100
+        result = run_oscillator_strategy(df, osc_name, osc_period, buy_thr, sell_thr,
+                                          args.initial_cash, fee, args.exposure,
+                                          args.long_leverage, args.short_leverage, args.lev_mode)
+        print(f"\n{osc_spec['label']}({osc_period}) — Buy > {buy_thr}, Sell < {sell_thr}")
+        print(f"  Total Return: {result['total_return']:.2f}%")
+        print(f"  Buy & Hold:   {result['buyhold_return']:.2f}%")
+        print(f"  Max Drawdown: {result['max_drawdown']:.2f}%")
+        print(f"  Trades:       {result['trades']}")
+        print(f"  Sharpe:       {result['sharpe']:.3f}")
         return
 
     # --- Resolve indicator settings from new + legacy args ---

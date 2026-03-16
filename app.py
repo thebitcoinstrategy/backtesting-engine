@@ -810,7 +810,18 @@ HTML = """\
                     </div>
                 </div>
                 <div class="form-section">
-                    <div class="section-title">Indicators</div>
+                    <div class="section-title">Signal Type</div>
+                    <div class="form-row" style="margin-bottom:12px">
+                        <div class="form-group" style="min-width:200px">
+                            <label>Strategy Type</label>
+                            <select name="signal_type" id="signal_type" onchange="toggleFields()">
+                                <option value="crossover" {{ 'selected' if p.signal_type=='crossover' }}>Moving Average Crossover</option>
+                                <option value="oscillator" {{ 'selected' if p.signal_type=='oscillator' }}>Oscillator Threshold</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="crossover-fields">
+                    <div class="section-title" style="font-size:0.78em;margin-top:0">Indicators</div>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Indicator 1</label>
@@ -860,6 +871,38 @@ HTML = """\
                             <label>Period 2</label>
                             <input type="number" name="period2" value="{{ p.ind2_period or '' }}" placeholder="e.g. 40" min="2">
                         </div>
+                    </div>
+                    </div>
+                    <div id="oscillator-fields" class="hidden">
+                    <div class="section-title" style="font-size:0.78em;margin-top:0">Oscillator</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Oscillator</label>
+                            <select name="osc_name" id="osc_name" onchange="onOscChange()">
+                                <option value="rsi" {{ 'selected' if p.osc_name=='rsi' }}>RSI (Relative Strength Index)</option>
+                                <option value="macd" {{ 'selected' if p.osc_name=='macd' }}>MACD (Moving Avg Convergence Divergence)</option>
+                                <option value="stochastic" {{ 'selected' if p.osc_name=='stochastic' }}>Stochastic Oscillator (%K/%D)</option>
+                                <option value="cci" {{ 'selected' if p.osc_name=='cci' }}>CCI (Commodity Channel Index)</option>
+                                <option value="roc" {{ 'selected' if p.osc_name=='roc' }}>ROC (Rate of Change)</option>
+                                <option value="momentum" {{ 'selected' if p.osc_name=='momentum' }}>Momentum</option>
+                                <option value="williams_r" {{ 'selected' if p.osc_name=='williams_r' }}>Williams %R</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="osc-period-group">
+                            <label>Period</label>
+                            <input type="number" name="osc_period" id="osc_period" value="{{ p.osc_period or '' }}" placeholder="14" min="2">
+                        </div>
+                        <div class="sep"></div>
+                        <div class="form-group" id="buy-threshold-group">
+                            <label>Buy Threshold</label>
+                            <input type="number" name="buy_threshold" id="buy_threshold" value="{{ p.buy_threshold }}" step="any">
+                        </div>
+                        <div class="form-group" id="sell-threshold-group">
+                            <label>Sell Threshold</label>
+                            <input type="number" name="sell_threshold" id="sell_threshold" value="{{ p.sell_threshold }}" step="any">
+                        </div>
+                    </div>
+                    <div id="osc-description" style="margin-top:6px;font-size:0.78em;color:var(--text-muted);line-height:1.5;padding:8px 12px;background:var(--bg-deep);border-radius:8px;border-left:2px solid var(--accent)"></div>
                     </div>
                     <div class="signal-explainer" id="signal-explainer">
                         <span id="explainer-text">Buy when <span id="explainer-ind1">Price</span> crosses above <span id="explainer-ind2">SMA</span>. Sell when it crosses below.</span>
@@ -1098,8 +1141,31 @@ function selectMode(mode, el) {
     el.classList.add('active');
     toggleFields();
 }
+var oscDefaults = {
+    rsi:        { period: 14, buy: 30, sell: 70, desc: 'Relative Strength Index \u2014 buy when oversold (<30), sell when overbought (>70)' },
+    macd:       { period: 9, buy: 0, sell: 0, desc: 'MACD \u2014 buy when MACD crosses above signal line, sell when below. Period controls signal line smoothing.' },
+    stochastic: { period: 14, buy: 20, sell: 80, desc: 'Stochastic Oscillator \u2014 buy when %K exits oversold (<20), sell when overbought (>80)' },
+    cci:        { period: 20, buy: -100, sell: 100, desc: 'Commodity Channel Index \u2014 buy above \u2212100, sell below +100' },
+    roc:        { period: 12, buy: 0, sell: 0, desc: 'Rate of Change \u2014 buy when positive (upward momentum), sell when negative' },
+    momentum:   { period: 10, buy: 0, sell: 0, desc: 'Price Momentum \u2014 buy when positive, sell when negative' },
+    williams_r: { period: 14, buy: -80, sell: -20, desc: 'Williams %R \u2014 buy when exits oversold (>\u221280), sell when overbought (<\u221220)' }
+};
+function onOscChange() {
+    var osc = document.getElementById('osc_name').value;
+    var d = oscDefaults[osc];
+    if (d) {
+        document.getElementById('osc_period').placeholder = d.period;
+        document.getElementById('buy_threshold').value = d.buy;
+        document.getElementById('sell_threshold').value = d.sell;
+        document.getElementById('osc-description').textContent = d.desc;
+    }
+    updateExplainer();
+    enableBtn();
+}
 function toggleFields() {
     var mode = document.getElementById('mode').value;
+    var sigType = document.getElementById('signal_type').value;
+    var isOsc = sigType === 'oscillator';
     var ind1El = document.getElementById('ind1_name');
     var ind1 = ind1El.value;
     // Auto-promote ind1 from price to SMA in heatmap mode
@@ -1107,13 +1173,31 @@ function toggleFields() {
         ind1El.value = 'sma';
         ind1 = 'sma';
     }
+    // Show/hide crossover vs oscillator field groups
+    var crossoverDiv = document.getElementById('crossover-fields');
+    var oscDiv = document.getElementById('oscillator-fields');
+    if (isOsc) {
+        crossoverDiv.classList.add('hidden');
+        oscDiv.classList.remove('hidden');
+        // Disable crossover inputs, enable oscillator inputs
+        var cInputs = crossoverDiv.querySelectorAll('input,select');
+        for (var ci = 0; ci < cInputs.length; ci++) cInputs[ci].disabled = true;
+        var oInputs = oscDiv.querySelectorAll('input,select');
+        for (var oi = 0; oi < oInputs.length; oi++) oInputs[oi].disabled = false;
+    } else {
+        crossoverDiv.classList.remove('hidden');
+        oscDiv.classList.add('hidden');
+        var oInputs2 = oscDiv.querySelectorAll('input,select');
+        for (var oi2 = 0; oi2 < oInputs2.length; oi2++) oInputs2[oi2].disabled = true;
+    }
+
     var isLevSweep = mode === 'sweep-lev';
     var rules = [
-        ['period1-group', ind1 !== 'price' && mode !== 'heatmap'],
-        ['period2-group', (mode === 'backtest' || mode === 'sweep-lev') && document.getElementById('ind2_name').value !== 'price'],
-        ['range-min-group', mode === 'sweep' || mode === 'heatmap'],
-        ['range-max-group', mode === 'sweep' || mode === 'heatmap'],
-        ['step-group', mode === 'heatmap'],
+        ['period1-group', !isOsc && ind1 !== 'price' && mode !== 'heatmap'],
+        ['period2-group', !isOsc && (mode === 'backtest' || mode === 'sweep-lev') && document.getElementById('ind2_name').value !== 'price'],
+        ['range-min-group', !isOsc && (mode === 'sweep' || mode === 'heatmap')],
+        ['range-max-group', !isOsc && (mode === 'sweep' || mode === 'heatmap')],
+        ['step-group', !isOsc && mode === 'heatmap'],
         ['long-lev-group', !isLevSweep],
         ['short-lev-group', !isLevSweep],
         ['exposure-group', !isLevSweep],
@@ -1129,19 +1213,49 @@ function toggleFields() {
         var inputs = el.querySelectorAll('input,select');
         for (var j = 0; j < inputs.length; j++) inputs[j].disabled = !show;
     }
+    // Update oscillator description on load
+    if (isOsc) {
+        var osc = document.getElementById('osc_name').value;
+        var d = oscDefaults[osc];
+        if (d) document.getElementById('osc-description').textContent = d.desc;
+    }
     updateExplainer();
 }
 function updateExplainer() {
+    var sigType = document.getElementById('signal_type').value;
+    var rev = document.getElementById('reverse').checked;
+    var el = document.getElementById('explainer-text');
+
+    if (sigType === 'oscillator') {
+        var osc = document.getElementById('osc_name').value;
+        var buyThr = document.getElementById('buy_threshold').value;
+        var sellThr = document.getElementById('sell_threshold').value;
+        var oscPer = document.getElementById('osc_period').value || document.getElementById('osc_period').placeholder;
+        var oscLabel = osc.toUpperCase().replace('_', ' ') + '(' + oscPer + ')';
+        if (osc === 'macd') {
+            if (rev) {
+                el.innerHTML = '<b>Sell</b> when MACD(' + oscPer + ') crosses above signal line. <b>Buy</b> when it crosses below.';
+            } else {
+                el.innerHTML = 'Buy when MACD(' + oscPer + ') crosses above signal line. Sell when it crosses below.';
+            }
+        } else {
+            if (rev) {
+                el.innerHTML = '<b>Sell</b> when ' + oscLabel + ' crosses above ' + buyThr + '. <b>Buy</b> when it drops below ' + sellThr + '.';
+            } else {
+                el.innerHTML = 'Buy when ' + oscLabel + ' crosses above ' + buyThr + '. Sell when it drops below ' + sellThr + '.';
+            }
+        }
+        return;
+    }
+
     var ind1 = document.getElementById('ind1_name');
     var ind2 = document.getElementById('ind2_name');
     var p1 = document.querySelector('#period1-group input');
     var p2 = document.querySelector('#period2-group input');
-    var rev = document.getElementById('reverse').checked;
     var label1 = ind1.value === 'price' ? 'Price' : ind1.value.toUpperCase() + (p1.value ? '(' + p1.value + ')' : '');
     var label2 = ind2.value.toUpperCase() + (p2.value ? '(' + p2.value + ')' : '');
     document.getElementById('explainer-ind1').textContent = label1;
     document.getElementById('explainer-ind2').textContent = label2;
-    var el = document.getElementById('explainer-text');
     if (rev) {
         el.innerHTML = '<b>Sell</b> when <span id="explainer-ind1">' + label1 + '</span> crosses above <span id="explainer-ind2">' + label2 + '</span>. <b>Buy</b> when it crosses below.';
     } else {
@@ -1151,6 +1265,9 @@ function updateExplainer() {
 document.querySelector('#period1-group input').addEventListener('input', updateExplainer);
 document.querySelector('#period2-group input').addEventListener('input', updateExplainer);
 document.getElementById('ind2_name').addEventListener('change', function() { updateExplainer(); toggleFields(); });
+document.getElementById('buy_threshold').addEventListener('input', function() { updateExplainer(); enableBtn(); });
+document.getElementById('sell_threshold').addEventListener('input', function() { updateExplainer(); enableBtn(); });
+document.getElementById('osc_period').addEventListener('input', function() { updateExplainer(); enableBtn(); });
 function setAllData() {
     var asset = document.getElementById('asset').value;
     document.getElementById('start_date').value = assetStarts[asset] || '';
@@ -1336,10 +1453,17 @@ function loadLWChart() {
 // Validation before submit
 function validateForm() {
     var mode = document.getElementById('mode').value;
+    var sigType = document.getElementById('signal_type').value;
+    var errors = [];
+
+    if (sigType === 'oscillator') {
+        // Oscillator mode: no period/ind validation needed (defaults apply)
+        return errors;
+    }
+
     var ind1 = document.getElementById('ind1_name').value;
     var p2 = document.querySelector('#period2-group input').value.trim();
     var p1 = document.querySelector('#period1-group input').value.trim();
-    var errors = [];
 
     // Period 2 required in backtest and sweep-lev modes
     if ((mode === 'backtest' || mode === 'sweep-lev') && !p2) {
@@ -1533,6 +1657,7 @@ class Params:
         if form:
             self.asset = form.get("asset", DEFAULT_ASSET)
             self.mode = form.get("mode", "sweep")
+            self.signal_type = form.get("signal_type", "crossover")
             self.ind1_name = form.get("ind1_name", "price")
             p1_val = form.get("period1", "").strip()
             self.ind1_period = int(p1_val) if p1_val else None
@@ -1557,9 +1682,16 @@ class Params:
             self.end_date = form.get("end_date", "").strip()
             self.reverse = bool(form.get("reverse"))
             self.sizing = form.get("sizing", "compound")
+            # Oscillator params
+            self.osc_name = form.get("osc_name", "rsi")
+            osc_p = form.get("osc_period", "").strip()
+            self.osc_period = int(osc_p) if osc_p else None
+            self.buy_threshold = float(form.get("buy_threshold", bt.OSCILLATORS.get(self.osc_name, {}).get("buy_threshold", 30)))
+            self.sell_threshold = float(form.get("sell_threshold", bt.OSCILLATORS.get(self.osc_name, {}).get("sell_threshold", 70)))
         else:
             self.asset = DEFAULT_ASSET
             self.mode = "backtest"
+            self.signal_type = "crossover"
             self.ind1_name = "price"
             self.ind1_period = None
             self.ind2_name = "sma"
@@ -1580,6 +1712,11 @@ class Params:
             self.end_date = str(ASSETS[DEFAULT_ASSET].index[-1].date())
             self.reverse = False
             self.sizing = "compound"
+            # Oscillator defaults
+            self.osc_name = "rsi"
+            self.osc_period = None
+            self.buy_threshold = 30
+            self.sell_threshold = 70
 
 
 # Load data once at startup
@@ -1713,8 +1850,10 @@ def _run_post_handler(cancel_event):
     table_rows = None
     col_header = "Strategy"
     long_short_breakdown = None
+    is_oscillator = False
 
     p = Params(request.form)
+    is_oscillator = p.signal_type == "oscillator"
     import pandas as pd_mod
     df = ASSETS.get(p.asset, ASSETS[DEFAULT_ASSET]).copy()
     if p.start_date:
@@ -1727,6 +1866,10 @@ def _run_post_handler(cancel_event):
         p.end_date = str(df.index[-1].date())
 
     fee = p.fee / 100
+
+    # Oscillator mode forces backtest (no sweep/heatmap/lev-sweep support)
+    if is_oscillator and p.mode != "backtest":
+        p.mode = "backtest"
 
     # --- Leverage Sweep Mode ---
     if p.mode == "sweep-lev":
@@ -2071,7 +2214,13 @@ def _run_post_handler(cancel_event):
 
     # --- Backtest Mode ---
     else:
-        if p.ind2_period is not None:
+
+        if is_oscillator:
+            # Oscillator strategy
+            result = bt.run_oscillator_strategy(df, p.osc_name, p.osc_period, p.buy_threshold, p.sell_threshold,
+                                                 p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
+            results = [result]
+        elif p.ind2_period is not None:
             # Single run with fixed period
             result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
@@ -2094,7 +2243,7 @@ def _run_post_handler(cancel_event):
 
             # Compute long/short breakdown for long-short exposure
             long_short_breakdown = None
-            if p.exposure == "long-short" and p.ind2_period is not None:
+            if not is_oscillator and p.exposure == "long-short" and p.ind2_period is not None:
                 long_only = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
                                              p.initial_cash, fee, "long-cash", p.long_leverage, 1, p.lev_mode, p.reverse, p.sizing)
                 short_only = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
@@ -2112,24 +2261,37 @@ def _run_post_handler(cancel_event):
 
             asset_name = p.asset.capitalize()
             show_ratio = p.exposure != "short-cash" and p.sizing != "fixed"
-            if show_ratio:
-                fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 13), dpi=150,
-                                                     gridspec_kw={"height_ratios": [5, 2.5, 2.5]}, sharex=True)
-                bt._apply_dark_theme(fig, [ax1, ax2, ax3])
+
+            if is_oscillator:
+                # Oscillator chart: price panel + oscillator panel + equity panel
+                if show_ratio:
+                    fig, (ax1, ax_osc, ax2, ax3) = plt.subplots(4, 1, figsize=(14, 16), dpi=150,
+                                                                  gridspec_kw={"height_ratios": [4, 2, 2.5, 2.5]}, sharex=True)
+                    bt._apply_dark_theme(fig, [ax1, ax_osc, ax2, ax3])
+                else:
+                    fig, (ax1, ax_osc, ax2) = plt.subplots(3, 1, figsize=(14, 13), dpi=150,
+                                                             gridspec_kw={"height_ratios": [5, 2, 3]}, sharex=True)
+                    bt._apply_dark_theme(fig, [ax1, ax_osc, ax2])
             else:
-                fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), dpi=150,
-                                                gridspec_kw={"height_ratios": [7, 3]}, sharex=True)
-                bt._apply_dark_theme(fig, [ax1, ax2])
+                if show_ratio:
+                    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 13), dpi=150,
+                                                         gridspec_kw={"height_ratios": [5, 2.5, 2.5]}, sharex=True)
+                    bt._apply_dark_theme(fig, [ax1, ax2, ax3])
+                else:
+                    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), dpi=150,
+                                                    gridspec_kw={"height_ratios": [7, 3]}, sharex=True)
+                    bt._apply_dark_theme(fig, [ax1, ax2])
 
             ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color="#e8eaf0", linewidth=0.8)
 
-            # Plot ind2 (main/slow indicator)
-            ax1.plot(best["ind2_series"].index, best["ind2_series"],
-                     label=best["ind2_label"], color="#6495ED", linewidth=0.8, alpha=0.8)
-            # Plot ind1 if not price
-            if best.get("ind1_name") != "price":
-                ax1.plot(best["ind1_series"].index, best["ind1_series"],
-                         label=best["ind1_label"], color="#f7931a", linewidth=0.8, alpha=0.8)
+            if not is_oscillator:
+                # Plot ind2 (main/slow indicator)
+                ax1.plot(best["ind2_series"].index, best["ind2_series"],
+                         label=best["ind2_label"], color="#6495ED", linewidth=0.8, alpha=0.8)
+                # Plot ind1 if not price
+                if best.get("ind1_name") != "price":
+                    ax1.plot(best["ind1_series"].index, best["ind1_series"],
+                             label=best["ind1_label"], color="#f7931a", linewidth=0.8, alpha=0.8)
 
             ax1.set_yscale("log")
             _fmt_usd = plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}")
@@ -2137,11 +2299,60 @@ def _run_post_handler(cancel_event):
             ax1.yaxis.set_minor_formatter(_minor_usd_formatter())
             ax1.tick_params(axis='y', which='minor', labelsize=6)
             ax1.set_ylabel(f"{asset_name} Price (log scale)")
-            ax1.set_title(f"{asset_name} Backtest \u2014 Best: {best['label']} "
+            ax1.set_title(f"{asset_name} Backtest \u2014 {best['label']} "
                           f"({best['total_return']:.1f}% return) | {p.exposure}")
             ax1.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
             ax1.grid(True, which="major", alpha=0.3, color="#252a3a")
             ax1.grid(True, which="minor", alpha=0.15, color="#252a3a")
+
+            # --- Oscillator panel ---
+            if is_oscillator:
+                osc_data = best.get("osc_data")
+                osc_spec = osc_data["spec"]
+                osc_colors = ["#6495ED", "#f7931a", "#34d399"]
+
+                if p.osc_name == "macd":
+                    # MACD: line + signal + histogram bars
+                    macd_s = osc_data["series"]["MACD"]
+                    sig_s = osc_data["series"]["Signal"]
+                    hist_s = osc_data["series"]["Histogram"]
+                    ax_osc.plot(macd_s.index, macd_s, color="#6495ED", linewidth=0.9, label="MACD")
+                    ax_osc.plot(sig_s.index, sig_s, color="#f7931a", linewidth=0.9, label="Signal")
+                    # Histogram as bars
+                    pos_hist = hist_s.where(hist_s >= 0, 0)
+                    neg_hist = hist_s.where(hist_s < 0, 0)
+                    ax_osc.fill_between(hist_s.index, 0, pos_hist, alpha=0.3, color="#34d399", step="mid")
+                    ax_osc.fill_between(hist_s.index, 0, neg_hist, alpha=0.3, color="#ef4444", step="mid")
+                    ax_osc.axhline(y=0, color="#8890a4", linestyle="--", linewidth=0.6, alpha=0.5)
+                else:
+                    # Single or dual line oscillators
+                    for idx, (line_name, line_series) in enumerate(osc_data["series"].items()):
+                        ax_osc.plot(line_series.index, line_series, color=osc_colors[idx % len(osc_colors)],
+                                    linewidth=0.9, label=line_name)
+
+                    # Draw threshold lines
+                    ax_osc.axhline(y=p.buy_threshold, color="#34d399", linestyle="--", linewidth=0.7, alpha=0.7,
+                                   label=f"Buy ({p.buy_threshold})")
+                    ax_osc.axhline(y=p.sell_threshold, color="#ef4444", linestyle="--", linewidth=0.7, alpha=0.7,
+                                   label=f"Sell ({p.sell_threshold})")
+
+                    # Shade overbought/oversold zones
+                    osc_range = osc_spec.get("range")
+                    if osc_range:
+                        ax_osc.fill_between(df.index, osc_range[0], p.buy_threshold, alpha=0.04, color="#34d399")
+                        ax_osc.fill_between(df.index, p.sell_threshold, osc_range[1], alpha=0.04, color="#ef4444")
+                    else:
+                        # For unbounded oscillators, just shade between threshold lines
+                        ax_osc.axhline(y=0, color="#8890a4", linestyle="--", linewidth=0.5, alpha=0.3)
+
+                # Set y-limits for bounded oscillators
+                osc_range = osc_spec.get("range")
+                if osc_range:
+                    ax_osc.set_ylim(osc_range[0] - 2, osc_range[1] + 2)
+
+                ax_osc.set_ylabel(osc_data["label"])
+                ax_osc.legend(loc="upper left", fontsize=7, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0", ncol=3)
+                ax_osc.grid(True, which="major", alpha=0.3, color="#252a3a")
 
             ax2.plot(best["equity"].index, best["equity"], label="Strategy Equity", color="#6495ED", linewidth=1)
             if show_ratio:
@@ -2191,8 +2402,12 @@ def _run_post_handler(cancel_event):
             chart_b64 = base64.b64encode(buf.read()).decode()
 
     price_json = _series_to_lw_json(df["close"]) if best else None
-    ind1_json = _series_to_lw_json(best["ind1_series"]) if best and best.get("ind1_name") != "price" else "[]"
-    ind2_json = _series_to_lw_json(best["ind2_series"]) if best else "[]"
+    if is_oscillator:
+        ind1_json = "[]"
+        ind2_json = "[]"
+    else:
+        ind1_json = _series_to_lw_json(best["ind1_series"]) if best and best.get("ind1_name") != "price" else "[]"
+        ind2_json = _series_to_lw_json(best["ind2_series"]) if best else "[]"
     return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
                                   asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                   hide_buyhold=(p.exposure == "short-cash"),
