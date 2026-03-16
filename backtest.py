@@ -978,6 +978,156 @@ def _minor_fmt():
     return FuncFormatter(_fmt)
 
 
+def run_regression_analysis(df, osc_name, osc_period, forward_days=365,
+                            buy_threshold=None, sell_threshold=None):
+    """Analyze relationship between oscillator values and forward N-day returns.
+    Returns dict with scatter data, regression stats, and zone analysis."""
+    from scipy import stats
+
+    osc_data = compute_oscillator(df, osc_name, osc_period)
+    spec = osc_data["spec"]
+    primary = osc_data["primary"]
+
+    if buy_threshold is None:
+        buy_threshold = spec["buy_threshold"]
+    if sell_threshold is None:
+        sell_threshold = spec["sell_threshold"]
+
+    # Forward return: (close[i+forward_days] / close[i]) - 1 as percentage
+    forward_return = (df["close"].shift(-forward_days) / df["close"] - 1) * 100
+
+    # Combine and drop NaN
+    combined = pd.DataFrame({
+        "osc": primary,
+        "fwd_return": forward_return,
+    }).dropna()
+
+    osc_values = combined["osc"].values
+    forward_returns = combined["fwd_return"].values
+    n_points = len(combined)
+
+    # Linear regression
+    if n_points >= 3:
+        slope, intercept, r_value, p_value, std_err = stats.linregress(osc_values, forward_returns)
+        spearman_r, spearman_p = stats.spearmanr(osc_values, forward_returns)
+    else:
+        slope = intercept = r_value = p_value = std_err = 0
+        spearman_r = spearman_p = 0
+
+    r_squared = r_value ** 2
+
+    # Zone analysis
+    def _zone_stats(mask):
+        vals = forward_returns[mask]
+        if len(vals) == 0:
+            return {"mean": 0, "median": 0, "count": 0, "win_rate": 0}
+        return {
+            "mean": float(np.mean(vals)),
+            "median": float(np.median(vals)),
+            "count": int(len(vals)),
+            "win_rate": float(np.sum(vals > 0) / len(vals) * 100),
+        }
+
+    oversold_mask = osc_values < buy_threshold
+    overbought_mask = osc_values > sell_threshold
+    neutral_mask = ~oversold_mask & ~overbought_mask
+
+    zone_stats = {
+        "oversold": _zone_stats(oversold_mask),
+        "neutral": _zone_stats(neutral_mask),
+        "overbought": _zone_stats(overbought_mask),
+    }
+
+    return {
+        "osc_data": osc_data,
+        "osc_values": osc_values,
+        "forward_returns": forward_returns,
+        "forward_days": forward_days,
+        "r_squared": r_squared,
+        "pearson_r": r_value,
+        "spearman_r": spearman_r,
+        "spearman_p": spearman_p,
+        "p_value": p_value,
+        "slope": slope,
+        "intercept": intercept,
+        "std_err": std_err,
+        "n_points": n_points,
+        "zone_stats": zone_stats,
+        "buy_threshold": buy_threshold,
+        "sell_threshold": sell_threshold,
+    }
+
+
+def generate_regression_chart(result):
+    """Generate scatter plot of oscillator values vs forward returns. Returns base64 PNG."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    osc_values = result["osc_values"]
+    forward_returns = result["forward_returns"]
+    buy_thr = result["buy_threshold"]
+    sell_thr = result["sell_threshold"]
+
+    fig, ax = plt.subplots(figsize=(14, 9), dpi=150)
+    _apply_dark_theme(fig, ax)
+
+    # Color points by zone
+    oversold_mask = osc_values < buy_thr
+    overbought_mask = osc_values > sell_thr
+    neutral_mask = ~oversold_mask & ~overbought_mask
+
+    ax.scatter(osc_values[neutral_mask], forward_returns[neutral_mask],
+               c="#8890a4", alpha=0.25, s=8, label="Neutral", rasterized=True)
+    ax.scatter(osc_values[oversold_mask], forward_returns[oversold_mask],
+               c="#34d399", alpha=0.35, s=12, label="Oversold", rasterized=True)
+    ax.scatter(osc_values[overbought_mask], forward_returns[overbought_mask],
+               c="#ef4444", alpha=0.35, s=12, label="Overbought", rasterized=True)
+
+    # Regression line
+    x_range = np.linspace(osc_values.min(), osc_values.max(), 100)
+    y_pred = result["slope"] * x_range + result["intercept"]
+    ax.plot(x_range, y_pred, color="#f7931a", linewidth=2, label="Regression line")
+
+    # Threshold lines
+    ax.axvline(x=buy_thr, color="#34d399", linestyle="--", linewidth=1, alpha=0.7,
+               label=f"Buy threshold ({buy_thr})")
+    ax.axvline(x=sell_thr, color="#ef4444", linestyle="--", linewidth=1, alpha=0.7,
+               label=f"Sell threshold ({sell_thr})")
+
+    # Zero return line
+    ax.axhline(y=0, color="#8890a4", linestyle="--", linewidth=0.8, alpha=0.5)
+
+    # Stats annotation
+    stats_text = (
+        f"R² = {result['r_squared']:.4f}\n"
+        f"Pearson r = {result['pearson_r']:.4f}\n"
+        f"Spearman ρ = {result['spearman_r']:.4f}\n"
+        f"p-value = {result['p_value']:.2e}\n"
+        f"n = {result['n_points']:,}"
+    )
+    ax.text(0.02, 0.97, stats_text, transform=ax.transAxes, fontsize=10,
+            verticalalignment="top", fontfamily="monospace",
+            color="#e8eaf0", bbox=dict(boxstyle="round,pad=0.5",
+            facecolor="#161922", edgecolor="#252a3a", alpha=0.9))
+
+    osc_label = result["osc_data"]["label"]
+    ax.set_xlabel(f"{osc_label} Value")
+    ax.set_ylabel(f"Forward {result['forward_days']}-Day Return (%)")
+    ax.set_title(f"{osc_label} vs Forward {result['forward_days']}-Day Return — Regression Analysis")
+    ax.legend(loc="upper right", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
+    ax.grid(True, alpha=0.3, color="#252a3a")
+    plt.tight_layout()
+
+    from io import BytesIO
+    import base64
+    buf = BytesIO()
+    plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
+    plt.close()
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
+
+
 def _apply_dark_theme(fig, axes):
     """Apply the web UI's dark color palette to a matplotlib figure and axes."""
     BG = "#080a10"

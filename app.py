@@ -265,7 +265,7 @@ HTML = """\
         /* Mode selector cards */
         .mode-selector {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, 1fr);
             gap: 8px;
             margin-bottom: 14px;
         }
@@ -735,6 +735,18 @@ HTML = """\
                             </svg>
                             <span class="mode-card-label">Leverage Optimization</span>
                         </div>
+                        <div class="mode-card {{ 'active' if p.mode=='regression' }}" onclick="selectMode('regression', this)">
+                            <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="7" cy="20" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/>
+                                <circle cx="10" cy="16" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/>
+                                <circle cx="13" cy="18" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/>
+                                <circle cx="16" cy="12" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/>
+                                <circle cx="19" cy="10" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/>
+                                <circle cx="22" cy="7" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/>
+                                <line x1="5" y1="22" x2="24" y2="6" opacity="0.8"/>
+                            </svg>
+                            <span class="mode-card-label">Regression Analysis</span>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group" id="range-min-group">
@@ -888,6 +900,12 @@ HTML = """\
                             <input type="number" name="sell_threshold" id="sell_threshold" value="{{ p.sell_threshold }}" step="any">
                         </div>
                     </div>
+                    <div class="form-row hidden" id="forward-days-row">
+                        <div class="form-group" id="forward-days-group">
+                            <label>Forward Days</label>
+                            <input type="number" name="forward_days" id="forward_days" value="{{ p.forward_days }}" placeholder="365" min="1">
+                        </div>
+                    </div>
                     <div id="osc-description" class="hidden" style="margin-top:6px;font-size:0.78em;color:var(--text-muted);line-height:1.5;padding:8px 12px;background:var(--bg-deep);border-radius:8px;border-left:2px solid var(--accent)"></div>
                     <div class="signal-explainer" id="signal-explainer">
                         <span id="explainer-text">Buy when <span id="explainer-ind1">Price</span> crosses above <span id="explainer-ind2">SMA</span>. Sell when it crosses below.</span>
@@ -982,8 +1000,57 @@ HTML = """\
             </form>
         </div>
         <div class="panel" id="results-panel">
-            {% if chart %}
-                {% if best %}
+            {% if error|default(none) %}
+                <div class="placeholder" style="color:var(--accent)">{{ error }}</div>
+            {% elif chart %}
+                {% if regression|default(none) %}
+                {# Regression analysis results #}
+                <div style="position:relative">
+                    <img class="chart-img" id="backtest-chart-img" src="data:image/png;base64,{{ chart }}" />
+                    <button onclick="downloadChart()" class="chart-download-btn" title="Download chart as PNG">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12h10"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="metrics-panel">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                    <div>
+                        <table class="metrics-table">
+                            <thead><tr><th class="col-metric">Statistic</th><th class="col-strategy">Value</th></tr></thead>
+                            <tbody>
+                            <tr class="section-row"><td colspan="2">Correlation</td></tr>
+                            <tr><td class="m-label">R² <span class="m-info" data-tip="Coefficient of determination.&#10;How much variance in returns is explained by the oscillator.">ⓘ</span></td><td class="m-val">{{ "%.6f"|format(regression.r_squared) }}</td></tr>
+                            <tr><td class="m-label">Pearson r <span class="m-info" data-tip="Linear correlation coefficient.&#10;Range: -1 to +1">ⓘ</span></td><td class="m-val">{{ "%.4f"|format(regression.pearson_r) }}</td></tr>
+                            <tr><td class="m-label">Spearman ρ <span class="m-info" data-tip="Rank correlation coefficient.&#10;Captures monotonic (non-linear) relationships.">ⓘ</span></td><td class="m-val">{{ "%.4f"|format(regression.spearman_r) }}</td></tr>
+                            <tr><td class="m-label">p-value <span class="m-info" data-tip="Statistical significance of the correlation.&#10;Lower = more significant. &lt; 0.05 is typical threshold.">ⓘ</span></td><td class="m-val">{{ "%.2e"|format(regression.p_value) }}</td></tr>
+                            <tr class="section-row"><td colspan="2">Regression</td></tr>
+                            <tr><td class="m-label">Slope <span class="m-info" data-tip="Change in forward return (%) per unit change in oscillator.">ⓘ</span></td><td class="m-val">{{ "%.4f"|format(regression.slope) }}</td></tr>
+                            <tr><td class="m-label">Intercept</td><td class="m-val">{{ "%.2f"|format(regression.intercept) }}%</td></tr>
+                            <tr><td class="m-label">Std Error</td><td class="m-val">{{ "%.4f"|format(regression.std_err) }}</td></tr>
+                            <tr><td class="m-label">Data Points</td><td class="m-val">{{ "{:,}".format(regression.n_points) }}</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <table class="metrics-table">
+                            <thead><tr><th class="col-metric">Zone</th><th>Mean Return</th><th>Median</th><th>Count</th><th>Win Rate</th></tr></thead>
+                            <tbody>
+                            {% for zone_name, zone in [('Oversold', regression.zone_stats.oversold), ('Neutral', regression.zone_stats.neutral), ('Overbought', regression.zone_stats.overbought)] %}
+                            <tr>
+                                <td class="m-label" style="color:{{ '#34d399' if zone_name == 'Oversold' else '#ef4444' if zone_name == 'Overbought' else '#8890a4' }}">{{ zone_name }}</td>
+                                <td class="m-val {{ 'positive' if zone.mean > 0 else 'negative' }}">{{ "%.1f"|format(zone.mean) }}%</td>
+                                <td class="m-val {{ 'positive' if zone.median > 0 else 'negative' }}">{{ "%.1f"|format(zone.median) }}%</td>
+                                <td class="m-val">{{ zone.count }}</td>
+                                <td class="m-val">{{ "%.1f"|format(zone.win_rate) }}%</td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                </div>
+                {% elif best %}
                 {% if lev_sweep|default(none) %}
                 {# Leverage sweep mode — keep compact table #}
                 <table class="results-table" style="margin-bottom:16px">
@@ -1027,6 +1094,7 @@ HTML = """\
                 </table>
                 {% endif %}
                 {% endif %}
+                {% if not regression|default(none) %}
                 {% if table_rows %}
                 <details style="margin-bottom:16px">
                     <summary>Show all results ({{ table_rows|length }})</summary>
@@ -1111,6 +1179,7 @@ HTML = """\
                 </table>
                 </div>
                 {% endif %}
+                {% endif %}
             {% else %}
                 <div class="placeholder">Configure parameters and press Run Backtest</div>
             {% endif %}
@@ -1165,6 +1234,14 @@ function _syncOscHidden() {
 }
 function toggleFields() {
     var mode = document.getElementById('mode').value;
+    var isRegression = mode === 'regression';
+    var ind2El = document.getElementById('ind2_name');
+
+    // Auto-select RSI for regression mode if not already an oscillator
+    if (isRegression && !_isOscValue(ind2El.value)) {
+        ind2El.value = 'osc_rsi';
+    }
+
     var isOsc = _syncOscHidden();
     var ind1El = document.getElementById('ind1_name');
     var ind1 = ind1El.value;
@@ -1179,7 +1256,7 @@ function toggleFields() {
     // Show/hide oscillator param row and description
     var oscParamsRow = document.getElementById('osc-params-row');
     var oscDesc = document.getElementById('osc-description');
-    if (isOsc) {
+    if (isOsc || isRegression) {
         oscParamsRow.classList.remove('hidden');
         oscDesc.classList.remove('hidden');
         var oInputs = oscParamsRow.querySelectorAll('input');
@@ -1191,21 +1268,31 @@ function toggleFields() {
         for (var oi2 = 0; oi2 < oInputs2.length; oi2++) oInputs2[oi2].disabled = true;
     }
 
+    // Show/hide forward days row
+    var fwdRow = document.getElementById('forward-days-row');
+    if (isRegression) {
+        fwdRow.classList.remove('hidden');
+        fwdRow.querySelector('input').disabled = false;
+    } else {
+        fwdRow.classList.add('hidden');
+        fwdRow.querySelector('input').disabled = true;
+    }
+
     var rules = [
-        ['ind1-group', !isOsc],
-        ['period1-group', !isOsc && ind1 !== 'price' && mode !== 'heatmap'],
-        ['ind-sep', !isOsc],
-        ['period2-group', !isOsc && (mode === 'backtest' || mode === 'sweep-lev')],
-        ['range-min-group', !isOsc && (mode === 'sweep' || mode === 'heatmap')],
-        ['range-max-group', !isOsc && (mode === 'sweep' || mode === 'heatmap')],
-        ['step-group', !isOsc && mode === 'heatmap'],
-        ['long-lev-group', !isLevSweep],
-        ['short-lev-group', !isLevSweep],
-        ['exposure-group', !isLevSweep],
-        ['lev-mode-group', true],
-        ['sizing-group', true],
-        ['lev-min-group', isLevSweep],
-        ['lev-max-group', isLevSweep],
+        ['ind1-group', !isOsc && !isRegression],
+        ['period1-group', !isOsc && !isRegression && ind1 !== 'price' && mode !== 'heatmap'],
+        ['ind-sep', !isOsc && !isRegression],
+        ['period2-group', !isOsc && !isRegression && (mode === 'backtest' || mode === 'sweep-lev')],
+        ['range-min-group', !isOsc && !isRegression && (mode === 'sweep' || mode === 'heatmap')],
+        ['range-max-group', !isOsc && !isRegression && (mode === 'sweep' || mode === 'heatmap')],
+        ['step-group', !isOsc && !isRegression && mode === 'heatmap'],
+        ['long-lev-group', !isLevSweep && !isRegression],
+        ['short-lev-group', !isLevSweep && !isRegression],
+        ['exposure-group', !isLevSweep && !isRegression],
+        ['lev-mode-group', !isRegression],
+        ['sizing-group', !isRegression],
+        ['lev-min-group', isLevSweep && !isRegression],
+        ['lev-max-group', isLevSweep && !isRegression],
     ];
     for (var i = 0; i < rules.length; i++) {
         var el = document.getElementById(rules[i][0]);
@@ -1221,6 +1308,16 @@ function updateExplainer() {
     var rev = document.getElementById('reverse').checked;
     var el = document.getElementById('explainer-text');
     var ind2Val = document.getElementById('ind2_name').value;
+    var mode = document.getElementById('mode').value;
+
+    if (mode === 'regression' && _isOscValue(ind2Val)) {
+        var osc = _oscKey(ind2Val);
+        var oscPer = document.getElementById('osc_period').value || oscDefaults[osc].period;
+        var fwdDays = document.getElementById('forward_days').value || 365;
+        var oscLabel = osc.toUpperCase().replace('_', ' ') + '(' + oscPer + ')';
+        el.innerHTML = 'Scatter plot: ' + oscLabel + ' value vs forward ' + fwdDays + '-day return. Regression line shows linear relationship.';
+        return;
+    }
 
     if (_isOscValue(ind2Val)) {
         var osc = _oscKey(ind2Val);
@@ -1668,6 +1765,7 @@ class Params:
             self.osc_period = int(osc_p) if osc_p else None
             self.buy_threshold = float(form.get("buy_threshold", bt.OSCILLATORS.get(self.osc_name, {}).get("buy_threshold", 30)))
             self.sell_threshold = float(form.get("sell_threshold", bt.OSCILLATORS.get(self.osc_name, {}).get("sell_threshold", 70)))
+            self.forward_days = int(form.get("forward_days", 365))
         else:
             self.asset = DEFAULT_ASSET
             self.mode = "backtest"
@@ -1697,6 +1795,7 @@ class Params:
             self.osc_period = None
             self.buy_threshold = 30
             self.sell_threshold = 70
+            self.forward_days = 365
 
 
 # Load data once at startup
@@ -1847,9 +1946,26 @@ def _run_post_handler(cancel_event):
 
     fee = p.fee / 100
 
-    # Oscillator mode forces backtest (no sweep/heatmap/lev-sweep support)
-    if is_oscillator and p.mode != "backtest":
+    # Oscillator mode forces backtest (no sweep/heatmap/lev-sweep support), except regression
+    if is_oscillator and p.mode not in ("backtest", "regression"):
         p.mode = "backtest"
+
+    # --- Regression Analysis Mode ---
+    if p.mode == "regression":
+        if not is_oscillator:
+            return render_template_string(HTML, p=p, chart=None, best=None, table_rows=None, col_header=col_header,
+                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                          error="Regression analysis requires an oscillator indicator. Please select one from Indicator 2.",
+                                          price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
+
+        reg_result = bt.run_regression_analysis(df, p.osc_name, p.osc_period, p.forward_days,
+                                                 p.buy_threshold, p.sell_threshold)
+        chart_b64 = bt.generate_regression_chart(reg_result)
+
+        return render_template_string(HTML, p=p, chart=chart_b64, best=None, table_rows=None, col_header=col_header,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                      regression=reg_result,
+                                      price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
     # --- Leverage Sweep Mode ---
     if p.mode == "sweep-lev":
