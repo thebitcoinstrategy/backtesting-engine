@@ -1150,14 +1150,13 @@ function _syncOscHidden() {
             var oscPeriodEl = document.getElementById('osc_period');
             var buyEl = document.getElementById('buy_threshold');
             var sellEl = document.getElementById('sell_threshold');
-            // Only set defaults if values are empty or we just switched to this oscillator
-            if (!oscPeriodEl.value) oscPeriodEl.placeholder = d.period;
+            // Set defaults when switching to a new oscillator
             if (buyEl.dataset.lastOsc !== oscName) {
                 buyEl.value = d.buy;
                 sellEl.value = d.sell;
-                oscPeriodEl.value = '';
-                oscPeriodEl.placeholder = d.period;
+                oscPeriodEl.value = d.period;
             }
+            if (!oscPeriodEl.value) oscPeriodEl.value = d.period;
             buyEl.dataset.lastOsc = oscName;
             document.getElementById('osc-description').textContent = d.desc;
         }
@@ -1227,7 +1226,7 @@ function updateExplainer() {
         var osc = _oscKey(ind2Val);
         var buyThr = document.getElementById('buy_threshold').value;
         var sellThr = document.getElementById('sell_threshold').value;
-        var oscPer = document.getElementById('osc_period').value || document.getElementById('osc_period').placeholder;
+        var oscPer = document.getElementById('osc_period').value || oscDefaults[osc].period;
         var oscLabel = osc.toUpperCase().replace('_', ' ') + '(' + oscPer + ')';
         if (osc === 'macd') {
             if (rev) {
