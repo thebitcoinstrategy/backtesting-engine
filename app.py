@@ -2122,7 +2122,7 @@ def index():
             last_ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
             import math
             date_range_years = (df.index[-1] - df.index[0]).days / 365.25
-            year_step = max(1, math.ceil(date_range_years / 12))
+            year_step = max(1, math.ceil(date_range_years / 18))
             last_ax.xaxis.set_major_locator(mdates.YearLocator(year_step))
             plt.tight_layout()
 
