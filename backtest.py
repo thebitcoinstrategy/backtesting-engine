@@ -430,6 +430,9 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
     if reverse:
         above = ~above
     df["position"] = _apply_exposure(above, exposure).shift(1).fillna(0)
+    # Force cash when oscillator primary is NaN (warmup period — no valid signal)
+    nan_mask = osc_data["primary"].isna()
+    df.loc[nan_mask, "position"] = 0
 
     daily_return = df["close"].pct_change().fillna(0)
 
@@ -780,6 +783,9 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
     if reverse:
         above = ~above
     df["position"] = _apply_exposure(above, exposure).shift(1).fillna(0)
+    # Force cash when either indicator is NaN (warmup period — no valid signal)
+    nan_mask = ind1_series.isna() | ind2_series.isna()
+    df.loc[nan_mask, "position"] = 0
 
     daily_return = df["close"].pct_change().fillna(0)
 

@@ -1997,6 +1997,9 @@ def _run_post_handler(cancel_event):
         if p.reverse:
             above = ~above
         position_base = bt._apply_exposure(above, p.exposure).shift(1).fillna(0)
+        # Force cash during NaN warmup period
+        _nan_mask = ind1_series.isna() | ind2_series.isna()
+        position_base[_nan_mask] = 0
         daily_return = df_full["close"].pct_change().fillna(0)
         # Trim to start_date after indicator warmup
         _ws_ts = pd_mod.Timestamp(warmup_start_date, tz="UTC")
@@ -2190,6 +2193,9 @@ def _run_post_handler(cancel_event):
                 if p.reverse:
                     above = ~above
                 position = bt._apply_exposure(above, p.exposure).shift(1).fillna(0)
+                # Force cash during NaN warmup period
+                nan_mask = ind1_cache[p1].isna() | ind2_cache[p2].isna()
+                position[nan_mask] = 0
                 # Trim to start_date after position is computed with warmup
                 position = position[_hm_mask]
                 leverage = np.where(position > 0, p.long_leverage,
