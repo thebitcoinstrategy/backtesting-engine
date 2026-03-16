@@ -1054,7 +1054,7 @@ HTML = """\
                 <table class="metrics-table">
                     <thead><tr>
                         <th class="col-metric">Metric</th>
-                        <th class="col-strategy">{{ best.label }}</th>
+                        <th class="col-strategy">{{ best.label }}{% if p.long_leverage != 1 or p.short_leverage != 1 %} ({{ "%.3g"|format(p.long_leverage) }}x Long, {{ "%.3g"|format(p.short_leverage) }}x Short){% endif %}</th>
                         <th class="col-buyhold">Buy & Hold</th>
                     </tr></thead>
                     <tbody>
