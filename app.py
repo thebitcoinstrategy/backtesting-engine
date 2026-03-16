@@ -2053,7 +2053,7 @@ def index():
             import numpy as np
 
             asset_name = p.asset.capitalize()
-            show_ratio = p.exposure != "short-cash"
+            show_ratio = p.exposure != "short-cash" and p.sizing != "fixed"
             if show_ratio:
                 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 13), dpi=150,
                                                      gridspec_kw={"height_ratios": [5, 2.5, 2.5]}, sharex=True)
