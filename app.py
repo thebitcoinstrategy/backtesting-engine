@@ -1473,29 +1473,16 @@ function validateForm() {
 var currentAbort = null;
 var currentRequestId = null;
 
-function resetBtn(done) {
+function resetBtn() {
     var btn = document.getElementById('btn');
     btn.classList.remove('btn-stop');
+    btn.classList.remove('btn-done');
+    btn.disabled = false;
+    btn.textContent = 'Run Backtest';
     currentAbort = null;
     currentRequestId = null;
-    if (done) {
-        btn.disabled = true;
-        btn.textContent = '\u2713  Results Ready';
-        btn.classList.add('btn-done');
-    } else {
-        btn.disabled = false;
-        btn.textContent = 'Run Backtest';
-        btn.classList.remove('btn-done');
-    }
 }
-function enableBtn() {
-    var btn = document.getElementById('btn');
-    if (btn.classList.contains('btn-done')) {
-        btn.disabled = false;
-        btn.textContent = 'Run Backtest';
-        btn.classList.remove('btn-done');
-    }
-}
+function enableBtn() {}
 
 document.getElementById('btn').addEventListener('click', function(e) {
     if (currentAbort) {
@@ -1577,7 +1564,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
             if (viewParam) qs.set('view', viewParam);
             history.replaceState(null, '', '?' + qs.toString());
             activateViewFromURL();
-            resetBtn(true);
+            resetBtn();
         })
         .catch(function(err) {
             panel.style.opacity = '1';
@@ -1626,7 +1613,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
             if (viewParam) qs.set('view', viewParam);
             history.replaceState(null, '', '?' + qs.toString());
             activateViewFromURL();
-            resetBtn(true);
+            resetBtn();
         })
         .catch(function(err) {
             if (err.name === 'AbortError') {
