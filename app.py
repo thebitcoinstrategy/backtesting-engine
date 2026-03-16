@@ -1127,13 +1127,13 @@ function selectMode(mode, el) {
     toggleFields();
 }
 var oscDefaults = {
-    rsi:        { period: 14, buy: 30, sell: 70, desc: 'Relative Strength Index \u2014 buy when oversold (<30), sell when overbought (>70)' },
+    rsi:        { period: 14, buy: 30, sell: 70, desc: 'Relative Strength Index \u2014 buy when dropping below 30 (oversold/cheap), sell when rising above 70 (overbought/expensive). Hold between thresholds.' },
     macd:       { period: 9, buy: 0, sell: 0, desc: 'MACD \u2014 buy when MACD crosses above signal line, sell when below. Period controls signal line smoothing.' },
-    stochastic: { period: 14, buy: 20, sell: 80, desc: 'Stochastic Oscillator \u2014 buy when %K exits oversold (<20), sell when overbought (>80)' },
-    cci:        { period: 20, buy: -100, sell: 100, desc: 'Commodity Channel Index \u2014 buy above \u2212100, sell below +100' },
-    roc:        { period: 12, buy: 0, sell: 0, desc: 'Rate of Change \u2014 buy when positive (upward momentum), sell when negative' },
-    momentum:   { period: 10, buy: 0, sell: 0, desc: 'Price Momentum \u2014 buy when positive, sell when negative' },
-    williams_r: { period: 14, buy: -80, sell: -20, desc: 'Williams %R \u2014 buy when exits oversold (>\u221280), sell when overbought (<\u221220)' }
+    stochastic: { period: 14, buy: 20, sell: 80, desc: 'Stochastic Oscillator \u2014 buy when dropping below 20 (oversold/cheap), sell when rising above 80 (overbought/expensive). Hold between thresholds.' },
+    cci:        { period: 20, buy: -100, sell: 100, desc: 'Commodity Channel Index \u2014 buy when dropping below \u2212100 (oversold), sell when rising above +100 (overbought). Hold between thresholds.' },
+    roc:        { period: 12, buy: 0, sell: 0, desc: 'Rate of Change \u2014 buy when dropping below 0 (negative momentum = cheap), sell when rising above 0 (positive = expensive). Hold between thresholds.' },
+    momentum:   { period: 10, buy: 0, sell: 0, desc: 'Price Momentum \u2014 buy when dropping below 0 (downward momentum = cheap), sell when rising above 0 (upward = expensive). Hold between thresholds.' },
+    williams_r: { period: 14, buy: -80, sell: -20, desc: 'Williams %R \u2014 buy when dropping below \u221280 (oversold/cheap), sell when rising above \u221220 (overbought/expensive). Hold between thresholds.' }
 };
 function _isOscValue(val) { return val && val.indexOf('osc_') === 0; }
 function _oscKey(val) { return val.substring(4); }
@@ -1236,9 +1236,9 @@ function updateExplainer() {
             }
         } else {
             if (rev) {
-                el.innerHTML = '<b>Sell</b> when ' + oscLabel + ' crosses above ' + buyThr + '. <b>Buy</b> when it drops below ' + sellThr + '.';
+                el.innerHTML = '<b>Sell</b> when ' + oscLabel + ' drops below ' + buyThr + '. <b>Buy</b> when it rises above ' + sellThr + '. Hold between thresholds.';
             } else {
-                el.innerHTML = 'Buy when ' + oscLabel + ' crosses above ' + buyThr + '. Sell when it drops below ' + sellThr + '.';
+                el.innerHTML = 'Buy when ' + oscLabel + ' drops below ' + buyThr + ' (cheap). Sell when it rises above ' + sellThr + ' (expensive). Hold between thresholds.';
             }
         }
         return;

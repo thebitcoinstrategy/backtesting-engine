@@ -278,7 +278,7 @@ OSCILLATORS = {
         "range": (0, 100),
         "lines": ["RSI"],
         "label": "RSI",
-        "description": "Relative Strength Index — buy when oversold (<30), sell when overbought (>70)",
+        "description": "Relative Strength Index — buy when dropping below 30 (oversold/cheap), sell when rising above 70 (overbought/expensive)",
     },
     "macd": {
         "fn": lambda df, period: compute_macd(df, fast=12, slow=26, signal=period),
@@ -299,7 +299,7 @@ OSCILLATORS = {
         "range": (0, 100),
         "lines": ["%K", "%D"],
         "label": "Stochastic",
-        "description": "Stochastic Oscillator — buy when %K exits oversold (<20), sell when overbought (>80)",
+        "description": "Stochastic Oscillator — buy when %K drops below 20 (oversold/cheap), sell when rising above 80 (overbought/expensive)",
     },
     "cci": {
         "fn": lambda df, period: (compute_cci(df, period),),
@@ -309,7 +309,7 @@ OSCILLATORS = {
         "range": None,
         "lines": ["CCI"],
         "label": "CCI",
-        "description": "Commodity Channel Index — buy above -100, sell below +100",
+        "description": "Commodity Channel Index — buy when dropping below -100 (oversold), sell when rising above +100 (overbought)",
     },
     "roc": {
         "fn": lambda df, period: (compute_roc(df, period),),
@@ -319,7 +319,7 @@ OSCILLATORS = {
         "range": None,
         "lines": ["ROC"],
         "label": "ROC",
-        "description": "Rate of Change — buy when positive, sell when negative",
+        "description": "Rate of Change — buy when dropping below 0 (negative momentum/cheap), sell when rising above 0",
     },
     "momentum": {
         "fn": lambda df, period: (compute_momentum(df, period),),
@@ -329,7 +329,7 @@ OSCILLATORS = {
         "range": None,
         "lines": ["MOM"],
         "label": "Momentum",
-        "description": "Price Momentum — buy when positive, sell when negative",
+        "description": "Price Momentum — buy when dropping below 0 (downward momentum/cheap), sell when rising above 0",
     },
     "williams_r": {
         "fn": lambda df, period: (compute_williams_r(df, period),),
@@ -339,7 +339,7 @@ OSCILLATORS = {
         "range": (-100, 0),
         "lines": ["%R"],
         "label": "Williams %R",
-        "description": "Williams %R — buy when exits oversold (>-80), sell when overbought (<-20)",
+        "description": "Williams %R — buy when dropping below -80 (oversold/cheap), sell when rising above -20 (overbought/expensive)",
     },
 }
 
@@ -378,10 +378,11 @@ def compute_oscillator(df, osc_name, period=None):
 
 
 def _oscillator_signal(osc_data, buy_threshold, sell_threshold):
-    """Generate buy/sell boolean signal from oscillator using hysteresis.
-    Buy when oscillator crosses above buy_threshold.
-    Sell when oscillator crosses below sell_threshold.
-    Hold position between thresholds."""
+    """Generate buy/sell boolean signal from oscillator using mean-reversion hysteresis.
+    Buy when oscillator drops below buy_threshold (enters oversold zone — it's cheap).
+    Hold position until oscillator rises above sell_threshold (enters overbought — it's expensive).
+    Stay out until oscillator drops below buy_threshold again.
+    Between thresholds: no change, hold whatever state we're in."""
     spec = osc_data["spec"]
     primary = osc_data["primary"]
 
@@ -391,28 +392,25 @@ def _oscillator_signal(osc_data, buy_threshold, sell_threshold):
         above = primary > signal_line
         return above
 
-    # Threshold-based hysteresis: buy when crossing above buy_threshold,
-    # sell when crossing below sell_threshold
+    # Mean-reversion hysteresis:
+    #   Oscillator drops below buy_threshold → BUY (cheap/oversold)
+    #   Oscillator rises above sell_threshold → SELL (expensive/overbought)
+    #   Between thresholds → hold current position
     n = len(primary)
     position = np.zeros(n, dtype=int)
     in_position = False
     for i in range(n):
         val = primary.iloc[i]
         if np.isnan(val):
-            position[i] = 0
+            position[i] = 1 if in_position else 0
             continue
         if not in_position:
-            if val > buy_threshold:
+            if val < buy_threshold:
                 in_position = True
-                position[i] = 1
-            else:
-                position[i] = 0
         else:
-            if val < sell_threshold:
+            if val > sell_threshold:
                 in_position = False
-                position[i] = 0
-            else:
-                position[i] = 1
+        position[i] = 1 if in_position else 0
     return pd.Series(position, index=primary.index).astype(bool)
 
 
