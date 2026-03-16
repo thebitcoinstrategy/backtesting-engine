@@ -810,20 +810,11 @@ HTML = """\
                     </div>
                 </div>
                 <div class="form-section">
-                    <div class="section-title">Signal Type</div>
-                    <div class="form-row" style="margin-bottom:12px">
-                        <div class="form-group" style="min-width:200px">
-                            <label>Strategy Type</label>
-                            <select name="signal_type" id="signal_type" onchange="toggleFields()">
-                                <option value="crossover" {{ 'selected' if p.signal_type=='crossover' }}>Moving Average Crossover</option>
-                                <option value="oscillator" {{ 'selected' if p.signal_type=='oscillator' }}>Oscillator Threshold</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div id="crossover-fields">
-                    <div class="section-title" style="font-size:0.78em;margin-top:0">Indicators</div>
+                    <div class="section-title">Indicators</div>
+                    <input type="hidden" name="signal_type" id="signal_type" value="{{ p.signal_type }}">
+                    <input type="hidden" name="osc_name" id="osc_name" value="{{ p.osc_name }}">
                     <div class="form-row">
-                        <div class="form-group">
+                        <div class="form-group" id="ind1-group">
                             <label>Indicator 1</label>
                             <select name="ind1_name" id="ind1_name" onchange="toggleFields()">
                                 <option value="price" {{ 'selected' if p.ind1_name=='price' }}>Price</option>
@@ -847,24 +838,35 @@ HTML = """\
                             <label>Period 1</label>
                             <input type="number" name="period1" value="{{ p.ind1_period or '' }}" placeholder="e.g. 20" min="2">
                         </div>
-                        <div class="sep"></div>
+                        <div class="sep" id="ind-sep"></div>
                         <div class="form-group">
                             <label>Indicator 2</label>
-                            <select name="ind2_name" id="ind2_name">
-                                <option value="sma" {{ 'selected' if p.ind2_name=='sma' }}>SMA (Simple Moving Average)</option>
-                                <option value="ema" {{ 'selected' if p.ind2_name=='ema' }}>EMA (Exponential Moving Average)</option>
-                                <option value="wma" {{ 'selected' if p.ind2_name=='wma' }}>WMA (Weighted Moving Average)</option>
-                                <option value="hma" {{ 'selected' if p.ind2_name=='hma' }}>HMA (Hull Moving Average)</option>
-                                <option value="dema" {{ 'selected' if p.ind2_name=='dema' }}>DEMA (Double Exponential MA)</option>
-                                <option value="tema" {{ 'selected' if p.ind2_name=='tema' }}>TEMA (Triple Exponential MA)</option>
-                                <option value="kama" {{ 'selected' if p.ind2_name=='kama' }}>KAMA (Kaufman Adaptive MA)</option>
-                                <option value="zlema" {{ 'selected' if p.ind2_name=='zlema' }}>ZLEMA (Zero-Lag EMA)</option>
-                                <option value="smma" {{ 'selected' if p.ind2_name=='smma' }}>SMMA (Smoothed Moving Average)</option>
-                                <option value="lsma" {{ 'selected' if p.ind2_name=='lsma' }}>LSMA (Least Squares MA)</option>
-                                <option value="alma" {{ 'selected' if p.ind2_name=='alma' }}>ALMA (Arnaud Legoux MA)</option>
-                                <option value="frama" {{ 'selected' if p.ind2_name=='frama' }}>FRAMA (Fractal Adaptive MA)</option>
-                                <option value="t3" {{ 'selected' if p.ind2_name=='t3' }}>T3 (Tillson T3)</option>
-                                <option value="mcginley" {{ 'selected' if p.ind2_name=='mcginley' }}>McGinley Dynamic</option>
+                            <select name="ind2_name" id="ind2_name" onchange="toggleFields()">
+                                <optgroup label="Moving Averages">
+                                <option value="sma" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='sma' }}>SMA (Simple Moving Average)</option>
+                                <option value="ema" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='ema' }}>EMA (Exponential Moving Average)</option>
+                                <option value="wma" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='wma' }}>WMA (Weighted Moving Average)</option>
+                                <option value="hma" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='hma' }}>HMA (Hull Moving Average)</option>
+                                <option value="dema" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='dema' }}>DEMA (Double Exponential MA)</option>
+                                <option value="tema" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='tema' }}>TEMA (Triple Exponential MA)</option>
+                                <option value="kama" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='kama' }}>KAMA (Kaufman Adaptive MA)</option>
+                                <option value="zlema" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='zlema' }}>ZLEMA (Zero-Lag EMA)</option>
+                                <option value="smma" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='smma' }}>SMMA (Smoothed Moving Average)</option>
+                                <option value="lsma" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='lsma' }}>LSMA (Least Squares MA)</option>
+                                <option value="alma" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='alma' }}>ALMA (Arnaud Legoux MA)</option>
+                                <option value="frama" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='frama' }}>FRAMA (Fractal Adaptive MA)</option>
+                                <option value="t3" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='t3' }}>T3 (Tillson T3)</option>
+                                <option value="mcginley" {{ 'selected' if p.signal_type=='crossover' and p.ind2_name=='mcginley' }}>McGinley Dynamic</option>
+                                </optgroup>
+                                <optgroup label="Oscillators">
+                                <option value="osc_rsi" {{ 'selected' if p.signal_type=='oscillator' and p.osc_name=='rsi' }}>RSI (Relative Strength Index)</option>
+                                <option value="osc_macd" {{ 'selected' if p.signal_type=='oscillator' and p.osc_name=='macd' }}>MACD (Moving Avg Convergence Divergence)</option>
+                                <option value="osc_stochastic" {{ 'selected' if p.signal_type=='oscillator' and p.osc_name=='stochastic' }}>Stochastic Oscillator (%K/%D)</option>
+                                <option value="osc_cci" {{ 'selected' if p.signal_type=='oscillator' and p.osc_name=='cci' }}>CCI (Commodity Channel Index)</option>
+                                <option value="osc_roc" {{ 'selected' if p.signal_type=='oscillator' and p.osc_name=='roc' }}>ROC (Rate of Change)</option>
+                                <option value="osc_momentum" {{ 'selected' if p.signal_type=='oscillator' and p.osc_name=='momentum' }}>Momentum</option>
+                                <option value="osc_williams_r" {{ 'selected' if p.signal_type=='oscillator' and p.osc_name=='williams_r' }}>Williams %R</option>
+                                </optgroup>
                             </select>
                         </div>
                         <div class="form-group" id="period2-group">
@@ -872,27 +874,11 @@ HTML = """\
                             <input type="number" name="period2" value="{{ p.ind2_period or '' }}" placeholder="e.g. 40" min="2">
                         </div>
                     </div>
-                    </div>
-                    <div id="oscillator-fields" class="hidden">
-                    <div class="section-title" style="font-size:0.78em;margin-top:0">Oscillator</div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Oscillator</label>
-                            <select name="osc_name" id="osc_name" onchange="onOscChange()">
-                                <option value="rsi" {{ 'selected' if p.osc_name=='rsi' }}>RSI (Relative Strength Index)</option>
-                                <option value="macd" {{ 'selected' if p.osc_name=='macd' }}>MACD (Moving Avg Convergence Divergence)</option>
-                                <option value="stochastic" {{ 'selected' if p.osc_name=='stochastic' }}>Stochastic Oscillator (%K/%D)</option>
-                                <option value="cci" {{ 'selected' if p.osc_name=='cci' }}>CCI (Commodity Channel Index)</option>
-                                <option value="roc" {{ 'selected' if p.osc_name=='roc' }}>ROC (Rate of Change)</option>
-                                <option value="momentum" {{ 'selected' if p.osc_name=='momentum' }}>Momentum</option>
-                                <option value="williams_r" {{ 'selected' if p.osc_name=='williams_r' }}>Williams %R</option>
-                            </select>
-                        </div>
+                    <div class="form-row" id="osc-params-row" class="hidden">
                         <div class="form-group" id="osc-period-group">
                             <label>Period</label>
                             <input type="number" name="osc_period" id="osc_period" value="{{ p.osc_period or '' }}" placeholder="14" min="2">
                         </div>
-                        <div class="sep"></div>
                         <div class="form-group" id="buy-threshold-group">
                             <label>Buy Threshold</label>
                             <input type="number" name="buy_threshold" id="buy_threshold" value="{{ p.buy_threshold }}" step="any">
@@ -902,8 +888,7 @@ HTML = """\
                             <input type="number" name="sell_threshold" id="sell_threshold" value="{{ p.sell_threshold }}" step="any">
                         </div>
                     </div>
-                    <div id="osc-description" style="margin-top:6px;font-size:0.78em;color:var(--text-muted);line-height:1.5;padding:8px 12px;background:var(--bg-deep);border-radius:8px;border-left:2px solid var(--accent)"></div>
-                    </div>
+                    <div id="osc-description" class="hidden" style="margin-top:6px;font-size:0.78em;color:var(--text-muted);line-height:1.5;padding:8px 12px;background:var(--bg-deep);border-radius:8px;border-left:2px solid var(--accent)"></div>
                     <div class="signal-explainer" id="signal-explainer">
                         <span id="explainer-text">Buy when <span id="explainer-ind1">Price</span> crosses above <span id="explainer-ind2">SMA</span>. Sell when it crosses below.</span>
                     </div>
@@ -1150,22 +1135,38 @@ var oscDefaults = {
     momentum:   { period: 10, buy: 0, sell: 0, desc: 'Price Momentum \u2014 buy when positive, sell when negative' },
     williams_r: { period: 14, buy: -80, sell: -20, desc: 'Williams %R \u2014 buy when exits oversold (>\u221280), sell when overbought (<\u221220)' }
 };
-function onOscChange() {
-    var osc = document.getElementById('osc_name').value;
-    var d = oscDefaults[osc];
-    if (d) {
-        document.getElementById('osc_period').placeholder = d.period;
-        document.getElementById('buy_threshold').value = d.buy;
-        document.getElementById('sell_threshold').value = d.sell;
-        document.getElementById('osc-description').textContent = d.desc;
+function _isOscValue(val) { return val && val.indexOf('osc_') === 0; }
+function _oscKey(val) { return val.substring(4); }
+function _syncOscHidden() {
+    // Auto-detect signal type from ind2 dropdown and sync hidden fields
+    var ind2Val = document.getElementById('ind2_name').value;
+    var isOsc = _isOscValue(ind2Val);
+    document.getElementById('signal_type').value = isOsc ? 'oscillator' : 'crossover';
+    if (isOsc) {
+        var oscName = _oscKey(ind2Val);
+        document.getElementById('osc_name').value = oscName;
+        var d = oscDefaults[oscName];
+        if (d) {
+            var oscPeriodEl = document.getElementById('osc_period');
+            var buyEl = document.getElementById('buy_threshold');
+            var sellEl = document.getElementById('sell_threshold');
+            // Only set defaults if values are empty or we just switched to this oscillator
+            if (!oscPeriodEl.value) oscPeriodEl.placeholder = d.period;
+            if (buyEl.dataset.lastOsc !== oscName) {
+                buyEl.value = d.buy;
+                sellEl.value = d.sell;
+                oscPeriodEl.value = '';
+                oscPeriodEl.placeholder = d.period;
+            }
+            buyEl.dataset.lastOsc = oscName;
+            document.getElementById('osc-description').textContent = d.desc;
+        }
     }
-    updateExplainer();
-    enableBtn();
+    return isOsc;
 }
 function toggleFields() {
     var mode = document.getElementById('mode').value;
-    var sigType = document.getElementById('signal_type').value;
-    var isOsc = sigType === 'oscillator';
+    var isOsc = _syncOscHidden();
     var ind1El = document.getElementById('ind1_name');
     var ind1 = ind1El.value;
     // Auto-promote ind1 from price to SMA in heatmap mode
@@ -1173,28 +1174,29 @@ function toggleFields() {
         ind1El.value = 'sma';
         ind1 = 'sma';
     }
-    // Show/hide crossover vs oscillator field groups
-    var crossoverDiv = document.getElementById('crossover-fields');
-    var oscDiv = document.getElementById('oscillator-fields');
+
+    var isLevSweep = mode === 'sweep-lev';
+
+    // Show/hide oscillator param row and description
+    var oscParamsRow = document.getElementById('osc-params-row');
+    var oscDesc = document.getElementById('osc-description');
     if (isOsc) {
-        crossoverDiv.classList.add('hidden');
-        oscDiv.classList.remove('hidden');
-        // Disable crossover inputs, enable oscillator inputs
-        var cInputs = crossoverDiv.querySelectorAll('input,select');
-        for (var ci = 0; ci < cInputs.length; ci++) cInputs[ci].disabled = true;
-        var oInputs = oscDiv.querySelectorAll('input,select');
+        oscParamsRow.classList.remove('hidden');
+        oscDesc.classList.remove('hidden');
+        var oInputs = oscParamsRow.querySelectorAll('input');
         for (var oi = 0; oi < oInputs.length; oi++) oInputs[oi].disabled = false;
     } else {
-        crossoverDiv.classList.remove('hidden');
-        oscDiv.classList.add('hidden');
-        var oInputs2 = oscDiv.querySelectorAll('input,select');
+        oscParamsRow.classList.add('hidden');
+        oscDesc.classList.add('hidden');
+        var oInputs2 = oscParamsRow.querySelectorAll('input');
         for (var oi2 = 0; oi2 < oInputs2.length; oi2++) oInputs2[oi2].disabled = true;
     }
 
-    var isLevSweep = mode === 'sweep-lev';
     var rules = [
+        ['ind1-group', !isOsc],
         ['period1-group', !isOsc && ind1 !== 'price' && mode !== 'heatmap'],
-        ['period2-group', !isOsc && (mode === 'backtest' || mode === 'sweep-lev') && document.getElementById('ind2_name').value !== 'price'],
+        ['ind-sep', !isOsc],
+        ['period2-group', !isOsc && (mode === 'backtest' || mode === 'sweep-lev')],
         ['range-min-group', !isOsc && (mode === 'sweep' || mode === 'heatmap')],
         ['range-max-group', !isOsc && (mode === 'sweep' || mode === 'heatmap')],
         ['step-group', !isOsc && mode === 'heatmap'],
@@ -1208,26 +1210,21 @@ function toggleFields() {
     ];
     for (var i = 0; i < rules.length; i++) {
         var el = document.getElementById(rules[i][0]);
+        if (!el) continue;
         var show = rules[i][1];
         if (show) { el.classList.remove('hidden'); } else { el.classList.add('hidden'); }
         var inputs = el.querySelectorAll('input,select');
         for (var j = 0; j < inputs.length; j++) inputs[j].disabled = !show;
     }
-    // Update oscillator description on load
-    if (isOsc) {
-        var osc = document.getElementById('osc_name').value;
-        var d = oscDefaults[osc];
-        if (d) document.getElementById('osc-description').textContent = d.desc;
-    }
     updateExplainer();
 }
 function updateExplainer() {
-    var sigType = document.getElementById('signal_type').value;
     var rev = document.getElementById('reverse').checked;
     var el = document.getElementById('explainer-text');
+    var ind2Val = document.getElementById('ind2_name').value;
 
-    if (sigType === 'oscillator') {
-        var osc = document.getElementById('osc_name').value;
+    if (_isOscValue(ind2Val)) {
+        var osc = _oscKey(ind2Val);
         var buyThr = document.getElementById('buy_threshold').value;
         var sellThr = document.getElementById('sell_threshold').value;
         var oscPer = document.getElementById('osc_period').value || document.getElementById('osc_period').placeholder;
@@ -1249,13 +1246,10 @@ function updateExplainer() {
     }
 
     var ind1 = document.getElementById('ind1_name');
-    var ind2 = document.getElementById('ind2_name');
     var p1 = document.querySelector('#period1-group input');
     var p2 = document.querySelector('#period2-group input');
     var label1 = ind1.value === 'price' ? 'Price' : ind1.value.toUpperCase() + (p1.value ? '(' + p1.value + ')' : '');
-    var label2 = ind2.value.toUpperCase() + (p2.value ? '(' + p2.value + ')' : '');
-    document.getElementById('explainer-ind1').textContent = label1;
-    document.getElementById('explainer-ind2').textContent = label2;
+    var label2 = ind2Val.toUpperCase() + (p2.value ? '(' + p2.value + ')' : '');
     if (rev) {
         el.innerHTML = '<b>Sell</b> when <span id="explainer-ind1">' + label1 + '</span> crosses above <span id="explainer-ind2">' + label2 + '</span>. <b>Buy</b> when it crosses below.';
     } else {
@@ -1264,7 +1258,7 @@ function updateExplainer() {
 }
 document.querySelector('#period1-group input').addEventListener('input', updateExplainer);
 document.querySelector('#period2-group input').addEventListener('input', updateExplainer);
-document.getElementById('ind2_name').addEventListener('change', function() { updateExplainer(); toggleFields(); });
+document.getElementById('ind2_name').addEventListener('change', function() { toggleFields(); enableBtn(); });
 document.getElementById('buy_threshold').addEventListener('input', function() { updateExplainer(); enableBtn(); });
 document.getElementById('sell_threshold').addEventListener('input', function() { updateExplainer(); enableBtn(); });
 document.getElementById('osc_period').addEventListener('input', function() { updateExplainer(); enableBtn(); });
