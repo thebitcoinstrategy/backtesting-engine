@@ -12,8 +12,21 @@ from io import BytesIO
 from datetime import timedelta
 from flask import Flask, render_template_string, request, session, redirect
 import backtest as bt
+import threading
+import uuid
 
 app = Flask(__name__)
+
+# --- Request cancellation infrastructure ---
+_cancel_flags = {}   # request_id -> threading.Event
+_cancel_lock = threading.Lock()
+
+class ClientDisconnected(Exception):
+    pass
+
+def check_cancelled(event):
+    if event.is_set():
+        raise ClientDisconnected()
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
 ANALYTICS_SECRET = os.environ.get('ANALYTICS_SHARED_SECRET', '')
 LARAVEL_LOGIN_URL = 'https://the-bitcoin-strategy.com/app/analytics-redirect'
@@ -1341,11 +1354,13 @@ function validateForm() {
 
 // AJAX form submission — only replace the results panel
 var currentAbort = null;
+var currentRequestId = null;
 
 function resetBtn(done) {
     var btn = document.getElementById('btn');
     btn.classList.remove('btn-stop');
     currentAbort = null;
+    currentRequestId = null;
     if (done) {
         btn.disabled = true;
         btn.textContent = '\u2713  Results Ready';
@@ -1369,6 +1384,9 @@ document.getElementById('btn').addEventListener('click', function(e) {
     if (currentAbort) {
         e.preventDefault();
         currentAbort.abort();
+        if (currentRequestId) {
+            fetch('/cancel', { method: 'POST', body: new URLSearchParams({ id: currentRequestId }) });
+        }
         return;
     }
 });
@@ -1390,12 +1408,14 @@ document.getElementById('form').addEventListener('submit', function(e) {
     }
 
     currentAbort = new AbortController();
+    currentRequestId = crypto.randomUUID();
     btn.textContent = 'Stop';
     btn.classList.add('btn-stop');
     panel.style.opacity = '0.5';
     panel.style.transition = 'opacity 0.2s ease';
 
     var formData = new FormData(this);
+    formData.append('_request_id', currentRequestId);
 
     fetch('/', { method: 'POST', body: formData, signal: currentAbort.signal })
         .then(function(resp) {
@@ -1645,6 +1665,15 @@ def _build_strategy_label(p):
     return f"{p.ind1_name.upper()}/{p.ind2_name.upper()}"
 
 
+@app.route('/cancel', methods=['POST'])
+def cancel():
+    rid = request.form.get('id', '')
+    with _cancel_lock:
+        if rid in _cancel_flags:
+            _cancel_flags[rid].set()
+    return '', 204
+
+
 @app.route("/", methods=["GET", "POST"])
 @require_auth
 def index():
@@ -1663,6 +1692,27 @@ def index():
         return render_template_string(HTML, p=p, chart=None, best=None, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       price_json=None, ind1_json='[]', ind2_json='[]', ind1_label='', ind2_label='')
+
+    rid = request.form.get('_request_id', str(uuid.uuid4()))
+    cancel_event = threading.Event()
+    with _cancel_lock:
+        _cancel_flags[rid] = cancel_event
+
+    try:
+        return _run_post_handler(cancel_event)
+    except ClientDisconnected:
+        return '', 204
+    finally:
+        with _cancel_lock:
+            _cancel_flags.pop(rid, None)
+
+
+def _run_post_handler(cancel_event):
+    chart_b64 = None
+    best = None
+    table_rows = None
+    col_header = "Strategy"
+    long_short_breakdown = None
 
     p = Params(request.form)
     import pandas as pd_mod
@@ -1732,8 +1782,14 @@ def index():
             total_ret = (equity_final / p.initial_cash - 1) * 100
             return bt._annualized_return(total_ret, n_days)
 
-        long_sweep_full = [_sweep_ann(lv, 0) for lv in lev_values]
-        short_sweep_full = [_sweep_ann(0, lv) for lv in lev_values]
+        long_sweep_full = []
+        for lv in lev_values:
+            check_cancelled(cancel_event)
+            long_sweep_full.append(_sweep_ann(lv, 0))
+        short_sweep_full = []
+        for lv in lev_values:
+            check_cancelled(cancel_event)
+            short_sweep_full.append(_sweep_ann(0, lv))
 
         def _trim_flatline(values, levs):
             if len(values) < 3:
@@ -1866,6 +1922,7 @@ def index():
         best_ann = -np.inf
         best_p1 = best_p2 = None
         for i, p1 in enumerate(periods):
+            check_cancelled(cancel_event)
             for j, p2 in enumerate(periods):
                 if same_type and p1 >= p2:
                     continue
@@ -1966,6 +2023,7 @@ def index():
         annualized_returns = []
 
         for period in periods:
+            check_cancelled(cancel_event)
             result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, period,
                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
             ann = bt._annualized_return(result["total_return"], n_days)
