@@ -1116,13 +1116,12 @@ def generate_regression_sweep_chart(sweep_result):
     _apply_dark_theme(fig, ax)
 
     ax.plot(days, r_sq, color="#6495ED", linewidth=1.5, label="R²")
-    ax.plot(days, spearman, color="#f7931a", linewidth=1.5, alpha=0.7, label="|Spearman ρ|")
     ax.scatter([sweep_result["best_days"]], [sweep_result["best_r_squared"]],
-               color="#6495ED", s=60, zorder=5,
+               color="#f7931a", s=60, zorder=5,
                label=f"Best R²: {sweep_result['best_days']}d ({sweep_result['best_r_squared']:.4f})")
 
     ax.set_xlabel("Forward Days")
-    ax.set_ylabel("Correlation Strength")
+    ax.set_ylabel("R²")
     ax.set_title(f"{sweep_result['osc_label']} — Predictive Power by Forward Horizon")
     ax.legend(loc="best", fontsize=9, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
     ax.grid(True, alpha=0.3, color="#252a3a")
