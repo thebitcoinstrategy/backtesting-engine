@@ -2088,11 +2088,16 @@ def index():
             ax2.plot(best["equity"].index, best["equity"], label="Strategy Equity", color="#6495ED", linewidth=1)
             if show_ratio:
                 ax2.plot(best["buyhold"].index, best["buyhold"], label="Buy & Hold", color="#8890a4", linewidth=1, alpha=0.7)
-            ax2.set_yscale("log")
-            ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
-            ax2.yaxis.set_minor_formatter(_minor_usd_formatter())
-            ax2.tick_params(axis='y', which='minor', labelsize=6)
-            ax2.set_ylabel("Portfolio Value (log)")
+            if p.sizing == "fixed":
+                ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if abs(x) < 1 else f"${x:,.0f}"))
+                ax2.axhline(y=p.initial_cash, color="#8890a4", linestyle="--", linewidth=0.8, alpha=0.5)
+                ax2.set_ylabel("Portfolio Value (linear, fixed sizing)")
+            else:
+                ax2.set_yscale("log")
+                ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
+                ax2.yaxis.set_minor_formatter(_minor_usd_formatter())
+                ax2.tick_params(axis='y', which='minor', labelsize=6)
+                ax2.set_ylabel("Portfolio Value (log)")
             ax2.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
             ax2.grid(True, which="major", alpha=0.3, color="#252a3a")
             ax2.grid(True, which="minor", alpha=0.15, color="#252a3a")
@@ -2103,10 +2108,11 @@ def index():
                 ratio_normalized = ratio / ratio.dropna().iloc[0] * 100
                 ax3.plot(ratio_normalized.index, ratio_normalized, color="#a78bfa", linewidth=1, label=f"Strategy in {asset_name}")
                 ax3.axhline(y=100, color="#8890a4", linestyle="--", linewidth=0.8, alpha=0.7)
-                ax3.set_yscale("log")
-                ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.2f}" if x < 1 else f"{x:,.0f}"))
-                ax3.yaxis.set_minor_formatter(_minor_usd_formatter(dollar=False))
-                ax3.tick_params(axis='y', which='minor', labelsize=6)
+                if p.sizing != "fixed":
+                    ax3.set_yscale("log")
+                    ax3.yaxis.set_minor_formatter(_minor_usd_formatter(dollar=False))
+                    ax3.tick_params(axis='y', which='minor', labelsize=6)
+                ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.2f}" if abs(x) < 1 else f"{x:,.0f}"))
                 ax3.set_ylabel(f"Value in {asset_name}")
                 ax3.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
                 ax3.grid(True, which="major", alpha=0.3, color="#252a3a")
