@@ -1058,6 +1058,84 @@ def run_regression_analysis(df, osc_name, osc_period, forward_days=365,
     }
 
 
+def sweep_regression_r_squared(df, osc_name, osc_period, buy_threshold=None, sell_threshold=None,
+                               sweep_min=1, sweep_max=361, sweep_step=10):
+    """Sweep forward_days and return R² for each. Returns dict with days list and r_squared list."""
+    from scipy import stats
+
+    osc_data = compute_oscillator(df, osc_name, osc_period)
+    spec = osc_data["spec"]
+    primary = osc_data["primary"]
+
+    if buy_threshold is None:
+        buy_threshold = spec["buy_threshold"]
+    if sell_threshold is None:
+        sell_threshold = spec["sell_threshold"]
+
+    days_list = list(range(sweep_min, sweep_max + 1, sweep_step))
+    r_squared_list = []
+    spearman_list = []
+
+    for fwd in days_list:
+        forward_return = (df["close"].shift(-fwd) / df["close"] - 1) * 100
+        combined = pd.DataFrame({"osc": primary, "fwd": forward_return}).dropna()
+        if len(combined) >= 3:
+            _, _, r_value, _, _ = stats.linregress(combined["osc"].values, combined["fwd"].values)
+            sp_r, _ = stats.spearmanr(combined["osc"].values, combined["fwd"].values)
+            r_squared_list.append(r_value ** 2)
+            spearman_list.append(abs(sp_r))
+        else:
+            r_squared_list.append(0)
+            spearman_list.append(0)
+
+    best_idx = int(np.argmax(r_squared_list))
+
+    return {
+        "days": days_list,
+        "r_squared": r_squared_list,
+        "spearman": spearman_list,
+        "best_days": days_list[best_idx],
+        "best_r_squared": r_squared_list[best_idx],
+        "osc_label": osc_data["label"],
+    }
+
+
+def generate_regression_sweep_chart(sweep_result):
+    """Generate line chart of R² vs forward days. Returns base64 PNG."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from io import BytesIO
+    import base64
+
+    days = sweep_result["days"]
+    r_sq = sweep_result["r_squared"]
+    spearman = sweep_result["spearman"]
+
+    fig, ax = plt.subplots(figsize=(14, 5), dpi=150)
+    _apply_dark_theme(fig, ax)
+
+    ax.plot(days, r_sq, color="#6495ED", linewidth=1.5, label="R²")
+    ax.plot(days, spearman, color="#f7931a", linewidth=1.5, alpha=0.7, label="|Spearman ρ|")
+    ax.scatter([sweep_result["best_days"]], [sweep_result["best_r_squared"]],
+               color="#6495ED", s=60, zorder=5,
+               label=f"Best R²: {sweep_result['best_days']}d ({sweep_result['best_r_squared']:.4f})")
+
+    ax.set_xlabel("Forward Days")
+    ax.set_ylabel("Correlation Strength")
+    ax.set_title(f"{sweep_result['osc_label']} — Predictive Power by Forward Horizon")
+    ax.legend(loc="best", fontsize=9, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
+    ax.grid(True, alpha=0.3, color="#252a3a")
+    ax.set_xlim(days[0], days[-1])
+    plt.tight_layout()
+
+    buf = BytesIO()
+    plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
+    plt.close()
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
+
+
 def generate_regression_chart(result):
     """Generate scatter plot of oscillator values vs forward returns. Returns base64 PNG."""
     import matplotlib

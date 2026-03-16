@@ -1050,6 +1050,11 @@ HTML = """\
                     </div>
                 </div>
                 </div>
+                {% if regression_sweep_chart|default(none) %}
+                <div style="position:relative;margin-top:16px">
+                    <img class="chart-img" src="data:image/png;base64,{{ regression_sweep_chart }}" />
+                </div>
+                {% endif %}
                 {% elif best %}
                 {% if lev_sweep|default(none) %}
                 {# Leverage sweep mode — keep compact table #}
@@ -1962,9 +1967,13 @@ def _run_post_handler(cancel_event):
                                                  p.buy_threshold, p.sell_threshold)
         chart_b64 = bt.generate_regression_chart(reg_result)
 
+        sweep_result = bt.sweep_regression_r_squared(df, p.osc_name, p.osc_period,
+                                                      p.buy_threshold, p.sell_threshold)
+        sweep_chart_b64 = bt.generate_regression_sweep_chart(sweep_result)
+
         return render_template_string(HTML, p=p, chart=chart_b64, best=None, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
-                                      regression=reg_result,
+                                      regression=reg_result, regression_sweep_chart=sweep_chart_b64, regression_sweep=sweep_result,
                                       price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
     # --- Leverage Sweep Mode ---
