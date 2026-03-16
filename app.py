@@ -1939,15 +1939,17 @@ def _run_post_handler(cancel_event):
     p = Params(request.form)
     is_oscillator = p.signal_type == "oscillator"
     import pandas as pd_mod
-    df = ASSETS.get(p.asset, ASSETS[DEFAULT_ASSET]).copy()
-    if p.start_date:
-        df = df[df.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
+    df_full = ASSETS.get(p.asset, ASSETS[DEFAULT_ASSET]).copy()
     if p.end_date:
-        df = df[df.index <= pd_mod.Timestamp(p.end_date, tz="UTC")]
+        df_full = df_full[df_full.index <= pd_mod.Timestamp(p.end_date, tz="UTC")]
     if not p.start_date:
-        p.start_date = str(df.index[0].date())
+        p.start_date = str(df_full.index[0].date())
     if not p.end_date:
-        p.end_date = str(df.index[-1].date())
+        p.end_date = str(df_full.index[-1].date())
+    warmup_start_date = p.start_date
+    # df_full = full data for indicator warmup (passed to strategy functions)
+    # df = trimmed to start_date for display (charts, n_days, buy-and-hold)
+    df = df_full[df_full.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
 
     fee = p.fee / 100
 
@@ -1987,15 +1989,20 @@ def _run_post_handler(cancel_event):
         lev_values = [round(p.lev_min + i * p.lev_step, 4)
                       for i in range(int((p.lev_max - p.lev_min) / p.lev_step) + 1)]
 
-        # Compute base position from ind1/ind2
-        ind1_series, _ = bt.compute_indicator_from_spec(df, p.ind1_name, p.ind1_period)
+        # Compute base position from ind1/ind2 (on full data for warmup)
+        ind1_series, _ = bt.compute_indicator_from_spec(df_full, p.ind1_name, p.ind1_period)
         ind2_period_val = p.ind2_period if p.ind2_period else 44
-        ind2_series, _ = bt.compute_indicator_from_spec(df, p.ind2_name, ind2_period_val)
+        ind2_series, _ = bt.compute_indicator_from_spec(df_full, p.ind2_name, ind2_period_val)
         above = ind1_series > ind2_series
         if p.reverse:
             above = ~above
         position_base = bt._apply_exposure(above, p.exposure).shift(1).fillna(0)
-        daily_return = df["close"].pct_change().fillna(0)
+        daily_return = df_full["close"].pct_change().fillna(0)
+        # Trim to start_date after indicator warmup
+        _ws_ts = pd_mod.Timestamp(warmup_start_date, tz="UTC")
+        _ws_mask = df_full.index >= _ws_ts
+        position_base = position_base[_ws_mask]
+        daily_return = daily_return[_ws_mask]
 
         if p.ind1_name == "price":
             title_label = f"Price/{p.ind2_name.upper()}({ind2_period_val})"
@@ -2100,8 +2107,8 @@ def _run_post_handler(cancel_event):
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode()
 
-        best_result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, ind2_period_val,
-                                       p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.reverse, p.sizing)
+        best_result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, ind2_period_val,
+                                       p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
         best = _enrich_best(best_result, df)
 
         combined_ann = _sweep_ann(best_long_lev, best_short_lev)
@@ -2154,21 +2161,26 @@ def _run_post_handler(cancel_event):
         ind1_upper = ind1_name.upper()
         ind2_upper = ind2_name.upper()
 
-        # Precompute indicators
+        # Precompute indicators on full data (warmup), then trim
         ind1_cache = {}
         ind2_cache = {}
         for per in periods:
-            ind1_cache[per], _ = bt.compute_indicator_from_spec(df, ind1_name, per)
+            ind1_cache[per], _ = bt.compute_indicator_from_spec(df_full, ind1_name, per)
             if same_type:
                 ind2_cache[per] = ind1_cache[per]
             else:
-                ind2_cache[per], _ = bt.compute_indicator_from_spec(df, ind2_name, per)
+                ind2_cache[per], _ = bt.compute_indicator_from_spec(df_full, ind2_name, per)
 
-        daily_return = df["close"].pct_change().fillna(0)
+        daily_return_full = df_full["close"].pct_change().fillna(0)
 
         matrix = np.full((n, n), np.nan)
         best_ann = -np.inf
         best_p1 = best_p2 = None
+        # Trim mask for start_date (on df_full index)
+        _hm_ts = pd_mod.Timestamp(warmup_start_date, tz="UTC")
+        _hm_mask = df_full.index >= _hm_ts
+        daily_return_trimmed = daily_return_full[_hm_mask]
+        n_days = int(_hm_mask.sum())
         for i, p1 in enumerate(periods):
             check_cancelled(cancel_event)
             for j, p2 in enumerate(periods):
@@ -2178,16 +2190,18 @@ def _run_post_handler(cancel_event):
                 if p.reverse:
                     above = ~above
                 position = bt._apply_exposure(above, p.exposure).shift(1).fillna(0)
+                # Trim to start_date after position is computed with warmup
+                position = position[_hm_mask]
                 leverage = np.where(position > 0, p.long_leverage,
                            np.where(position < 0, p.short_leverage, 1))
                 if p.sizing == "fixed":
-                    daily_pnl = p.initial_cash * position * daily_return * leverage
+                    daily_pnl = p.initial_cash * position * daily_return_trimmed * leverage
                     trade_mask = position.diff().fillna(0).abs() > 0
                     daily_pnl = daily_pnl.copy()
                     daily_pnl[trade_mask] -= p.initial_cash * fee
                     equity_arr = p.initial_cash + daily_pnl.cumsum().values
                 else:
-                    strat_return = position * daily_return * leverage
+                    strat_return = position * daily_return_trimmed * leverage
                     trade_mask = position.diff().fillna(0).abs() > 0
                     strat_return = strat_return.copy()
                     strat_return[trade_mask] -= fee
@@ -2201,6 +2215,7 @@ def _run_post_handler(cancel_event):
                     best_p1 = p1
                     best_p2 = p2
 
+        # df is already trimmed to start_date; use it for buy-and-hold and chart display
         bh_total = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
         bh_ann = bt._annualized_return(bh_total, n_days)
 
@@ -2246,8 +2261,8 @@ def _run_post_handler(cancel_event):
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode()
 
-        best_result = bt.run_strategy(df, ind1_name, best_p1, ind2_name, best_p2,
-                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
+        best_result = bt.run_strategy(df_full, ind1_name, best_p1, ind2_name, best_p2,
+                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
         best = _enrich_best(best_result, df)
 
         price_json = _series_to_lw_json(df["close"])
@@ -2272,8 +2287,8 @@ def _run_post_handler(cancel_event):
 
         for period in periods:
             check_cancelled(cancel_event)
-            result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, period,
-                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
+            result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, period,
+                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
             ann = bt._annualized_return(result["total_return"], n_days)
             annualized_returns.append(ann)
 
@@ -2313,8 +2328,8 @@ def _run_post_handler(cancel_event):
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode()
 
-        best_result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, best_period,
-                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
+        best_result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, best_period,
+                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
         best = _enrich_best(best_result, df)
 
     # --- Backtest Mode ---
@@ -2322,20 +2337,20 @@ def _run_post_handler(cancel_event):
 
         if is_oscillator:
             # Oscillator strategy
-            result = bt.run_oscillator_strategy(df, p.osc_name, p.osc_period, p.buy_threshold, p.sell_threshold,
-                                                 p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
+            result = bt.run_oscillator_strategy(df_full, p.osc_name, p.osc_period, p.buy_threshold, p.sell_threshold,
+                                                 p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
             results = [result]
         elif p.ind2_period is not None:
             # Single run with fixed period
-            result = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
+            result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
+                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
             results = [result]
         else:
             # Sweep ind2 period and show table
-            results = bt.sweep_periods(df, p.ind1_name, p.ind1_period, p.ind2_name, None,
+            results = bt.sweep_periods(df_full, p.ind1_name, p.ind1_period, p.ind2_name, None,
                                         "ind2", p.range_min, p.range_max,
                                         p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode,
-                                        sizing=p.sizing)
+                                        sizing=p.sizing, start_date=warmup_start_date)
             # For same-type crossover, filter invalid combos
             if p.ind1_name != "price" and p.ind1_name == p.ind2_name and p.ind1_period is not None:
                 results = [r for r in results if r["ind2_period"] > p.ind1_period]
@@ -2349,10 +2364,10 @@ def _run_post_handler(cancel_event):
             # Compute long/short breakdown for long-short exposure
             long_short_breakdown = None
             if not is_oscillator and p.exposure == "long-short" and p.ind2_period is not None:
-                long_only = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                             p.initial_cash, fee, "long-cash", p.long_leverage, 1, p.lev_mode, p.reverse, p.sizing)
-                short_only = bt.run_strategy(df, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                              p.initial_cash, fee, "short-cash", 1, p.short_leverage, p.lev_mode, p.reverse, p.sizing)
+                long_only = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
+                                             p.initial_cash, fee, "long-cash", p.long_leverage, 1, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
+                short_only = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
+                                              p.initial_cash, fee, "short-cash", 1, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
                 long_only = _enrich_best(long_only, df)
                 short_only = _enrich_best(short_only, df)
                 long_short_breakdown = {"long": long_only, "short": short_only}

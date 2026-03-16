@@ -417,9 +417,11 @@ def _oscillator_signal(osc_data, buy_threshold, sell_threshold):
 def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_threshold,
                             initial_cash, fee=0.001, exposure="long-cash",
                             long_leverage=1, short_leverage=1, lev_mode="rebalance",
-                            reverse=False, sizing="compound"):
+                            reverse=False, sizing="compound", start_date=None):
     """Run strategy based on oscillator threshold signals.
-    Returns dict compatible with run_strategy output."""
+    Returns dict compatible with run_strategy output.
+    If start_date is given, indicators are computed on the full df for warmup,
+    then data is trimmed to start_date before equity computation."""
     df = df.copy()
 
     osc_data = compute_oscillator(df, osc_name, osc_period)
@@ -430,6 +432,16 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
     df["position"] = _apply_exposure(above, exposure).shift(1).fillna(0)
 
     daily_return = df["close"].pct_change().fillna(0)
+
+    # Trim to start_date AFTER indicators/positions are computed (preserves warmup)
+    if start_date is not None:
+        ts = pd.Timestamp(start_date)
+        if df.index.tz is not None:
+            ts = ts.tz_localize(df.index.tz)
+        mask = df.index >= ts
+        df = df[mask]
+        daily_return = daily_return[mask]
+        osc_data = {k: (v[mask] if hasattr(v, 'loc') else v) for k, v in osc_data.items()}
 
     if sizing == "fixed":
         leverage = np.where(df["position"] > 0, long_leverage,
@@ -754,9 +766,11 @@ def _trade_stats(equity_series, position_series):
 def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
                  initial_cash, fee=0.001, exposure="long-cash",
                  long_leverage=1, short_leverage=1, lev_mode="rebalance",
-                 reverse=False, sizing="compound"):
+                 reverse=False, sizing="compound", start_date=None):
     """Unified strategy: go long when ind1 > ind2, apply exposure mode.
-    Returns dict with ind1/ind2 series, labels, and all metrics."""
+    Returns dict with ind1/ind2 series, labels, and all metrics.
+    If start_date is given, indicators are computed on the full df for warmup,
+    then data is trimmed to start_date before equity computation."""
     df = df.copy()
 
     ind1_series, ind1_label = compute_indicator_from_spec(df, ind1_name, ind1_period)
@@ -768,6 +782,17 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
     df["position"] = _apply_exposure(above, exposure).shift(1).fillna(0)
 
     daily_return = df["close"].pct_change().fillna(0)
+
+    # Trim to start_date AFTER indicators/positions are computed (preserves warmup)
+    if start_date is not None:
+        ts = pd.Timestamp(start_date)
+        if df.index.tz is not None:
+            ts = ts.tz_localize(df.index.tz)
+        mask = df.index >= ts
+        df = df[mask]
+        daily_return = daily_return[mask]
+        ind1_series = ind1_series[mask]
+        ind2_series = ind2_series[mask]
 
     if sizing == "fixed":
         leverage = np.where(df["position"] > 0, long_leverage,
@@ -898,7 +923,7 @@ def sweep_periods(df, ind1_name, ind1_period, ind2_name, ind2_period,
                   sweep_target, sweep_min, sweep_max,
                   initial_cash, fee=0.001, exposure="long-cash",
                   long_leverage=1, short_leverage=1, lev_mode="rebalance",
-                  sizing="compound"):
+                  sizing="compound", start_date=None):
     """Sweep one indicator's period across a range. sweep_target: 'ind1' or 'ind2'."""
     results = []
     for period in range(sweep_min, sweep_max + 1):
@@ -906,7 +931,7 @@ def sweep_periods(df, ind1_name, ind1_period, ind2_name, ind2_period,
         p2 = period if sweep_target == "ind2" else ind2_period
         r = run_strategy(df, ind1_name, p1, ind2_name, p2,
                          initial_cash, fee, exposure, long_leverage, short_leverage, lev_mode,
-                         sizing=sizing)
+                         sizing=sizing, start_date=start_date)
         results.append(r)
     results.sort(key=lambda r: r["total_return"], reverse=True)
     return results
