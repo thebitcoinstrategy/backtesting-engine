@@ -3349,6 +3349,7 @@ COMMUNITY_HTML = """\
                 {% endif %}
                 <a class="backtest-card" href="/backtest/{{ bt.id }}">
                     <div class="backtest-card-head">
+                        {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% endif %}
                         <div class="backtest-card-head-text">
                             <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled Backtest' }}</div>
                         </div>
