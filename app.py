@@ -3091,12 +3091,17 @@ COMMUNITY_HTML = """\
         .backtest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
         .backtest-card { display: block; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: all 0.2s ease; cursor: pointer; text-decoration: none; color: inherit; }
         .backtest-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-        .backtest-card-title { font-size: 1em; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+        .backtest-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .backtest-card-asset-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); flex-shrink: 0; }
+        .backtest-card-asset-fallback { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8em; color: var(--text-muted); flex-shrink: 0; }
+        .backtest-card-head-text { flex: 1; min-width: 0; }
+        .backtest-card-title { font-size: 1em; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .backtest-card-asset-name { font-size: 0.75em; color: var(--text-muted); }
+        .backtest-card-mode-icon { color: var(--text-dim); flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--bg-deep); }
         .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .backtest-card-metrics { display: flex; gap: 14px; margin-bottom: 10px; flex-wrap: wrap; }
-        .backtest-card-metric { font-family: 'JetBrains Mono', monospace; font-size: 0.75em; }
-        .backtest-card-metric .label { color: var(--text-dim); font-size: 0.85em; }
-        .backtest-card-metric .value { color: var(--text); font-weight: 500; }
+        .backtest-card-params { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+        .backtest-card-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: var(--bg-deep); border: 1px solid var(--border); font-size: 0.7em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
+        .backtest-card-tag svg { width: 12px; height: 12px; opacity: 0.6; }
         .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
         .backtest-card-footer .engagement { display: flex; gap: 12px; }
         .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
@@ -3155,8 +3160,22 @@ COMMUNITY_HTML = """\
                 {% if bt.visibility == 'featured' %}<span class="backtest-card-badge badge-featured">Featured</span>{% endif %}
                 {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
                 {% if bt.visibility == 'private' %}<span class="backtest-card-badge badge-private">Private</span>{% endif %}
-                <div class="backtest-card-title">{{ bt.title or 'Untitled Backtest' }}</div>
+                <div class="backtest-card-head">
+                    {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
+                    <div class="backtest-card-head-text">
+                        <div class="backtest-card-title">{{ bt.title or 'Untitled Backtest' }}</div>
+                        <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
+                    </div>
+                    <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
+                </div>
                 {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:120] }}</div>{% endif %}
+                <div class="backtest-card-params">
+                    <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
+                    <span class="backtest-card-tag" title="Strategy">{{ bt._strategy }}</span>
+                    {% if bt._leverage %}<span class="backtest-card-tag" title="Leverage (Long/Short)">{{ bt._leverage }}</span>{% endif %}
+                    {% if bt._start_date %}<span class="backtest-card-tag" title="Start date">{{ bt._start_date }}</span>{% endif %}
+                    {% if bt._exposure != 'long-cash' %}<span class="backtest-card-tag" title="Exposure">{{ bt._exposure }}</span>{% endif %}
+                </div>
                 <div class="backtest-card-footer">
                     <span>{{ bt.user_email.split('@')[0] }} · {{ time_ago(bt.created_at) }}</span>
                     <div class="engagement">
@@ -3476,6 +3495,14 @@ MY_BACKTESTS_HTML = """\
         .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
         .backtest-card-footer .engagement { display: flex; gap: 12px; }
         .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
+        .backtest-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .backtest-card-asset-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); flex-shrink: 0; }
+        .backtest-card-asset-fallback { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8em; color: var(--text-muted); flex-shrink: 0; }
+        .backtest-card-head-text { flex: 1; min-width: 0; }
+        .backtest-card-asset-name { font-size: 0.75em; color: var(--text-muted); }
+        .backtest-card-mode-icon { color: var(--text-dim); flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--bg-deep); }
+        .backtest-card-params { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+        .backtest-card-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: var(--bg-deep); border: 1px solid var(--border); font-size: 0.7em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
         .backtest-card-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
         .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
         .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
@@ -3514,8 +3541,21 @@ MY_BACKTESTS_HTML = """\
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
                     {% if bt.visibility == 'featured' %}<span class="backtest-card-badge badge-featured">Featured</span>{% endif %}
                     {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
-                    <div class="backtest-card-title">{{ bt.title or 'Untitled' }}</div>
+                    <div class="backtest-card-head">
+                        {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
+                        <div class="backtest-card-head-text">
+                            <div class="backtest-card-title">{{ bt.title or 'Untitled' }}</div>
+                            <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
+                        </div>
+                        <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
+                    </div>
                     {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:120] }}</div>{% endif %}
+                    <div class="backtest-card-params">
+                        <span class="backtest-card-tag">{{ bt._mode_label }}</span>
+                        <span class="backtest-card-tag">{{ bt._strategy }}</span>
+                        {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
+                        {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
+                    </div>
                     <div class="backtest-card-footer">
                         <span>{{ time_ago(bt.created_at) }}</span>
                         <div class="engagement">
@@ -3540,7 +3580,20 @@ MY_BACKTESTS_HTML = """\
             <div class="backtest-card">
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
                     <span class="backtest-card-badge badge-private">Private</span>
-                    <div class="backtest-card-title">{{ bt.title or 'Saved Backtest' }}</div>
+                    <div class="backtest-card-head">
+                        {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
+                        <div class="backtest-card-head-text">
+                            <div class="backtest-card-title">{{ bt.title or 'Saved Backtest' }}</div>
+                            <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
+                        </div>
+                        <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
+                    </div>
+                    <div class="backtest-card-params">
+                        <span class="backtest-card-tag">{{ bt._mode_label }}</span>
+                        <span class="backtest-card-tag">{{ bt._strategy }}</span>
+                        {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
+                        {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
+                    </div>
                     <div class="backtest-card-footer">
                         <span>{{ time_ago(bt.created_at) }}</span>
                     </div>
@@ -3684,6 +3737,71 @@ def api_delete_comment(comment_id):
     return jsonify({'ok': True})
 
 
+MODE_SVGS = {
+    'backtest': '<svg width="18" height="18" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 20 10 12 16 16 24 6"/><line x1="4" y1="24" x2="24" y2="24" opacity="0.4"/><circle cx="24" cy="6" r="2" fill="currentColor" stroke="none"/></svg>',
+    'sweep': '<svg width="18" height="18" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="8" opacity="0.4"/><line x1="18" y1="20" x2="24" y2="26"/><path d="M9 14h6M12 11v6"/></svg>',
+    'heatmap': '<svg width="18" height="18" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="6" height="6" rx="1" fill="currentColor" opacity="0.6"/><rect x="11" y="3" width="6" height="6" rx="1" fill="currentColor" opacity="0.3"/><rect x="19" y="3" width="6" height="6" rx="1" fill="currentColor" opacity="0.15"/><rect x="3" y="11" width="6" height="6" rx="1" fill="currentColor" opacity="0.3"/><rect x="11" y="11" width="6" height="6" rx="1" fill="currentColor" opacity="0.8"/><rect x="19" y="11" width="6" height="6" rx="1" fill="currentColor" opacity="0.4"/><rect x="3" y="19" width="6" height="6" rx="1" fill="currentColor" opacity="0.15"/><rect x="11" y="19" width="6" height="6" rx="1" fill="currentColor" opacity="0.4"/><rect x="19" y="19" width="6" height="6" rx="1" fill="currentColor" opacity="0.6"/></svg>',
+    'sweep-lev': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
+    'regression': '<svg width="18" height="18" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="20" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/><circle cx="10" cy="16" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/><circle cx="16" cy="12" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/><circle cx="22" cy="8" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/><line x1="4" y1="23" x2="25" y2="5" opacity="0.6"/></svg>',
+}
+
+MODE_LABELS = {
+    'backtest': 'Backtest',
+    'sweep': 'Sweep',
+    'heatmap': 'Heatmap',
+    'sweep-lev': 'Leverage',
+    'regression': 'Regression',
+}
+
+
+def _enrich_backtest_cards(backtests):
+    """Parse params JSON and add display-ready fields to each backtest dict."""
+    for bt in backtests:
+        try:
+            p = json.loads(bt.get('params', '{}'))
+        except (json.JSONDecodeError, TypeError):
+            p = {}
+        # Asset
+        asset = p.get('asset', '')
+        bt['_asset'] = asset
+        bt['_asset_display'] = asset.capitalize() if asset else ''
+        bt['_asset_logo'] = ASSET_LOGOS.get(asset, '')
+        # Mode
+        mode = p.get('mode', 'backtest')
+        bt['_mode'] = mode
+        bt['_mode_label'] = MODE_LABELS.get(mode, mode.capitalize())
+        bt['_mode_svg'] = MODE_SVGS.get(mode, '')
+        # Indicators
+        ind1 = p.get('ind1_name', 'price')
+        ind2 = p.get('ind2_name', 'sma')
+        p1 = p.get('period1', '')
+        p2 = p.get('period2', '')
+        if ind1 == 'price':
+            bt['_strategy'] = f"Price / {ind2.upper()}({p2})" if p2 else f"Price / {ind2.upper()}"
+        else:
+            ind1_str = f"{ind1.upper()}({p1})" if p1 else ind1.upper()
+            ind2_str = f"{ind2.upper()}({p2})" if p2 else ind2.upper()
+            bt['_strategy'] = f"{ind1_str} / {ind2_str}"
+        # Leverage
+        ll = p.get('long_leverage', '1')
+        sl = p.get('short_leverage', '1')
+        try:
+            ll_f = float(ll)
+            sl_f = float(sl)
+        except (ValueError, TypeError):
+            ll_f = 1.0
+            sl_f = 1.0
+        if ll_f != 1.0 or sl_f != 1.0:
+            bt['_leverage'] = f"{ll_f:.2g}x / {sl_f:.2g}x"
+        else:
+            bt['_leverage'] = None
+        # Start date
+        bt['_start_date'] = p.get('start_date', '')
+        # Exposure
+        bt['_exposure'] = p.get('exposure', 'long-cash')
+    return backtests
+
+
 # --- Page Routes ---
 
 @app.route('/community')
@@ -3692,6 +3810,7 @@ def community():
     sort = request.args.get('sort', 'newest')
     page = int(request.args.get('page', 1))
     backtests, total = db.list_backtests(visibility=['community', 'featured'], sort=sort, page=page, per_page=20)
+    _enrich_backtest_cards(backtests)
     total_pages = max(1, (total + 19) // 20)
     return render_template_string(COMMUNITY_HTML,
         nav_active='community', page_title='Community Backtests',
@@ -3706,6 +3825,7 @@ def featured():
     sort = request.args.get('sort', 'newest')
     page = int(request.args.get('page', 1))
     backtests, total = db.list_backtests(visibility='featured', sort=sort, page=page, per_page=20)
+    _enrich_backtest_cards(backtests)
     total_pages = max(1, (total + 19) // 20)
     return render_template_string(COMMUNITY_HTML,
         nav_active='featured', page_title='Featured Backtests',
@@ -3722,6 +3842,8 @@ def my_backtests():
     all_bt = db.list_user_backtests(user_id)
     published = [b for b in all_bt if b['visibility'] in ('community', 'featured')]
     saved = [b for b in all_bt if b['visibility'] == 'private']
+    _enrich_backtest_cards(published)
+    _enrich_backtest_cards(saved)
     return render_template_string(MY_BACKTESTS_HTML,
         published=published, saved=saved, time_ago=_time_ago)
 
