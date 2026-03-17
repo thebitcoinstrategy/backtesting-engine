@@ -1411,6 +1411,7 @@ HTML = """\
                         </button>
                     </div>
                 </div>
+                <input type="hidden" id="equity-thumbnail" value="{{ thumb_b64|default('') }}">
                 {% if price_json %}
                 <div id="livechart-tab" style="display:none">
                     <div id="lw-chart-container"
@@ -2087,22 +2088,8 @@ window.addEventListener('popstate', function(e) {
 var _currentShortCode = null;
 
 function _getChartThumbnail() {
-    var img = document.getElementById('backtest-chart-img');
-    if (!img) return '';
-    try {
-        var equityTop = parseFloat(img.getAttribute('data-equity-top') || '0.7');
-        var equityBottom = parseFloat(img.getAttribute('data-equity-bottom') || '1.0');
-        var srcY = Math.round(img.naturalHeight * equityTop);
-        var srcH = Math.round(img.naturalHeight * equityBottom) - srcY;
-        var canvas = document.createElement('canvas');
-        var maxW = 400;
-        var ratio = srcH / img.naturalWidth;
-        canvas.width = maxW;
-        canvas.height = Math.round(maxW * ratio);
-        var ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, srcY, img.naturalWidth, srcH, 0, 0, canvas.width, canvas.height);
-        return canvas.toDataURL('image/jpeg', 0.6);
-    } catch(e) { return ''; }
+    var el = document.getElementById('equity-thumbnail');
+    return el ? el.value : '';
 }
 
 function saveBacktest() {
@@ -2537,6 +2524,7 @@ def index():
 
 def _run_post_handler(cancel_event):
     chart_b64 = None
+    thumb_b64 = ''
     best = None
     table_rows = None
     col_header = "Strategy"
@@ -3142,6 +3130,29 @@ def _run_post_handler(cancel_event):
             buf.seek(0)
             chart_b64 = base64.b64encode(buf.read()).decode()
 
+            # Generate small equity-only thumbnail
+            thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
+            bt._apply_dark_theme(thumb_fig, [thumb_ax])
+            thumb_ax.plot(best["equity"].index, best["equity"], color="#6495ED", linewidth=1.5)
+            if show_ratio:
+                thumb_ax.plot(best["buyhold"].index, best["buyhold"], color="#8890a4", linewidth=1, alpha=0.7)
+            if p.sizing == "fixed":
+                thumb_ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+            else:
+                thumb_ax.set_yscale("log")
+                thumb_ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+            thumb_ax.grid(True, which="major", alpha=0.3, color="#252a3a")
+            thumb_ax.tick_params(labelsize=7)
+            thumb_ax.set_xlabel("")
+            thumb_ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+            thumb_ax.xaxis.set_major_locator(mdates.YearLocator(year_step))
+            plt.tight_layout()
+            thumb_buf = BytesIO()
+            plt.savefig(thumb_buf, format="jpeg", facecolor=thumb_fig.get_facecolor(), quality=60)
+            plt.close()
+            thumb_buf.seek(0)
+            thumb_b64 = "data:image/jpeg;base64," + base64.b64encode(thumb_buf.read()).decode()
+
     price_json = _series_to_lw_json(df["close"]) if best else None
     if is_oscillator:
         ind1_json = "[]"
@@ -3154,6 +3165,7 @@ def _run_post_handler(cancel_event):
                                   hide_buyhold=(p.exposure == "short-cash"),
                                   ls_breakdown=long_short_breakdown,
                                   equity_top=equity_top if best else 0.7, equity_bottom=equity_bottom if best else 1.0,
+                                  thumb_b64=thumb_b64 if best else '',
                                   price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                   ind1_label=best.get("ind1_label", "") if best else "", ind2_label=best.get("ind2_label", "") if best else "")
 
