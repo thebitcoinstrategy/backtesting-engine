@@ -3211,6 +3211,10 @@ COMMUNITY_HTML = """\
         .sort-tab { padding: 6px 16px; border-radius: 8px; font-size: 0.8em; font-weight: 500; color: var(--text-muted); text-decoration: none; border: 1px solid transparent; transition: all 0.2s ease; }
         .sort-tab:hover { color: var(--text); background: var(--bg-elevated); }
         .sort-tab.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        .asset-section { margin-bottom: 28px; }
+        .asset-section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+        .asset-section-logo { width: 36px; height: 36px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); }
+        .asset-section-title { font-size: 1.15em; font-weight: 700; color: var(--text); }
         .backtest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
         .backtest-card-wrapper { position: relative; }
         .reorder-controls { position: absolute; top: 8px; right: 8px; z-index: 10; display: flex; flex-direction: column; gap: 2px; opacity: 0; transition: opacity 0.2s ease; }
@@ -3282,14 +3286,75 @@ COMMUNITY_HTML = """\
         <h2 class="page-title">{{ page_title }}</h2>
         <p class="page-subtitle">{{ page_subtitle }}</p>
 
-        {% if show_sort|default(true) %}
+        {% if show_sort|default(true) and not asset_sections|default(none) %}
         <div class="sort-tabs">
             <a href="?sort=newest&page=1" class="sort-tab {{ 'active' if sort=='newest' }}">Newest</a>
             <a href="?sort=popular&page=1" class="sort-tab {{ 'active' if sort=='popular' }}">Most Liked</a>
         </div>
         {% endif %}
 
-        {% if backtests %}
+        {% if asset_sections|default(none) %}
+        {# Grouped by asset view (featured page) #}
+        {% for section in asset_sections %}
+        <div class="asset-section">
+            <div class="asset-section-header">
+                {% if section.logo %}<img class="asset-section-logo" src="/static/logos/{{ section.logo }}" alt="{{ section.display }}">{% endif %}
+                <h3 class="asset-section-title">{{ section.display }}</h3>
+            </div>
+            <div class="backtest-grid" id="backtest-grid-{{ section.asset }}">
+                {% for bt in section.backtests %}
+                <div class="backtest-card-wrapper" data-id="{{ bt.id }}">
+                {% if is_admin|default(false) %}
+                <div class="reorder-controls">
+                    <button class="reorder-btn" onclick="event.preventDefault();moveCard('{{ bt.id }}', -1)" title="Move up">&#9650;</button>
+                    <button class="reorder-btn" onclick="event.preventDefault();moveCard('{{ bt.id }}', 1)" title="Move down">&#9660;</button>
+                </div>
+                {% endif %}
+                <a class="backtest-card" href="/backtest/{{ bt.id }}">
+                    <div class="backtest-card-head">
+                        <div class="backtest-card-head-text">
+                            <div class="backtest-card-title">{{ bt.title or 'Untitled Backtest' }}</div>
+                        </div>
+                        <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
+                    </div>
+                    {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
+                    {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:120] }}</div>{% endif %}
+                    <div class="backtest-card-params">
+                        <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
+                        <span class="backtest-card-tag" title="Strategy">{{ bt._strategy }}</span>
+                        {% if bt._leverage %}<span class="backtest-card-tag" title="Leverage (Long/Short)">{{ bt._leverage }}</span>{% endif %}
+                        {% if bt._start_date %}<span class="backtest-card-tag" title="Start date">{{ bt._start_date }}</span>{% endif %}
+                        {% if bt._exposure != 'long-cash' %}<span class="backtest-card-tag" title="Exposure">{{ bt._exposure }}</span>{% endif %}
+                    </div>
+                    {% if bt._apr %}
+                    <div class="backtest-card-metrics">
+                        <div class="card-metric">
+                            <span class="card-metric-label">APR</span>
+                            <span class="card-metric-val {{ 'positive' if bt._apr|float > 0 else 'negative' }}">{{ bt._apr }}%</span>
+                            <span class="card-metric-vs">vs {{ bt._apr_bh }}% B&H</span>
+                        </div>
+                        <div class="card-metric">
+                            <span class="card-metric-label">Max DD</span>
+                            <span class="card-metric-val negative">{{ bt._max_dd }}%</span>
+                            <span class="card-metric-vs">vs {{ bt._max_dd_bh }}% B&H</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="backtest-card-footer">
+                        <span>{{ bt._display_name }} · {{ time_ago(bt.created_at) }}</span>
+                        <div class="engagement">
+                            <span>♥ {{ bt.likes_count }}</span>
+                            <span>💬 {{ bt.comments_count }}</span>
+                        </div>
+                    </div>
+                </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        {% elif backtests %}
         <div class="backtest-grid" id="backtest-grid">
             {% for bt in backtests %}
             <div class="backtest-card-wrapper" data-id="{{ bt.id }}">
@@ -3383,19 +3448,21 @@ function featureBacktest(backtestId) {
     .then(function() { location.reload(); });
 }
 function moveCard(id, direction) {
-    var grid = document.getElementById('backtest-grid');
+    var el = document.querySelector('.backtest-card-wrapper[data-id="' + id + '"]');
+    if (!el) return;
+    var grid = el.parentElement;
     var wrappers = Array.from(grid.querySelectorAll('.backtest-card-wrapper'));
-    var idx = wrappers.findIndex(function(w) { return w.getAttribute('data-id') === id; });
+    var idx = wrappers.indexOf(el);
     if (idx < 0) return;
     var newIdx = idx + direction;
     if (newIdx < 0 || newIdx >= wrappers.length) return;
-    var el = wrappers[idx];
     if (direction < 0) {
         grid.insertBefore(el, wrappers[newIdx]);
     } else {
         grid.insertBefore(wrappers[newIdx], el);
     }
-    var orderedIds = Array.from(grid.querySelectorAll('.backtest-card-wrapper')).map(function(w) { return w.getAttribute('data-id'); });
+    // Collect all IDs across all grids in order
+    var orderedIds = Array.from(document.querySelectorAll('.backtest-card-wrapper')).map(function(w) { return w.getAttribute('data-id'); });
     fetch('/api/reorder-featured', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -3623,13 +3690,21 @@ DETAIL_HTML = """\
         {% endif %}
     </div>
 
+    {% if not is_authenticated %}
+    <div class="cta-banner" style="margin-bottom:16px">
+        <h3>Want to run your own backtests?</h3>
+        <p>Sign up for a premium membership to access the full backtesting engine.</p>
+        <a href="https://the-bitcoin-strategy.com">Get Started</a>
+    </div>
+    {% endif %}
+
     {% if backtest.cached_html %}
     <div class="panel" id="results-panel">
         {{ backtest.cached_html|safe }}
     </div>
     {% endif %}
 
-    <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+    <div id="like-container" style="display:flex;justify-content:flex-end;margin-bottom:16px">
         {% if is_authenticated %}
         <button class="like-btn {{ 'liked' if has_liked }}" onclick="toggleLike('{{ backtest.id }}', this)">
             <span class="like-heart">♥</span> <span class="like-count">{{ backtest.likes_count }}</span> <span class="like-text">{{ 'Liked' if has_liked else 'Like' }}</span>
@@ -3693,14 +3768,7 @@ DETAIL_HTML = """\
             {% endfor %}
         </div>
 
-        {% if not is_authenticated %}
-        <div class="cta-banner">
-            <h3>Want to join the conversation?</h3>
-            <p>Sign up for a premium membership to like, comment, and publish your own backtests.</p>
-            <a href="https://the-bitcoin-strategy.com">Get Started</a>
         </div>
-        {% endif %}
-    </div>
 </div>
 <script>
 function toggleLike(backtestId, btn) {
@@ -3764,6 +3832,18 @@ function copyLink() {
     navigator.clipboard.writeText(location.origin + '/s/{{ backtest.short_code }}');
     alert('Link copied!');
 }
+// Move like button between chart and metrics table
+(function() {
+    var panel = document.getElementById('results-panel');
+    var likeContainer = document.getElementById('like-container');
+    if (panel && likeContainer) {
+        var metrics = panel.querySelector('.metrics-panel');
+        if (metrics) {
+            likeContainer.style.margin = '12px 0';
+            metrics.parentNode.insertBefore(likeContainer, metrics);
+        }
+    }
+})();
 </script>
 {% if is_authenticated and (is_admin or backtest.user_id == session.get('user_id')) %}
 <div class="edit-modal-overlay" id="detail-edit-overlay">
@@ -4374,14 +4454,30 @@ def community():
 def featured():
     """Featured backtests page."""
     sort = request.args.get('sort', 'manual')
-    page = int(request.args.get('page', 1))
-    backtests, total = db.list_backtests(visibility='featured', sort=sort, page=page, per_page=20)
+    backtests, total = db.list_backtests(visibility='featured', sort=sort, page=1, per_page=200)
     _enrich_backtest_cards(backtests)
-    total_pages = max(1, (total + 19) // 20)
+    # Group by asset, preserving sort order
+    from collections import OrderedDict
+    grouped = OrderedDict()
+    for bt in backtests:
+        asset = bt.get('_asset', '') or 'other'
+        if asset not in grouped:
+            grouped[asset] = []
+        grouped[asset].append(bt)
+    # Build sections with display info
+    asset_sections = []
+    for asset, bts in grouped.items():
+        asset_sections.append({
+            'asset': asset,
+            'display': asset.capitalize() if asset != 'other' else 'Other',
+            'logo': ASSET_LOGOS.get(asset, ''),
+            'backtests': bts,
+        })
     return render_template_string(COMMUNITY_HTML,
         nav_active='featured', page_title='Featured Backtests',
         page_subtitle='Curated strategies hand-picked by our team',
-        backtests=backtests, sort=sort, page=page, total_pages=total_pages,
+        backtests=backtests, asset_sections=asset_sections,
+        sort=sort, page=1, total_pages=1,
         is_authenticated=_is_authenticated(), is_admin=_is_admin(), time_ago=_time_ago)
 
 
