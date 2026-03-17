@@ -1283,7 +1283,7 @@ HTML = """\
                 {% if regression|default(none) %}
                 {# Regression analysis results #}
                 <div style="position:relative">
-                    <img class="chart-img" id="backtest-chart-img" src="data:image/png;base64,{{ chart }}" />
+                    <img class="chart-img" id="backtest-chart-img" src="data:image/png;base64,{{ chart }}" data-equity-top="{{ equity_top|default(0.7) }}" />
                     <button onclick="downloadChart()" class="chart-download-btn" title="Download chart as PNG">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12h10"/>
@@ -1402,7 +1402,7 @@ HTML = """\
                 {% endif %}
                 <div id="backtest-chart-tab">
                     <div style="position:relative">
-                        <img class="chart-img" id="backtest-chart-img" src="data:image/png;base64,{{ chart }}" />
+                        <img class="chart-img" id="backtest-chart-img" src="data:image/png;base64,{{ chart }}" data-equity-top="{{ equity_top|default(0.7) }}" />
                         <button onclick="downloadChart()" class="chart-download-btn" title="Download chart as PNG">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12h10"/>
@@ -2089,13 +2089,16 @@ function _getChartThumbnail() {
     var img = document.getElementById('backtest-chart-img');
     if (!img) return '';
     try {
+        var equityTop = parseFloat(img.getAttribute('data-equity-top') || '0.7');
+        var srcY = Math.round(img.naturalHeight * equityTop);
+        var srcH = img.naturalHeight - srcY;
         var canvas = document.createElement('canvas');
         var maxW = 400;
-        var ratio = img.naturalHeight / img.naturalWidth;
+        var ratio = srcH / img.naturalWidth;
         canvas.width = maxW;
         canvas.height = Math.round(maxW * ratio);
         var ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, srcY, img.naturalWidth, srcH, 0, 0, canvas.width, canvas.height);
         return canvas.toDataURL('image/jpeg', 0.6);
     } catch(e) { return ''; }
 }
@@ -2996,19 +2999,23 @@ def _run_post_handler(cancel_event):
                     fig, (ax1, ax_osc, ax2, ax3) = plt.subplots(4, 1, figsize=(14, 16), dpi=150,
                                                                   gridspec_kw={"height_ratios": [4, 2, 2.5, 2.5]}, sharex=True)
                     bt._apply_dark_theme(fig, [ax1, ax_osc, ax2, ax3])
+                    equity_top = (4 + 2) / (4 + 2 + 2.5 + 2.5)  # skip price+osc
                 else:
                     fig, (ax1, ax_osc, ax2) = plt.subplots(3, 1, figsize=(14, 13), dpi=150,
                                                              gridspec_kw={"height_ratios": [5, 2, 3]}, sharex=True)
                     bt._apply_dark_theme(fig, [ax1, ax_osc, ax2])
+                    equity_top = (5 + 2) / (5 + 2 + 3)  # skip price+osc
             else:
                 if show_ratio:
                     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 13), dpi=150,
                                                          gridspec_kw={"height_ratios": [5, 2.5, 2.5]}, sharex=True)
                     bt._apply_dark_theme(fig, [ax1, ax2, ax3])
+                    equity_top = 5 / (5 + 2.5 + 2.5)  # skip price
                 else:
                     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), dpi=150,
                                                     gridspec_kw={"height_ratios": [7, 3]}, sharex=True)
                     bt._apply_dark_theme(fig, [ax1, ax2])
+                    equity_top = 7 / (7 + 3)  # skip price
 
             ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color="#e8eaf0", linewidth=0.8)
 
@@ -3140,6 +3147,7 @@ def _run_post_handler(cancel_event):
                                   asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                   hide_buyhold=(p.exposure == "short-cash"),
                                   ls_breakdown=long_short_breakdown,
+                                  equity_top=equity_top if best else 0.7,
                                   price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                   ind1_label=best.get("ind1_label", "") if best else "", ind2_label=best.get("ind2_label", "") if best else "")
 
