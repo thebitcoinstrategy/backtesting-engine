@@ -3251,7 +3251,8 @@ COMMUNITY_HTML = """\
         .asset-section { margin-bottom: 28px; }
         .asset-section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
         .asset-section-logo { width: 36px; height: 36px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); }
-        .asset-section-title { font-size: 1.15em; font-weight: 700; color: var(--text); }
+        .asset-section-title { font-size: 1.15em; font-weight: 700; color: var(--text); flex: 1; }
+        .section-reorder-controls { display: flex; gap: 4px; margin-left: auto; }
         .backtest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
         .backtest-card-wrapper { position: relative; }
         .reorder-controls { position: absolute; top: 8px; right: 8px; z-index: 10; display: flex; flex-direction: column; gap: 2px; opacity: 0; transition: opacity 0.2s ease; }
@@ -3333,10 +3334,16 @@ COMMUNITY_HTML = """\
         {% if asset_sections|default(none) %}
         {# Grouped by asset view (featured page) #}
         {% for section in asset_sections %}
-        <div class="asset-section">
+        <div class="asset-section" data-asset="{{ section.asset }}">
             <div class="asset-section-header">
                 {% if section.logo %}<img class="asset-section-logo" src="/static/logos/{{ section.logo }}" alt="{{ section.display }}">{% endif %}
                 <h3 class="asset-section-title">{{ section.display }}</h3>
+                {% if is_admin|default(false) %}
+                <div class="section-reorder-controls">
+                    <button class="reorder-btn" onclick="moveSection('{{ section.asset }}', -1)" title="Move section up">&#9650;</button>
+                    <button class="reorder-btn" onclick="moveSection('{{ section.asset }}', 1)" title="Move section down">&#9660;</button>
+                </div>
+                {% endif %}
             </div>
             <div class="backtest-grid" id="backtest-grid-{{ section.asset }}">
                 {% for bt in section.backtests %}
@@ -3509,6 +3516,27 @@ function moveCard(id, direction) {
         grid.insertBefore(wrappers[newIdx], el);
     }
     // Collect all IDs across all grids in order
+    var orderedIds = Array.from(document.querySelectorAll('.backtest-card-wrapper')).map(function(w) { return w.getAttribute('data-id'); });
+    fetch('/api/reorder-featured', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ordered_ids: orderedIds})
+    });
+}
+function moveSection(asset, direction) {
+    var sections = Array.from(document.querySelectorAll('.asset-section'));
+    var el = document.querySelector('.asset-section[data-asset="' + asset + '"]');
+    if (!el) return;
+    var idx = sections.indexOf(el);
+    var newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= sections.length) return;
+    var parent = el.parentElement;
+    if (direction < 0) {
+        parent.insertBefore(el, sections[newIdx]);
+    } else {
+        parent.insertBefore(sections[newIdx], el);
+    }
+    // Collect all backtest IDs in new section order
     var orderedIds = Array.from(document.querySelectorAll('.backtest-card-wrapper')).map(function(w) { return w.getAttribute('data-id'); });
     fetch('/api/reorder-featured', {
         method: 'POST',
