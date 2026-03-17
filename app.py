@@ -2084,6 +2084,21 @@ window.addEventListener('popstate', function(e) {
 // --- Save / Publish / Like / Comment functionality ---
 var _currentShortCode = null;
 
+function _getChartThumbnail() {
+    var img = document.getElementById('backtest-chart-img');
+    if (!img) return '';
+    try {
+        var canvas = document.createElement('canvas');
+        var maxW = 400;
+        var ratio = img.naturalHeight / img.naturalWidth;
+        canvas.width = maxW;
+        canvas.height = Math.round(maxW * ratio);
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/jpeg', 0.6);
+    } catch(e) { return ''; }
+}
+
 function saveBacktest() {
     var btn = document.getElementById('save-btn');
     btn.textContent = 'Saving...';
@@ -2093,10 +2108,11 @@ function saveBacktest() {
     formData.forEach(function(v, k) { params[k] = v; });
     var qs = new URLSearchParams(params).toString();
     var resultsHtml = document.getElementById('results-panel').innerHTML;
+    var thumb = _getChartThumbnail();
     fetch('/api/save', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({params: JSON.stringify(params), query_string: qs, cached_html: resultsHtml})
+        body: JSON.stringify({params: JSON.stringify(params), query_string: qs, cached_html: resultsHtml, thumbnail: thumb})
     }).then(function(r) { return r.json(); }).then(function(data) {
         btn.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8l4 4 8-8"/></svg> Saved!';
         _currentShortCode = data.short_code;
@@ -2108,16 +2124,24 @@ function saveBacktest() {
 }
 
 function openPublishModal() {
+    // Fetch saved display name
+    fetch('/api/display-name').then(function(r) { return r.json(); }).then(function(data) {
+        if (data.display_name) {
+            document.getElementById('publish-display-name').value = data.display_name;
+        }
+    });
     document.getElementById('publish-modal-overlay').classList.add('open');
-    document.getElementById('publish-title').focus();
+    document.getElementById('publish-display-name').focus();
 }
 function closePublishModal() {
     document.getElementById('publish-modal-overlay').classList.remove('open');
 }
 
 function publishBacktest(visibility) {
+    var displayName = document.getElementById('publish-display-name').value.trim();
     var title = document.getElementById('publish-title').value.trim();
     var desc = document.getElementById('publish-desc').value.trim();
+    if (!displayName) { alert('Public username is required'); document.getElementById('publish-display-name').focus(); return; }
     if (!title) { alert('Title is required'); return; }
     if (!desc) { alert('Description is required'); return; }
     var formData = new FormData(document.getElementById('form'));
@@ -2125,14 +2149,17 @@ function publishBacktest(visibility) {
     formData.forEach(function(v, k) { params[k] = v; });
     var qs = new URLSearchParams(params).toString();
     var resultsHtml = document.getElementById('results-panel').innerHTML;
+    var thumb = _getChartThumbnail();
     fetch('/api/publish', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             params: JSON.stringify(params), query_string: qs, cached_html: resultsHtml,
-            title: title, description: desc, visibility: visibility || 'community'
+            title: title, description: desc, visibility: visibility || 'community',
+            display_name: displayName, thumbnail: thumb
         })
     }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.error) { alert(data.error); return; }
         _currentShortCode = data.short_code;
         closePublishModal();
         var copyBtn = document.getElementById('copy-link-btn');
@@ -2194,6 +2221,31 @@ function featureBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' })
     .then(function() { location.reload(); });
 }
+
+function openEditModal(backtestId, title, desc) {
+    document.getElementById('edit-bt-id').value = backtestId;
+    document.getElementById('edit-title').value = title || '';
+    document.getElementById('edit-desc').value = desc || '';
+    document.getElementById('edit-modal-overlay').classList.add('open');
+    document.getElementById('edit-title').focus();
+}
+function closeEditModal() {
+    document.getElementById('edit-modal-overlay').classList.remove('open');
+}
+function saveEdit() {
+    var btId = document.getElementById('edit-bt-id').value;
+    var title = document.getElementById('edit-title').value.trim();
+    var desc = document.getElementById('edit-desc').value.trim();
+    fetch('/api/backtest/' + btId, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: title, description: desc})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.error) { alert(data.error); return; }
+        closeEditModal();
+        location.reload();
+    }).catch(function() { alert('Failed to save'); });
+}
 </script>
 
 <!-- Publish Modal -->
@@ -2201,6 +2253,8 @@ function featureBacktest(backtestId) {
     <div class="publish-modal">
         <button class="close-btn" onclick="closePublishModal()">&times;</button>
         <h3>Publish to Community</h3>
+        <label for="publish-display-name">Public Username</label>
+        <input type="text" id="publish-display-name" placeholder="How should your name appear?" maxlength="40">
         <label for="publish-title">Title</label>
         <input type="text" id="publish-title" placeholder="e.g. Bitcoin EMA(20)/SMA(100) Crossover" maxlength="120">
         <label for="publish-desc">Description</label>
@@ -2211,6 +2265,23 @@ function featureBacktest(backtestId) {
             {% if session.get('email') == '""" + db.ADMIN_EMAIL + """' %}
             <button class="action-btn" style="border-color:var(--green);color:var(--green)" onclick="publishBacktest('featured')">Publish as Featured</button>
             {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Edit Backtest Modal -->
+<div class="publish-modal-overlay" id="edit-modal-overlay">
+    <div class="publish-modal">
+        <button class="close-btn" onclick="closeEditModal()">&times;</button>
+        <h3>Edit Backtest</h3>
+        <input type="hidden" id="edit-bt-id">
+        <label for="edit-title">Title</label>
+        <input type="text" id="edit-title" maxlength="120">
+        <label for="edit-desc">Description</label>
+        <textarea id="edit-desc"></textarea>
+        <div class="publish-modal-actions">
+            <button class="action-btn" onclick="closeEditModal()">Cancel</button>
+            <button class="action-btn primary" onclick="saveEdit()">Save Changes</button>
         </div>
     </div>
 </div>
@@ -3102,6 +3173,7 @@ COMMUNITY_HTML = """\
         .backtest-card-params { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
         .backtest-card-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: var(--bg-deep); border: 1px solid var(--border); font-size: 0.7em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
         .backtest-card-tag svg { width: 12px; height: 12px; opacity: 0.6; }
+        .backtest-card-thumb { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border); }
         .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
         .backtest-card-footer .engagement { display: flex; gap: 12px; }
         .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
@@ -3168,6 +3240,7 @@ COMMUNITY_HTML = """\
                     </div>
                     <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
                 </div>
+                {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
                 {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:120] }}</div>{% endif %}
                 <div class="backtest-card-params">
                     <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
@@ -3177,7 +3250,7 @@ COMMUNITY_HTML = """\
                     {% if bt._exposure != 'long-cash' %}<span class="backtest-card-tag" title="Exposure">{{ bt._exposure }}</span>{% endif %}
                 </div>
                 <div class="backtest-card-footer">
-                    <span>{{ bt.user_email.split('@')[0] }} · {{ time_ago(bt.created_at) }}</span>
+                    <span>{{ bt._display_name }} · {{ time_ago(bt.created_at) }}</span>
                     <div class="engagement">
                         <span>♥ {{ bt.likes_count }}</span>
                         <span>💬 {{ bt.comments_count }}</span>
@@ -3321,7 +3394,7 @@ DETAIL_HTML = """\
             {% if backtest.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
             <h2 class="detail-title">{{ backtest.title or 'Backtest' }}</h2>
             <div class="detail-meta">
-                <span>by {{ backtest.user_email.split('@')[0] }}</span>
+                <span>by {{ display_name or backtest.user_email.split('@')[0] }}</span>
                 <span>{{ time_ago(backtest.created_at) }}</span>
                 <span>♥ {{ backtest.likes_count }} · 💬 {{ backtest.comments_count }}</span>
             </div>
@@ -3366,7 +3439,7 @@ DETAIL_HTML = """\
             {% for comment in comments %}
             <div class="comment">
                 <div class="comment-header">
-                    <span class="comment-author">{{ comment.user_email.split('@')[0] }}</span>
+                    <span class="comment-author">{{ comment._display_name }}</span>
                     <span class="comment-time">{{ time_ago(comment.created_at) }}</span>
                 </div>
                 <div class="comment-body">{{ comment.body }}</div>
@@ -3387,7 +3460,7 @@ DETAIL_HTML = """\
                     {% for reply in comment.replies %}
                     <div class="comment">
                         <div class="comment-header">
-                            <span class="comment-author">{{ reply.user_email.split('@')[0] }}</span>
+                            <span class="comment-author">{{ reply._display_name }}</span>
                             <span class="comment-time">{{ time_ago(reply.created_at) }}</span>
                         </div>
                         <div class="comment-body">{{ reply.body }}</div>
@@ -3503,11 +3576,26 @@ MY_BACKTESTS_HTML = """\
         .backtest-card-mode-icon { color: var(--text-dim); flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--bg-deep); }
         .backtest-card-params { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
         .backtest-card-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: var(--bg-deep); border: 1px solid var(--border); font-size: 0.7em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
+        .backtest-card-thumb { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border); }
         .backtest-card-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
         .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
         .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
         .badge-private { background: rgba(136,144,164,0.15); color: var(--text-muted); }
         .card-actions { display: flex; gap: 8px; margin-top: 10px; }
+        .username-section { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding: 14px 18px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 12px; }
+        .username-section label { font-size: 0.8em; color: var(--text-muted); font-weight: 500; white-space: nowrap; margin: 0; }
+        .username-section input { flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-size: 0.85em; font-family: 'DM Sans', sans-serif; }
+        .username-section input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .publish-modal-overlay { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+        .publish-modal-overlay.open { display: flex; }
+        .publish-modal { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 90%; max-width: 500px; position: relative; }
+        .publish-modal h3 { font-size: 1.1em; font-weight: 600; margin-bottom: 16px; }
+        .publish-modal label { display: block; font-size: 0.8em; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
+        .publish-modal input, .publish-modal textarea { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-size: 0.9em; font-family: 'DM Sans', sans-serif; margin-bottom: 14px; }
+        .publish-modal input:focus, .publish-modal textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .publish-modal textarea { resize: vertical; min-height: 80px; }
+        .publish-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+        .publish-modal .close-btn { position: absolute; top: 12px; right: 16px; background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2em; }
         .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); cursor: pointer; font-size: 0.75em; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; text-decoration: none; }
         .action-btn:hover { border-color: var(--border-hover); color: var(--text); }
         .action-btn.danger { border-color: #ef4444; color: #ef4444; }
@@ -3533,6 +3621,12 @@ MY_BACKTESTS_HTML = """\
     <div class="panel">
         <h2 class="page-title">My Backtests</h2>
 
+        <div class="username-section">
+            <label>Public Username:</label>
+            <input type="text" id="display-name-input" value="{{ display_name or '' }}" placeholder="Set your public username" maxlength="40">
+            <button class="action-btn" onclick="saveDisplayName()">Save</button>
+        </div>
+
         {% if published %}
         <h3 class="section-header" style="margin-top:16px">Published ({{ published|length }})</h3>
         <div class="backtest-grid">
@@ -3549,6 +3643,7 @@ MY_BACKTESTS_HTML = """\
                         </div>
                         <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
                     </div>
+                    {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
                     {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:120] }}</div>{% endif %}
                     <div class="backtest-card-params">
                         <span class="backtest-card-tag">{{ bt._mode_label }}</span>
@@ -3566,6 +3661,7 @@ MY_BACKTESTS_HTML = """\
                 </a>
                 <div class="card-actions">
                     <a class="action-btn" href="/?{{ bt.query_string }}">Open</a>
+                    <button class="action-btn" onclick="event.stopPropagation();openEditModal('{{ bt.id }}', '{{ bt.title|e }}', '{{ bt.description|e }}')">Edit</button>
                     <button class="action-btn danger" onclick="event.stopPropagation();deleteBacktest('{{ bt.id }}')">Delete</button>
                 </div>
             </div>
@@ -3588,6 +3684,7 @@ MY_BACKTESTS_HTML = """\
                         </div>
                         <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
                     </div>
+                    {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
                     <div class="backtest-card-params">
                         <span class="backtest-card-tag">{{ bt._mode_label }}</span>
                         <span class="backtest-card-tag">{{ bt._strategy }}</span>
@@ -3600,6 +3697,7 @@ MY_BACKTESTS_HTML = """\
                 </a>
                 <div class="card-actions">
                     <a class="action-btn" href="/?{{ bt.query_string }}">Open</a>
+                    <button class="action-btn" onclick="event.stopPropagation();openEditModal('{{ bt.id }}', '{{ bt.title|e }}', '{{ (bt.description or '')|e }}')">Edit</button>
                     <button class="action-btn danger" onclick="event.stopPropagation();deleteBacktest('{{ bt.id }}')">Delete</button>
                 </div>
             </div>
@@ -3621,7 +3719,57 @@ function deleteBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId, { method: 'DELETE' })
     .then(function() { location.reload(); });
 }
+function saveDisplayName() {
+    var name = document.getElementById('display-name-input').value.trim();
+    if (!name) { alert('Please enter a username'); return; }
+    fetch('/api/display-name', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({display_name: name})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.ok) { alert('Username saved!'); }
+    });
+}
+function openEditModal(backtestId, title, desc) {
+    document.getElementById('edit-bt-id').value = backtestId;
+    document.getElementById('edit-title').value = title || '';
+    document.getElementById('edit-desc').value = desc || '';
+    document.getElementById('edit-modal-overlay').classList.add('open');
+    document.getElementById('edit-title').focus();
+}
+function closeEditModal() {
+    document.getElementById('edit-modal-overlay').classList.remove('open');
+}
+function saveEdit() {
+    var btId = document.getElementById('edit-bt-id').value;
+    var title = document.getElementById('edit-title').value.trim();
+    var desc = document.getElementById('edit-desc').value.trim();
+    fetch('/api/backtest/' + btId, {
+        method: 'PATCH', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: title, description: desc})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.error) { alert(data.error); return; }
+        closeEditModal();
+        location.reload();
+    }).catch(function() { alert('Failed to save'); });
+}
 </script>
+
+<!-- Edit Modal -->
+<div class="publish-modal-overlay" id="edit-modal-overlay">
+    <div class="publish-modal">
+        <button class="close-btn" onclick="closeEditModal()">&times;</button>
+        <h3>Edit Backtest</h3>
+        <input type="hidden" id="edit-bt-id">
+        <label for="edit-title">Title</label>
+        <input type="text" id="edit-title" maxlength="120">
+        <label for="edit-desc">Description</label>
+        <textarea id="edit-desc"></textarea>
+        <div class="publish-modal-actions">
+            <button class="action-btn" onclick="closeEditModal()">Cancel</button>
+            <button class="action-btn primary" onclick="saveEdit()">Save Changes</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
 """
@@ -3650,7 +3798,8 @@ def api_save():
         params=data.get('params', '{}'),
         query_string=data.get('query_string', ''),
         cached_html=data.get('cached_html', ''),
-        visibility='private'
+        visibility='private',
+        thumbnail=data.get('thumbnail', '')
     )
     return jsonify(result)
 
@@ -3664,10 +3813,15 @@ def api_publish():
         abort(400)
     title = data.get('title', '').strip()
     description = data.get('description', '').strip()
+    display_name = data.get('display_name', '').strip()
     if not title:
         return jsonify({'error': 'Title is required'}), 400
     if not description:
         return jsonify({'error': 'Description is required'}), 400
+    if not display_name:
+        return jsonify({'error': 'Display name is required'}), 400
+    # Save display name
+    db.set_display_name(user_id, email, display_name)
     visibility = data.get('visibility', 'community')
     # Only admin can publish as featured
     if visibility == 'featured' and email != db.ADMIN_EMAIL:
@@ -3678,9 +3832,46 @@ def api_publish():
         query_string=data.get('query_string', ''),
         cached_html=data.get('cached_html', ''),
         visibility=visibility,
-        title=title, description=description
+        title=title, description=description,
+        thumbnail=data.get('thumbnail', '')
     )
     return jsonify(result)
+
+
+@app.route('/api/backtest/<bt_id>', methods=['PATCH'])
+def api_update_backtest(bt_id):
+    """Update title/description of a backtest."""
+    user_id, email = _require_auth_api()
+    data = request.get_json()
+    if not data:
+        abort(400)
+    result = db.update_backtest(bt_id, user_id,
+        title=data.get('title'),
+        description=data.get('description'))
+    if not result:
+        abort(403)
+    return jsonify(result)
+
+
+@app.route('/api/display-name', methods=['GET'])
+def api_get_display_name():
+    """Get current user's display name."""
+    if not _is_authenticated():
+        return jsonify({'display_name': None})
+    user_id = session.get('user_id')
+    name = db.get_display_name(user_id)
+    return jsonify({'display_name': name})
+
+
+@app.route('/api/display-name', methods=['POST'])
+def api_set_display_name():
+    """Set current user's display name."""
+    user_id, email = _require_auth_api()
+    data = request.get_json()
+    if not data or not data.get('display_name', '').strip():
+        abort(400)
+    db.set_display_name(user_id, email, data['display_name'].strip())
+    return jsonify({'ok': True, 'display_name': data['display_name'].strip()})
 
 
 @app.route('/api/backtest/<bt_id>', methods=['DELETE'])
@@ -3756,7 +3947,16 @@ MODE_LABELS = {
 
 def _enrich_backtest_cards(backtests):
     """Parse params JSON and add display-ready fields to each backtest dict."""
+    # Batch-resolve display names
+    user_ids = {bt.get('user_id') for bt in backtests if bt.get('user_id')}
+    display_names = {}
+    for uid in user_ids:
+        name = db.get_display_name(uid)
+        if name:
+            display_names[uid] = name
     for bt in backtests:
+        uid = bt.get('user_id', '')
+        bt['_display_name'] = display_names.get(uid, bt.get('user_email', '').split('@')[0])
         try:
             p = json.loads(bt.get('params', '{}'))
         except (json.JSONDecodeError, TypeError):
@@ -3844,8 +4044,10 @@ def my_backtests():
     saved = [b for b in all_bt if b['visibility'] == 'private']
     _enrich_backtest_cards(published)
     _enrich_backtest_cards(saved)
+    display_name = db.get_display_name(user_id)
     return render_template_string(MY_BACKTESTS_HTML,
-        published=published, saved=saved, time_ago=_time_ago)
+        published=published, saved=saved, time_ago=_time_ago,
+        display_name=display_name)
 
 
 @app.route('/backtest/<bt_id>')
@@ -3861,10 +4063,27 @@ def backtest_detail(bt_id):
     comments = db.get_comments(bt_id)
     is_auth = _is_authenticated()
     liked = db.has_liked(session.get('user_id', ''), bt_id) if is_auth else False
+    author_display_name = db.get_display_name(bt_entry['user_id'])
+    # Resolve display names for comment authors
+    commenter_ids = set()
+    for c in comments:
+        commenter_ids.add(c['user_id'])
+        for r in c.get('replies', []):
+            commenter_ids.add(r['user_id'])
+    commenter_names = {}
+    for uid in commenter_ids:
+        name = db.get_display_name(uid)
+        if name:
+            commenter_names[uid] = name
+    for c in comments:
+        c['_display_name'] = commenter_names.get(c['user_id'], c['user_email'].split('@')[0])
+        for r in c.get('replies', []):
+            r['_display_name'] = commenter_names.get(r['user_id'], r['user_email'].split('@')[0])
     return render_template_string(DETAIL_HTML,
         backtest=bt_entry, comments=comments,
         is_authenticated=is_auth, is_admin=_is_admin(),
-        has_liked=liked, time_ago=_time_ago)
+        has_liked=liked, time_ago=_time_ago,
+        display_name=author_display_name)
 
 
 if __name__ == "__main__":

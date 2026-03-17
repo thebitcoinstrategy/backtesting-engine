@@ -57,12 +57,24 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_backtests_visibility ON backtests(visibility);
         CREATE INDEX IF NOT EXISTS idx_backtests_user ON backtests(user_id);
         CREATE INDEX IF NOT EXISTS idx_backtests_short_code ON backtests(short_code);
         CREATE INDEX IF NOT EXISTS idx_comments_backtest ON comments(backtest_id);
         CREATE INDEX IF NOT EXISTS idx_likes_backtest ON likes(backtest_id);
     """)
+    # Add thumbnail column if missing (migration for existing DBs)
+    try:
+        conn.execute("ALTER TABLE backtests ADD COLUMN thumbnail TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already exists
     conn.close()
 
 
@@ -88,7 +100,27 @@ def _row_to_dict(row):
     return dict(row)
 
 
-def save_backtest(user_id, email, params, query_string, cached_html, visibility='private', title=None, description=None):
+def get_display_name(user_id):
+    """Get user's display name, or None if not set."""
+    conn = _get_conn()
+    row = conn.execute("SELECT display_name FROM users WHERE user_id=?", (user_id,)).fetchone()
+    conn.close()
+    return row['display_name'] if row else None
+
+
+def set_display_name(user_id, email, display_name):
+    """Set or update user's display name."""
+    conn = _get_conn()
+    conn.execute(
+        """INSERT INTO users (user_id, email, display_name) VALUES (?, ?, ?)
+           ON CONFLICT(user_id) DO UPDATE SET display_name=?, email=?""",
+        (user_id, email, display_name, display_name, email)
+    )
+    conn.commit()
+    conn.close()
+
+
+def save_backtest(user_id, email, params, query_string, cached_html, visibility='private', title=None, description=None, thumbnail=None):
     """Save a backtest. Returns the backtest dict."""
     conn = _get_conn()
     bt_id = str(uuid.uuid4())
@@ -96,10 +128,10 @@ def save_backtest(user_id, email, params, query_string, cached_html, visibility=
     now = datetime.utcnow().isoformat()
     conn.execute(
         """INSERT INTO backtests (id, short_code, user_id, user_email, title, description,
-           params, query_string, cached_html, visibility, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           params, query_string, cached_html, visibility, thumbnail, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (bt_id, short_code, user_id, email, title, description,
-         params, query_string, cached_html, visibility, now, now)
+         params, query_string, cached_html, visibility, thumbnail, now, now)
     )
     conn.commit()
     row = conn.execute("SELECT * FROM backtests WHERE id=?", (bt_id,)).fetchone()
@@ -201,6 +233,30 @@ def update_visibility(bt_id, new_visibility):
     conn.commit()
     conn.close()
     return True
+
+
+def update_backtest(bt_id, user_id, title=None, description=None):
+    """Update title/description of a backtest. Owner only. Returns updated dict or None."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM backtests WHERE id=?", (bt_id,)).fetchone()
+    if not row:
+        conn.close()
+        return None
+    bt = _row_to_dict(row)
+    if bt['user_id'] != user_id:
+        conn.close()
+        return None
+    now = datetime.utcnow().isoformat()
+    new_title = title if title is not None else bt['title']
+    new_desc = description if description is not None else bt['description']
+    conn.execute(
+        "UPDATE backtests SET title=?, description=?, updated_at=? WHERE id=?",
+        (new_title, new_desc, now, bt_id)
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM backtests WHERE id=?", (bt_id,)).fetchone()
+    conn.close()
+    return _row_to_dict(row)
 
 
 def toggle_like(user_id, backtest_id):
