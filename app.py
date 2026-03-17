@@ -3685,13 +3685,17 @@ DETAIL_HTML = """\
         .detail-title { font-size: 1.3em; font-weight: 700; margin-bottom: 4px; }
         .detail-meta { font-size: 0.8em; color: var(--text-muted); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
         .detail-description { font-size: 0.9em; color: var(--text-muted); line-height: 1.6; margin-bottom: 20px; white-space: pre-wrap; }
-        .detail-params { margin-bottom: 20px; padding: 16px 20px; background: var(--bg-elevated); border-radius: 10px; border: 1px solid var(--border); }
-        .params-heading { font-size: 0.85em; font-weight: 600; color: var(--text); margin: 0 0 10px 0; letter-spacing: 0.03em; }
+        .detail-params { margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 600px) { .detail-params { grid-template-columns: 1fr; } }
+        .params-group { padding: 14px 16px; background: var(--bg-elevated); border-radius: 10px; border: 1px solid var(--border); }
+        .params-group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .params-group-icon { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; opacity: 0.8; }
+        .params-group-title { font-size: 0.7em; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
         .params-table { width: 100%; border-collapse: collapse; }
         .params-table tr { border-bottom: 1px solid rgba(255,255,255,0.04); }
         .params-table tr:last-child { border-bottom: none; }
-        .params-td-label { font-size: 0.72em; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; padding: 7px 8px 7px 0; white-space: nowrap; width: 1%; }
-        .params-td-value { font-size: 0.82em; font-weight: 500; color: var(--text); font-family: 'JetBrains Mono', monospace; padding: 7px 24px 7px 0; }
+        .params-td-label { font-size: 0.72em; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; padding: 5px 8px 5px 0; white-space: nowrap; width: 1%; }
+        .params-td-value { font-size: 0.82em; font-weight: 500; color: var(--text); font-family: 'JetBrains Mono', monospace; padding: 5px 0; }
         .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); cursor: pointer; font-size: 0.82em; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; text-decoration: none; }
         .action-btn:hover { border-color: var(--border-hover); color: var(--text); }
         .action-btn.primary { border-color: var(--accent); color: var(--accent); }
@@ -3855,38 +3859,68 @@ DETAIL_HTML = """\
 
         {% if bt_params %}
         <div class="detail-params">
-            <h4 class="params-heading">Parameters</h4>
-            <table class="params-table">
-                <tbody>
-                {% if bt_params.asset %}
-                <tr><td class="params-td-label">Asset</td><td class="params-td-value">{{ bt_params.asset|capitalize }}</td>
-                {% if bt_params.exposure %}<td class="params-td-label">Exposure</td><td class="params-td-value">{{ bt_params.exposure }}</td>{% endif %}
-                </tr>
-                {% endif %}
-                {% if bt_params.ind1_name %}
-                <tr><td class="params-td-label">Indicator 1</td><td class="params-td-value">{{ bt_params.ind1_name|upper }}{% if bt_params.get('period1') %} ({{ bt_params.period1 }}){% endif %}</td>
-                {% if bt_params.ind2_name %}<td class="params-td-label">Indicator 2</td><td class="params-td-value">{{ bt_params.ind2_name|upper }}{% if bt_params.get('period2') %} ({{ bt_params.period2 }}){% endif %}</td>{% endif %}
-                </tr>
-                {% endif %}
-                {% if bt_params.get('osc_name') and bt_params.get('signal_type', '') == 'oscillator' %}
-                <tr><td class="params-td-label">Oscillator</td><td class="params-td-value">{{ bt_params.osc_name|upper }}{% if bt_params.get('osc_period') %} ({{ bt_params.osc_period }}){% endif %}</td>
-                <td class="params-td-label"></td><td class="params-td-value"></td></tr>
-                {% endif %}
-                {% set ll = bt_params.get('long_leverage', '1') %}{% set sl = bt_params.get('short_leverage', '1') %}
-                {% if ll not in ('1', '1.0') or sl not in ('1', '1.0') %}
-                <tr><td class="params-td-label">Leverage (L/S)</td><td class="params-td-value">{{ ll }}x / {{ sl }}x</td>
-                {% if bt_params.get('lev_mode') %}<td class="params-td-label">Lev Mode</td><td class="params-td-value">{{ bt_params.lev_mode|capitalize }}</td>{% endif %}
-                </tr>
-                {% endif %}
-                <tr><td class="params-td-label">Sizing</td><td class="params-td-value">{{ bt_params.get('sizing', 'compound')|capitalize }}</td>
-                <td class="params-td-label">Fee</td><td class="params-td-value">{{ bt_params.get('fee', '0.1') }}%</td></tr>
-                <tr><td class="params-td-label">Start Date</td><td class="params-td-value">{{ bt_params.get('start_date', '–') }}</td>
-                <td class="params-td-label">End Date</td><td class="params-td-value">{{ bt_params.get('end_date', '–') }}</td></tr>
-                <tr><td class="params-td-label">Initial Capital</td><td class="params-td-value">${{ bt_params.get('initial_cash', '10000') }}</td>
-                {% if bt_params.get('range_min') %}<td class="params-td-label">Period Range</td><td class="params-td-value">{{ bt_params.range_min }} – {{ bt_params.range_max }}</td>
-                {% else %}<td class="params-td-label"></td><td class="params-td-value"></td>{% endif %}</tr>
-                </tbody>
-            </table>
+            {# ── Asset ── #}
+            <div class="params-group">
+                <div class="params-group-header">
+                    <svg class="params-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    <span class="params-group-title">Asset</span>
+                </div>
+                <table class="params-table">
+                    <tr><td class="params-td-label">Asset</td><td class="params-td-value">{{ bt_params.asset|capitalize }}</td></tr>
+                    {% if bt_params.get('mode') %}<tr><td class="params-td-label">Mode</td><td class="params-td-value">{{ bt_params.mode|replace('-', ' ')|title }}</td></tr>{% endif %}
+                </table>
+            </div>
+
+            {# ── Indicators ── #}
+            <div class="params-group">
+                <div class="params-group-header">
+                    <svg class="params-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    <span class="params-group-title">Indicators</span>
+                </div>
+                <table class="params-table">
+                    {% if bt_params.ind1_name %}<tr><td class="params-td-label">Indicator 1</td><td class="params-td-value">{{ bt_params.ind1_name|upper }}{% if bt_params.get('period1') %} ({{ bt_params.period1 }}){% endif %}</td></tr>{% endif %}
+                    {% if bt_params.ind2_name %}<tr><td class="params-td-label">Indicator 2</td><td class="params-td-value">{{ bt_params.ind2_name|upper }}{% if bt_params.get('period2') %} ({{ bt_params.period2 }}){% endif %}</td></tr>{% endif %}
+                    {% if bt_params.get('osc_name') and bt_params.get('signal_type', '') == 'oscillator' %}
+                    <tr><td class="params-td-label">Oscillator</td><td class="params-td-value">{{ bt_params.osc_name|upper }}{% if bt_params.get('osc_period') %} ({{ bt_params.osc_period }}){% endif %}</td></tr>
+                    {% if bt_params.get('buy_threshold') %}<tr><td class="params-td-label">Buy / Sell</td><td class="params-td-value">{{ bt_params.buy_threshold }} / {{ bt_params.sell_threshold }}</td></tr>{% endif %}
+                    {% endif %}
+                    {% if bt_params.get('reverse') == '1' %}<tr><td class="params-td-label">Signal</td><td class="params-td-value">Reversed</td></tr>{% endif %}
+                    {% if bt_params.get('range_min') %}<tr><td class="params-td-label">Period Range</td><td class="params-td-value">{{ bt_params.range_min }} – {{ bt_params.range_max }} (step {{ bt_params.get('step', '1') }})</td></tr>{% endif %}
+                    {% if bt_params.get('forward_days') %}<tr><td class="params-td-label">Forward Days</td><td class="params-td-value">{{ bt_params.forward_days }}</td></tr>{% endif %}
+                </table>
+            </div>
+
+            {# ── Exposure & Leverage ── #}
+            <div class="params-group">
+                <div class="params-group-header">
+                    <svg class="params-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                    <span class="params-group-title">Exposure & Leverage</span>
+                </div>
+                <table class="params-table">
+                    {% if bt_params.exposure %}<tr><td class="params-td-label">Exposure</td><td class="params-td-value">{{ bt_params.exposure|replace('-', ' ')|title }}</td></tr>{% endif %}
+                    {% set ll = bt_params.get('long_leverage', '1') %}{% set sl = bt_params.get('short_leverage', '1') %}
+                    {% if ll not in ('1', '1.0') or sl not in ('1', '1.0') %}
+                    <tr><td class="params-td-label">Long Lev</td><td class="params-td-value">{{ ll }}x</td></tr>
+                    <tr><td class="params-td-label">Short Lev</td><td class="params-td-value">{{ sl }}x</td></tr>
+                    {% if bt_params.get('lev_mode') %}<tr><td class="params-td-label">Lev Mode</td><td class="params-td-value">{{ bt_params.lev_mode|capitalize }}</td></tr>{% endif %}
+                    {% endif %}
+                    <tr><td class="params-td-label">Sizing</td><td class="params-td-value">{{ bt_params.get('sizing', 'compound')|capitalize }}</td></tr>
+                </table>
+            </div>
+
+            {# ── Date Range & Capital ── #}
+            <div class="params-group">
+                <div class="params-group-header">
+                    <svg class="params-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <span class="params-group-title">Date Range & Capital</span>
+                </div>
+                <table class="params-table">
+                    <tr><td class="params-td-label">Start</td><td class="params-td-value">{{ bt_params.get('start_date', '–') }}</td></tr>
+                    <tr><td class="params-td-label">End</td><td class="params-td-value">{{ bt_params.get('end_date', '–') }}</td></tr>
+                    <tr><td class="params-td-label">Capital</td><td class="params-td-value">${{ bt_params.get('initial_cash', '10,000') }}</td></tr>
+                    <tr><td class="params-td-label">Fee</td><td class="params-td-value">{{ bt_params.get('fee', '0.1') }}%</td></tr>
+                </table>
+            </div>
         </div>
         {% endif %}
 
