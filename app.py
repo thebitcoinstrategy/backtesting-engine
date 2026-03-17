@@ -1920,7 +1920,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
     var formData = new FormData(this);
     formData.append('_request_id', currentRequestId);
 
-    fetch('/', { method: 'POST', body: formData, signal: currentAbort.signal })
+    fetch('/backtester', { method: 'POST', body: formData, signal: currentAbort.signal })
         .then(function(resp) {
             if (resp.redirected) { window.location.href = resp.url; throw new Error('redirect'); }
             return resp.text();
@@ -1990,7 +1990,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
     btn.textContent = 'Stop';
     btn.classList.add('btn-stop');
     var formData = new FormData(document.getElementById('form'));
-    fetch('/', { method: 'POST', body: formData, signal: currentAbort.signal })
+    fetch('/backtester', { method: 'POST', body: formData, signal: currentAbort.signal })
         .then(function(resp) {
             if (resp.redirected) { window.location.href = resp.url; throw new Error('redirect'); }
             return resp.text();
