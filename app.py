@@ -879,7 +879,7 @@ HTML = """\
         }
         .backtest-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
         .backtest-card-title { font-size: 1em; font-weight: 600; margin-bottom: 6px; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
-        .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
         .backtest-card-metrics { display: flex; gap: 14px; margin-bottom: 10px; }
         .backtest-card-metric { font-family: 'JetBrains Mono', monospace; font-size: 0.75em; }
         .backtest-card-metric .label { color: var(--text-dim); font-size: 0.85em; }
@@ -3347,7 +3347,7 @@ COMMUNITY_HTML = """\
         .backtest-card-title { font-size: 1em; font-weight: 600; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
         .backtest-card-asset-name { font-size: 0.75em; color: var(--text-muted); }
         .backtest-card-mode-icon { color: var(--text-dim); flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--bg-deep); }
-        .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
         .backtest-card-params { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
         .backtest-card-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: var(--bg-deep); border: 1px solid var(--border); font-size: 0.7em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
         .backtest-card-tag svg { width: 12px; height: 12px; opacity: 0.6; }
@@ -3448,7 +3448,7 @@ COMMUNITY_HTML = """\
                         <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
                     </div>
                     {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
-                    {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:120] }}</div>{% endif %}
+                    {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
                     <div class="backtest-card-params">
                         <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
                         <span class="backtest-card-tag" title="Strategy">{{ bt._strategy }}</span>
@@ -3512,7 +3512,7 @@ COMMUNITY_HTML = """\
                     <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
                 </div>
                 {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
-                {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:120] }}</div>{% endif %}
+                {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
                 <div class="backtest-card-params">
                     <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
                     <span class="backtest-card-tag" title="Strategy">{{ bt._strategy }}</span>
@@ -4093,7 +4093,7 @@ MY_BACKTESTS_HTML = """\
         .backtest-card { display: block; background: var(--bg-base); border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: all 0.2s ease; color: inherit; text-decoration: none; }
         .backtest-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
         .backtest-card-title { font-size: 1em; font-weight: 600; margin-bottom: 6px; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
-        .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
         .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
         .backtest-card-footer .engagement { display: flex; gap: 12px; }
         .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
@@ -4182,7 +4182,7 @@ MY_BACKTESTS_HTML = """\
                         <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
                     </div>
                     {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
-                    {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:120] }}</div>{% endif %}
+                    {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
                     <div class="backtest-card-params">
                         <span class="backtest-card-tag">{{ bt._mode_label }}</span>
                         <span class="backtest-card-tag">{{ bt._strategy }}</span>
