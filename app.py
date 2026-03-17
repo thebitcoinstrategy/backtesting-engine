@@ -2,6 +2,7 @@
 """Web interface for the Backtesting Engine."""
 
 import os
+import re
 import hmac
 import hashlib
 import json
@@ -3213,6 +3214,13 @@ COMMUNITY_HTML = """\
         .backtest-card-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: var(--bg-deep); border: 1px solid var(--border); font-size: 0.7em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
         .backtest-card-tag svg { width: 12px; height: 12px; opacity: 0.6; }
         .backtest-card-thumb { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border); }
+        .backtest-card-metrics { display: flex; gap: 12px; margin-bottom: 10px; }
+        .card-metric { flex: 1; padding: 8px 10px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 8px; text-align: center; }
+        .card-metric-label { display: block; font-size: 0.65em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 2px; }
+        .card-metric-val { display: block; font-size: 0.95em; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+        .card-metric-val.positive { color: var(--green); }
+        .card-metric-val.negative { color: #ef4444; }
+        .card-metric-vs { display: block; font-size: 0.6em; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; margin-top: 1px; }
         .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
         .backtest-card-footer .engagement { display: flex; gap: 12px; }
         .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
@@ -3288,6 +3296,20 @@ COMMUNITY_HTML = """\
                     {% if bt._start_date %}<span class="backtest-card-tag" title="Start date">{{ bt._start_date }}</span>{% endif %}
                     {% if bt._exposure != 'long-cash' %}<span class="backtest-card-tag" title="Exposure">{{ bt._exposure }}</span>{% endif %}
                 </div>
+                {% if bt._apr %}
+                <div class="backtest-card-metrics">
+                    <div class="card-metric">
+                        <span class="card-metric-label">APR</span>
+                        <span class="card-metric-val {{ 'positive' if bt._apr|float > 0 else 'negative' }}">{{ bt._apr }}%</span>
+                        <span class="card-metric-vs">vs {{ bt._apr_bh }}% B&H</span>
+                    </div>
+                    <div class="card-metric">
+                        <span class="card-metric-label">Max DD</span>
+                        <span class="card-metric-val negative">{{ bt._max_dd }}%</span>
+                        <span class="card-metric-vs">vs {{ bt._max_dd_bh }}% B&H</span>
+                    </div>
+                </div>
+                {% endif %}
                 <div class="backtest-card-footer">
                     <span>{{ bt._display_name }} · {{ time_ago(bt.created_at) }}</span>
                     <div class="engagement">
@@ -3697,6 +3719,13 @@ MY_BACKTESTS_HTML = """\
         .backtest-card-params { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
         .backtest-card-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: var(--bg-deep); border: 1px solid var(--border); font-size: 0.7em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
         .backtest-card-thumb { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border); }
+        .backtest-card-metrics { display: flex; gap: 12px; margin-bottom: 10px; }
+        .card-metric { flex: 1; padding: 8px 10px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 8px; text-align: center; }
+        .card-metric-label { display: block; font-size: 0.65em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 2px; }
+        .card-metric-val { display: block; font-size: 0.95em; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+        .card-metric-val.positive { color: var(--green); }
+        .card-metric-val.negative { color: #ef4444; }
+        .card-metric-vs { display: block; font-size: 0.6em; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; margin-top: 1px; }
         .backtest-card-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
         .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
         .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
@@ -3774,6 +3803,20 @@ MY_BACKTESTS_HTML = """\
                         {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
                         {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
                     </div>
+                    {% if bt._apr %}
+                    <div class="backtest-card-metrics">
+                        <div class="card-metric">
+                            <span class="card-metric-label">APR</span>
+                            <span class="card-metric-val {{ 'positive' if bt._apr|float > 0 else 'negative' }}">{{ bt._apr }}%</span>
+                            <span class="card-metric-vs">vs {{ bt._apr_bh }}% B&H</span>
+                        </div>
+                        <div class="card-metric">
+                            <span class="card-metric-label">Max DD</span>
+                            <span class="card-metric-val negative">{{ bt._max_dd }}%</span>
+                            <span class="card-metric-vs">vs {{ bt._max_dd_bh }}% B&H</span>
+                        </div>
+                    </div>
+                    {% endif %}
                     <div class="backtest-card-footer">
                         <span>{{ time_ago(bt.created_at) }}</span>
                         <div class="engagement">
@@ -3814,6 +3857,20 @@ MY_BACKTESTS_HTML = """\
                         {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
                         {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
                     </div>
+                    {% if bt._apr %}
+                    <div class="backtest-card-metrics">
+                        <div class="card-metric">
+                            <span class="card-metric-label">APR</span>
+                            <span class="card-metric-val {{ 'positive' if bt._apr|float > 0 else 'negative' }}">{{ bt._apr }}%</span>
+                            <span class="card-metric-vs">vs {{ bt._apr_bh }}% B&H</span>
+                        </div>
+                        <div class="card-metric">
+                            <span class="card-metric-label">Max DD</span>
+                            <span class="card-metric-val negative">{{ bt._max_dd }}%</span>
+                            <span class="card-metric-vs">vs {{ bt._max_dd_bh }}% B&H</span>
+                        </div>
+                    </div>
+                    {% endif %}
                     <div class="backtest-card-footer">
                         <span>{{ time_ago(bt.created_at) }}</span>
                     </div>
@@ -4143,6 +4200,16 @@ def _enrich_backtest_cards(backtests):
         bt['_start_date'] = p.get('start_date', '')
         # Exposure
         bt['_exposure'] = p.get('exposure', 'long-cash')
+        # Extract key metrics from cached HTML
+        html = bt.get('cached_html', '') or ''
+        # Ann. Return (strategy vs buy & hold)
+        m = re.search(r'Ann\. Return.*?m-val[^>]*>([\-\d.]+)%.*?m-val[^>]*>([\-\d.]+)%', html, re.DOTALL)
+        bt['_apr'] = m.group(1) if m else None
+        bt['_apr_bh'] = m.group(2) if m else None
+        # Max Drawdown (strategy vs buy & hold)
+        m = re.search(r'Max Drawdown.*?m-val[^>]*>([\-\d.]+)%.*?m-val[^>]*>([\-\d.]+)%', html, re.DOTALL)
+        bt['_max_dd'] = m.group(1) if m else None
+        bt['_max_dd_bh'] = m.group(2) if m else None
     return backtests
 
 
