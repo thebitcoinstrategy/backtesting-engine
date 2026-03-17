@@ -951,12 +951,12 @@ HTML = """\
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px;font-family:'DM Sans',sans-serif">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a> at the-bitcoin-strategy.com</div>
     </div>
     <nav class="nav-bar">
-        <a href="/" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Backtester</a>
-        <a href="/community" class="nav-link {{ 'active' if nav_active|default('')=='community' }}">Community</a>
         <a href="/featured" class="nav-link {{ 'active' if nav_active|default('')=='featured' }}">Featured</a>
+        <a href="/community" class="nav-link {{ 'active' if nav_active|default('')=='community' }}">Community</a>
         {% if session.get('user_id') %}
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active|default('')=='my-backtests' }}">My Backtests</a>
         {% endif %}
+        <a href="/" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Backtester</a>
     </nav>
     <div class="layout">
         <div class="panel">
