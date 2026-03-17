@@ -3685,13 +3685,13 @@ DETAIL_HTML = """\
         .detail-title { font-size: 1.3em; font-weight: 700; margin-bottom: 4px; }
         .detail-meta { font-size: 0.8em; color: var(--text-muted); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
         .detail-description { font-size: 0.9em; color: var(--text-muted); line-height: 1.6; margin-bottom: 20px; white-space: pre-wrap; }
-        .detail-params { margin-bottom: 20px; padding: 14px 18px; background: var(--bg-elevated); border-radius: 10px; border: 1px solid var(--border); }
-        .detail-params-grid { display: flex; flex-wrap: wrap; gap: 6px 16px; }
-        .param-item { display: flex; align-items: center; gap: 6px; }
-        .param-label { font-size: 0.72em; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
-        .param-value { font-size: 0.82em; font-weight: 500; color: var(--text); font-family: 'JetBrains Mono', monospace; }
-        .param-item::after { content: ''; display: inline-block; width: 1px; height: 14px; background: var(--border); margin-left: 10px; }
-        .param-item:last-child::after { display: none; }
+        .detail-params { margin-bottom: 20px; padding: 16px 20px; background: var(--bg-elevated); border-radius: 10px; border: 1px solid var(--border); }
+        .params-heading { font-size: 0.85em; font-weight: 600; color: var(--text); margin: 0 0 10px 0; letter-spacing: 0.03em; }
+        .params-table { width: 100%; border-collapse: collapse; }
+        .params-table tr { border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .params-table tr:last-child { border-bottom: none; }
+        .params-td-label { font-size: 0.72em; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; padding: 7px 8px 7px 0; white-space: nowrap; width: 1%; }
+        .params-td-value { font-size: 0.82em; font-weight: 500; color: var(--text); font-family: 'JetBrains Mono', monospace; padding: 7px 24px 7px 0; }
         .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); cursor: pointer; font-size: 0.82em; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; text-decoration: none; }
         .action-btn:hover { border-color: var(--border-hover); color: var(--text); }
         .action-btn.primary { border-color: var(--accent); color: var(--accent); }
@@ -3855,23 +3855,38 @@ DETAIL_HTML = """\
 
         {% if bt_params %}
         <div class="detail-params">
-            <div class="detail-params-grid">
-                {% if bt_params.asset %}<div class="param-item"><span class="param-label">Asset</span><span class="param-value">{{ bt_params.asset|capitalize }}</span></div>{% endif %}
-                {% if bt_params.mode %}<div class="param-item"><span class="param-label">Mode</span><span class="param-value">{{ bt_params.mode|capitalize }}</span></div>{% endif %}
-                {% if bt_params.ind1_name and bt_params.ind1_name != 'price' %}<div class="param-item"><span class="param-label">Indicator 1</span><span class="param-value">{{ bt_params.ind1_name|upper }}{% if bt_params.get('period1') %}({{ bt_params.period1 }}){% endif %}</span></div>{% endif %}
-                {% if bt_params.ind2_name %}<div class="param-item"><span class="param-label">Indicator 2</span><span class="param-value">{{ bt_params.ind2_name|upper }}{% if bt_params.get('period2') %}({{ bt_params.period2 }}){% endif %}</span></div>{% endif %}
-                {% if bt_params.get('osc_name') and bt_params.signal_type|default('') == 'oscillator' %}<div class="param-item"><span class="param-label">Oscillator</span><span class="param-value">{{ bt_params.osc_name|upper }}{% if bt_params.get('osc_period') %}({{ bt_params.osc_period }}){% endif %}</span></div>{% endif %}
-                {% if bt_params.exposure %}<div class="param-item"><span class="param-label">Exposure</span><span class="param-value">{{ bt_params.exposure }}</span></div>{% endif %}
+            <h4 class="params-heading">Parameters</h4>
+            <table class="params-table">
+                <tbody>
+                {% if bt_params.asset %}
+                <tr><td class="params-td-label">Asset</td><td class="params-td-value">{{ bt_params.asset|capitalize }}</td>
+                {% if bt_params.exposure %}<td class="params-td-label">Exposure</td><td class="params-td-value">{{ bt_params.exposure }}</td>{% endif %}
+                </tr>
+                {% endif %}
+                {% if bt_params.ind1_name %}
+                <tr><td class="params-td-label">Indicator 1</td><td class="params-td-value">{{ bt_params.ind1_name|upper }}{% if bt_params.get('period1') %} ({{ bt_params.period1 }}){% endif %}</td>
+                {% if bt_params.ind2_name %}<td class="params-td-label">Indicator 2</td><td class="params-td-value">{{ bt_params.ind2_name|upper }}{% if bt_params.get('period2') %} ({{ bt_params.period2 }}){% endif %}</td>{% endif %}
+                </tr>
+                {% endif %}
+                {% if bt_params.get('osc_name') and bt_params.get('signal_type', '') == 'oscillator' %}
+                <tr><td class="params-td-label">Oscillator</td><td class="params-td-value">{{ bt_params.osc_name|upper }}{% if bt_params.get('osc_period') %} ({{ bt_params.osc_period }}){% endif %}</td>
+                <td class="params-td-label"></td><td class="params-td-value"></td></tr>
+                {% endif %}
                 {% set ll = bt_params.get('long_leverage', '1') %}{% set sl = bt_params.get('short_leverage', '1') %}
-                {% if ll != '1' or sl != '1' or ll != '1.0' or sl != '1.0' %}<div class="param-item"><span class="param-label">Leverage</span><span class="param-value">{{ ll }}x / {{ sl }}x</span></div>{% endif %}
-                {% if bt_params.sizing %}<div class="param-item"><span class="param-label">Sizing</span><span class="param-value">{{ bt_params.sizing|capitalize }}</span></div>{% endif %}
-                {% if bt_params.get('lev_mode') and (ll != '1' and ll != '1.0') %}<div class="param-item"><span class="param-label">Lev Mode</span><span class="param-value">{{ bt_params.lev_mode|capitalize }}</span></div>{% endif %}
-                {% if bt_params.start_date %}<div class="param-item"><span class="param-label">Start</span><span class="param-value">{{ bt_params.start_date }}</span></div>{% endif %}
-                {% if bt_params.end_date %}<div class="param-item"><span class="param-label">End</span><span class="param-value">{{ bt_params.end_date }}</span></div>{% endif %}
-                {% if bt_params.initial_cash %}<div class="param-item"><span class="param-label">Initial Capital</span><span class="param-value">${{ bt_params.initial_cash }}</span></div>{% endif %}
-                {% if bt_params.fee %}<div class="param-item"><span class="param-label">Fee</span><span class="param-value">{{ bt_params.fee }}%</span></div>{% endif %}
-                {% if bt_params.get('range_min') %}<div class="param-item"><span class="param-label">Range</span><span class="param-value">{{ bt_params.range_min }} – {{ bt_params.range_max }}</span></div>{% endif %}
-            </div>
+                {% if ll not in ('1', '1.0') or sl not in ('1', '1.0') %}
+                <tr><td class="params-td-label">Leverage (L/S)</td><td class="params-td-value">{{ ll }}x / {{ sl }}x</td>
+                {% if bt_params.get('lev_mode') %}<td class="params-td-label">Lev Mode</td><td class="params-td-value">{{ bt_params.lev_mode|capitalize }}</td>{% endif %}
+                </tr>
+                {% endif %}
+                <tr><td class="params-td-label">Sizing</td><td class="params-td-value">{{ bt_params.get('sizing', 'compound')|capitalize }}</td>
+                <td class="params-td-label">Fee</td><td class="params-td-value">{{ bt_params.get('fee', '0.1') }}%</td></tr>
+                <tr><td class="params-td-label">Start Date</td><td class="params-td-value">{{ bt_params.get('start_date', '–') }}</td>
+                <td class="params-td-label">End Date</td><td class="params-td-value">{{ bt_params.get('end_date', '–') }}</td></tr>
+                <tr><td class="params-td-label">Initial Capital</td><td class="params-td-value">${{ bt_params.get('initial_cash', '10000') }}</td>
+                {% if bt_params.get('range_min') %}<td class="params-td-label">Period Range</td><td class="params-td-value">{{ bt_params.range_min }} – {{ bt_params.range_max }}</td>
+                {% else %}<td class="params-td-label"></td><td class="params-td-value"></td>{% endif %}</tr>
+                </tbody>
+            </table>
         </div>
         {% endif %}
 
