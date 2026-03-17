@@ -17,6 +17,74 @@ import uuid
 
 app = Flask(__name__)
 
+# --- Disk cache for backtest results ---
+CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
+CACHE_MAX_BYTES = 1 * 1024 * 1024 * 1024  # 1 GB
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+def _cache_version():
+    """Hash of backtest.py + app.py to auto-invalidate cache on code changes."""
+    h = hashlib.md5()
+    for fname in ("backtest.py", "app.py"):
+        fpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), fname)
+        try:
+            h.update(open(fpath, "rb").read())
+        except FileNotFoundError:
+            pass
+    return h.hexdigest()[:12]
+
+_CODE_VERSION = _cache_version()
+
+def _cache_key(form_params):
+    """Build a deterministic cache key from form parameters (excludes _request_id)."""
+    excluded = {"_request_id"}
+    items = sorted((k, v) for k, v in form_params.items() if k not in excluded)
+    raw = _CODE_VERSION + "|" + "&".join(f"{k}={v}" for k, v in items)
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+def _cache_get(key):
+    """Return cached HTML response or None."""
+    path = os.path.join(CACHE_DIR, key + ".html")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            # Touch file to update access time (for LRU eviction)
+            os.utime(path, None)
+            return f.read()
+    except FileNotFoundError:
+        return None
+
+def _cache_put(key, html):
+    """Store HTML response to disk and enforce size limit."""
+    path = os.path.join(CACHE_DIR, key + ".html")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(html)
+    # Evict oldest files if cache exceeds size limit
+    _cache_evict()
+
+def _cache_evict():
+    """Delete oldest cache files until total size is under CACHE_MAX_BYTES."""
+    try:
+        files = []
+        total = 0
+        for fname in os.listdir(CACHE_DIR):
+            if not fname.endswith(".html"):
+                continue
+            fpath = os.path.join(CACHE_DIR, fname)
+            stat = os.stat(fpath)
+            files.append((stat.st_mtime, stat.st_size, fpath))
+            total += stat.st_size
+        if total <= CACHE_MAX_BYTES:
+            return
+        # Sort oldest first, delete until under limit
+        files.sort()
+        for mtime, size, fpath in files:
+            if total <= CACHE_MAX_BYTES:
+                break
+            os.remove(fpath)
+            total -= size
+    except OSError:
+        pass
+
 # --- Request cancellation infrastructure ---
 _cancel_flags = {}   # request_id -> threading.Event
 _cancel_lock = threading.Lock()
@@ -1995,13 +2063,23 @@ def index():
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       price_json=None, ind1_json='[]', ind2_json='[]', ind1_label='', ind2_label='')
 
+    # Check disk cache first
+    cache_key = _cache_key(request.form)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     rid = request.form.get('_request_id', str(uuid.uuid4()))
     cancel_event = threading.Event()
     with _cancel_lock:
         _cancel_flags[rid] = cancel_event
 
     try:
-        return _run_post_handler(cancel_event)
+        result = _run_post_handler(cancel_event)
+        # Cache the rendered HTML response
+        if isinstance(result, str):
+            _cache_put(cache_key, result)
+        return result
     except ClientDisconnected:
         return '', 204
     finally:
