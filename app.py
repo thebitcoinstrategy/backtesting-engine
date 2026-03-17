@@ -4067,7 +4067,7 @@ def community():
     """Community backtests page."""
     sort = request.args.get('sort', 'newest')
     page = int(request.args.get('page', 1))
-    backtests, total = db.list_backtests(visibility=['community', 'featured'], sort=sort, page=page, per_page=20)
+    backtests, total = db.list_backtests(visibility='community', sort=sort, page=page, per_page=20)
     _enrich_backtest_cards(backtests)
     total_pages = max(1, (total + 19) // 20)
     return render_template_string(COMMUNITY_HTML,
