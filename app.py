@@ -3682,7 +3682,11 @@ DETAIL_HTML = """\
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
         .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); margin-bottom: 16px; }
         .detail-header { margin-bottom: 20px; }
-        .detail-title { font-size: 1.3em; font-weight: 700; margin-bottom: 4px; }
+        .detail-title { font-size: 1.3em; font-weight: 700; margin-bottom: 4px; display: inline; }
+        .detail-title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+        .copy-link-icon { width: 18px; height: 18px; color: var(--text-dim); cursor: pointer; transition: color 0.2s ease, transform 0.15s ease; flex-shrink: 0; position: relative; top: 1px; }
+        .copy-link-icon:hover { color: var(--accent); transform: scale(1.1); }
+        .copy-link-icon.copied { color: #22c55e; }
         .detail-meta { font-size: 0.8em; color: var(--text-muted); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
         .detail-description { font-size: 0.9em; color: var(--text-muted); line-height: 1.6; margin-bottom: 20px; white-space: pre-wrap; }
         .detail-params { margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -3702,7 +3706,9 @@ DETAIL_HTML = """\
         .action-btn.liked { color: #ef4444; border-color: #ef4444; }
         .action-btn.danger { border-color: #ef4444; color: #ef4444; }
         .action-btn.danger:hover { background: rgba(239,68,68,0.1); }
-        .action-buttons { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .action-buttons { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
+        .open-backtester-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px; border-radius: 10px; border: 1.5px solid #f7931a; background: rgba(247,147,26,0.08); color: #f7931a; font-size: 0.88em; font-weight: 600; font-family: 'DM Sans', sans-serif; text-decoration: none; transition: all 0.2s ease; }
+        .open-backtester-btn:hover { background: rgba(247,147,26,0.18); transform: translateY(-1px); }
         .like-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-muted); cursor: pointer; font-size: 0.9em; font-weight: 600; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; }
         .like-btn:hover { border-color: #ef4444; color: #ef4444; }
         .like-btn.liked { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,0.08); }
@@ -3846,7 +3852,10 @@ DETAIL_HTML = """\
     <div class="panel">
         <div class="detail-header">
             {% if backtest.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
-            <h2 class="detail-title">{{ backtest.title|title if backtest.title else 'Backtest' }}</h2>
+            <div class="detail-title-row">
+                <h2 class="detail-title">{{ backtest.title|title if backtest.title else 'Backtest' }}</h2>
+                <svg class="copy-link-icon" onclick="copyLink(this)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" title="Copy link"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            </div>
             <div class="detail-meta">
                 <span>by {{ display_name or backtest.user_email.split('@')[0] }}</span>
                 <span>{{ time_ago(backtest.created_at) }}</span>
@@ -3925,9 +3934,13 @@ DETAIL_HTML = """\
         {% endif %}
 
         {% if is_authenticated %}
+        <div style="text-align:center;margin-bottom:16px">
+            <a class="open-backtester-btn" href="/backtester?{{ backtest.query_string }}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Open in Backtester
+            </a>
+        </div>
         <div class="action-buttons">
-            <a class="action-btn" href="/backtester?{{ backtest.query_string }}">Open in Backtester</a>
-            <button class="action-btn" onclick="copyLink()">Copy Link</button>
             {% if is_admin or backtest.user_id == session.get('user_id') %}
             <button class="action-btn" onclick="openDetailEditModal()">Edit</button>
             <button class="action-btn danger" onclick="deleteThisBacktest()">Delete</button>
@@ -4093,9 +4106,10 @@ function showReplyForm(commentId) {
 function featureBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' }).then(function() { location.reload(); });
 }
-function copyLink() {
+function copyLink(el) {
     navigator.clipboard.writeText(location.origin + '/s/{{ backtest.short_code }}');
-    _swal.fire({icon:'success', title:'Link copied!', timer:1500, showConfirmButton:false});
+    if (el) { el.classList.add('copied'); setTimeout(function(){ el.classList.remove('copied'); }, 1200); }
+    _swal.fire({icon:'success', title:'Link copied!', timer:1200, showConfirmButton:false});
 }
 // Move like button between chart and metrics table
 (function() {
