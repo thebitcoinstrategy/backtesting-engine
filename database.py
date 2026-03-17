@@ -1,0 +1,338 @@
+"""SQLite database for saved/published backtests, likes, and comments."""
+
+import os
+import sqlite3
+import uuid
+import string
+import random
+from datetime import datetime
+
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backtests.db")
+ADMIN_EMAIL = "kuschnik.gerhard@gmail.com"
+
+
+def _get_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
+def init_db():
+    """Create tables if they don't exist."""
+    conn = _get_conn()
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS backtests (
+            id TEXT PRIMARY KEY,
+            short_code TEXT UNIQUE,
+            user_id TEXT NOT NULL,
+            user_email TEXT NOT NULL,
+            title TEXT,
+            description TEXT,
+            params TEXT NOT NULL,
+            query_string TEXT NOT NULL,
+            cached_html TEXT,
+            visibility TEXT NOT NULL DEFAULT 'private',
+            likes_count INTEGER DEFAULT 0,
+            comments_count INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS likes (
+            user_id TEXT NOT NULL,
+            backtest_id TEXT NOT NULL REFERENCES backtests(id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, backtest_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS comments (
+            id TEXT PRIMARY KEY,
+            backtest_id TEXT NOT NULL REFERENCES backtests(id) ON DELETE CASCADE,
+            parent_id TEXT REFERENCES comments(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL,
+            user_email TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_backtests_visibility ON backtests(visibility);
+        CREATE INDEX IF NOT EXISTS idx_backtests_user ON backtests(user_id);
+        CREATE INDEX IF NOT EXISTS idx_backtests_short_code ON backtests(short_code);
+        CREATE INDEX IF NOT EXISTS idx_comments_backtest ON comments(backtest_id);
+        CREATE INDEX IF NOT EXISTS idx_likes_backtest ON likes(backtest_id);
+    """)
+    conn.close()
+
+
+def generate_short_code():
+    """Generate a unique 6-char alphanumeric short code."""
+    chars = string.ascii_lowercase + string.digits
+    conn = _get_conn()
+    for _ in range(100):
+        code = ''.join(random.choices(chars, k=6))
+        row = conn.execute("SELECT 1 FROM backtests WHERE short_code=?", (code,)).fetchone()
+        if not row:
+            conn.close()
+            return code
+    conn.close()
+    # Fallback: use 8 chars
+    return ''.join(random.choices(chars, k=8))
+
+
+def _row_to_dict(row):
+    """Convert sqlite3.Row to dict."""
+    if row is None:
+        return None
+    return dict(row)
+
+
+def save_backtest(user_id, email, params, query_string, cached_html, visibility='private', title=None, description=None):
+    """Save a backtest. Returns the backtest dict."""
+    conn = _get_conn()
+    bt_id = str(uuid.uuid4())
+    short_code = generate_short_code()
+    now = datetime.utcnow().isoformat()
+    conn.execute(
+        """INSERT INTO backtests (id, short_code, user_id, user_email, title, description,
+           params, query_string, cached_html, visibility, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (bt_id, short_code, user_id, email, title, description,
+         params, query_string, cached_html, visibility, now, now)
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM backtests WHERE id=?", (bt_id,)).fetchone()
+    conn.close()
+    return _row_to_dict(row)
+
+
+def get_backtest(bt_id):
+    """Get a backtest by ID."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM backtests WHERE id=?", (bt_id,)).fetchone()
+    conn.close()
+    return _row_to_dict(row)
+
+
+def get_backtest_by_short_code(code):
+    """Get a backtest by short code."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM backtests WHERE short_code=?", (code,)).fetchone()
+    conn.close()
+    return _row_to_dict(row)
+
+
+def list_backtests(visibility=None, sort='newest', page=1, per_page=20):
+    """List backtests filtered by visibility. Returns (list, total_count)."""
+    conn = _get_conn()
+    where = ""
+    params = []
+    if visibility:
+        if isinstance(visibility, (list, tuple)):
+            placeholders = ','.join('?' * len(visibility))
+            where = f"WHERE visibility IN ({placeholders})"
+            params = list(visibility)
+        else:
+            where = "WHERE visibility=?"
+            params = [visibility]
+
+    order = "created_at DESC" if sort == 'newest' else "likes_count DESC, created_at DESC"
+    offset = (page - 1) * per_page
+
+    total = conn.execute(f"SELECT COUNT(*) FROM backtests {where}", params).fetchone()[0]
+    rows = conn.execute(
+        f"SELECT * FROM backtests {where} ORDER BY {order} LIMIT ? OFFSET ?",
+        params + [per_page, offset]
+    ).fetchall()
+    conn.close()
+    return [_row_to_dict(r) for r in rows], total
+
+
+def list_user_backtests(user_id):
+    """List all backtests for a user."""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT * FROM backtests WHERE user_id=? ORDER BY created_at DESC",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    return [_row_to_dict(r) for r in rows]
+
+
+def delete_backtest(bt_id, user_id):
+    """Delete a backtest. Owner or admin only. Returns True if deleted."""
+    conn = _get_conn()
+    row = conn.execute("SELECT user_id, user_email FROM backtests WHERE id=?", (bt_id,)).fetchone()
+    if not row:
+        conn.close()
+        return False
+    # Check ownership or admin
+    bt = _row_to_dict(row)
+    conn_email = conn.execute("SELECT user_email FROM backtests WHERE id=? AND user_id=?", (bt_id, user_id)).fetchone()
+    # Get the requesting user's email from session (passed as user_id check)
+    if bt['user_id'] != user_id:
+        # Check if user_id belongs to admin — caller must pass admin check separately
+        conn.close()
+        return False
+    conn.execute("DELETE FROM backtests WHERE id=?", (bt_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def delete_backtest_admin(bt_id):
+    """Admin delete — no ownership check."""
+    conn = _get_conn()
+    conn.execute("DELETE FROM backtests WHERE id=?", (bt_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def update_visibility(bt_id, new_visibility):
+    """Update backtest visibility. Returns True if updated."""
+    conn = _get_conn()
+    now = datetime.utcnow().isoformat()
+    conn.execute(
+        "UPDATE backtests SET visibility=?, updated_at=? WHERE id=?",
+        (new_visibility, now, bt_id)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def toggle_like(user_id, backtest_id):
+    """Toggle like. Returns (new_likes_count, liked)."""
+    conn = _get_conn()
+    existing = conn.execute(
+        "SELECT 1 FROM likes WHERE user_id=? AND backtest_id=?",
+        (user_id, backtest_id)
+    ).fetchone()
+    if existing:
+        conn.execute("DELETE FROM likes WHERE user_id=? AND backtest_id=?", (user_id, backtest_id))
+        conn.execute("UPDATE backtests SET likes_count = MAX(0, likes_count - 1) WHERE id=?", (backtest_id,))
+    else:
+        conn.execute("INSERT INTO likes (user_id, backtest_id) VALUES (?, ?)", (user_id, backtest_id))
+        conn.execute("UPDATE backtests SET likes_count = likes_count + 1 WHERE id=?", (backtest_id,))
+    conn.commit()
+    count = conn.execute("SELECT likes_count FROM backtests WHERE id=?", (backtest_id,)).fetchone()
+    conn.close()
+    liked = not bool(existing)
+    return (count[0] if count else 0, liked)
+
+
+def has_liked(user_id, backtest_id):
+    """Check if user has liked a backtest."""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT 1 FROM likes WHERE user_id=? AND backtest_id=?",
+        (user_id, backtest_id)
+    ).fetchone()
+    conn.close()
+    return bool(row)
+
+
+def add_comment(backtest_id, user_id, email, body, parent_id=None):
+    """Add a comment. Returns the comment dict."""
+    conn = _get_conn()
+    comment_id = str(uuid.uuid4())
+    now = datetime.utcnow().isoformat()
+    conn.execute(
+        """INSERT INTO comments (id, backtest_id, parent_id, user_id, user_email, body, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (comment_id, backtest_id, parent_id, user_id, email, body, now)
+    )
+    conn.execute("UPDATE backtests SET comments_count = comments_count + 1 WHERE id=?", (backtest_id,))
+    conn.commit()
+    row = conn.execute("SELECT * FROM comments WHERE id=?", (comment_id,)).fetchone()
+    conn.close()
+    return _row_to_dict(row)
+
+
+def get_comments(backtest_id):
+    """Get threaded comments for a backtest. Returns list of top-level comments with 'replies' key."""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT * FROM comments WHERE backtest_id=? ORDER BY created_at ASC",
+        (backtest_id,)
+    ).fetchall()
+    conn.close()
+
+    comments = [_row_to_dict(r) for r in rows]
+    top_level = []
+    by_id = {}
+    for c in comments:
+        c['replies'] = []
+        by_id[c['id']] = c
+
+    for c in comments:
+        if c['parent_id'] and c['parent_id'] in by_id:
+            by_id[c['parent_id']]['replies'].append(c)
+        else:
+            top_level.append(c)
+
+    return top_level
+
+
+def delete_comment(comment_id, user_id):
+    """Delete a comment. Owner only. Returns True if deleted."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM comments WHERE id=?", (comment_id,)).fetchone()
+    if not row:
+        conn.close()
+        return False
+    comment = _row_to_dict(row)
+    if comment['user_id'] != user_id:
+        conn.close()
+        return False
+    backtest_id = comment['backtest_id']
+    # Count this comment + its replies
+    reply_count = conn.execute(
+        "SELECT COUNT(*) FROM comments WHERE parent_id=?", (comment_id,)
+    ).fetchone()[0]
+    conn.execute("DELETE FROM comments WHERE id=? OR parent_id=?", (comment_id, comment_id))
+    conn.execute(
+        "UPDATE backtests SET comments_count = MAX(0, comments_count - ?) WHERE id=?",
+        (1 + reply_count, backtest_id)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def delete_comment_admin(comment_id):
+    """Admin delete comment — no ownership check."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM comments WHERE id=?", (comment_id,)).fetchone()
+    if not row:
+        conn.close()
+        return False
+    comment = _row_to_dict(row)
+    backtest_id = comment['backtest_id']
+    reply_count = conn.execute(
+        "SELECT COUNT(*) FROM comments WHERE parent_id=?", (comment_id,)
+    ).fetchone()[0]
+    conn.execute("DELETE FROM comments WHERE id=? OR parent_id=?", (comment_id, comment_id))
+    conn.execute(
+        "UPDATE backtests SET comments_count = MAX(0, comments_count - ?) WHERE id=?",
+        (1 + reply_count, backtest_id)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_user_liked_ids(user_id, backtest_ids):
+    """Get set of backtest IDs that user has liked from a list."""
+    if not backtest_ids:
+        return set()
+    conn = _get_conn()
+    placeholders = ','.join('?' * len(backtest_ids))
+    rows = conn.execute(
+        f"SELECT backtest_id FROM likes WHERE user_id=? AND backtest_id IN ({placeholders})",
+        [user_id] + list(backtest_ids)
+    ).fetchall()
+    conn.close()
+    return {r['backtest_id'] for r in rows}

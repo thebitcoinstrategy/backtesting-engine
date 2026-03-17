@@ -9,13 +9,15 @@ import time
 import base64
 import functools
 from io import BytesIO
-from datetime import timedelta
-from flask import Flask, render_template_string, request, session, redirect
+from datetime import timedelta, datetime
+from flask import Flask, render_template_string, request, session, redirect, jsonify, abort
 import backtest as bt
 import threading
 import uuid
+import database as db
 
 app = Flask(__name__)
+db.init_db()
 
 # --- Disk cache for backtest results ---
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
@@ -187,6 +189,53 @@ def require_auth(f):
         return redirect(LARAVEL_LOGIN_URL, code=302)
 
     return decorated
+
+
+def _is_authenticated():
+    """Check if current request has a valid session."""
+    auth_time = session.get('auth_time')
+    return bool(auth_time and (time.time() - auth_time) < SESSION_DURATION)
+
+
+def _is_admin():
+    """Check if current user is admin."""
+    return _is_authenticated() and session.get('email') == db.ADMIN_EMAIL
+
+
+def _require_auth_api():
+    """Check auth for API routes. Returns (user_id, email) or aborts with 401."""
+    if not _is_authenticated():
+        abort(401)
+    return session.get('user_id'), session.get('email')
+
+
+def _time_ago(dt_str):
+    """Convert ISO datetime string to human-readable time ago."""
+    if not dt_str:
+        return ""
+    try:
+        dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+        now = datetime.utcnow()
+        diff = now - dt.replace(tzinfo=None) if dt.tzinfo else now - dt
+        seconds = int(diff.total_seconds())
+        if seconds < 60:
+            return "just now"
+        minutes = seconds // 60
+        if minutes < 60:
+            return f"{minutes}m ago"
+        hours = minutes // 60
+        if hours < 24:
+            return f"{hours}h ago"
+        days = hours // 24
+        if days < 30:
+            return f"{days}d ago"
+        months = days // 30
+        if months < 12:
+            return f"{months}mo ago"
+        return f"{days // 365}y ago"
+    except Exception:
+        return ""
+
 
 HTML = """\
 <!DOCTYPE html>
@@ -741,6 +790,146 @@ HTML = """\
         ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
+        /* Nav bar */
+        .nav-bar {
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+            margin-bottom: 20px;
+            animation: fadeDown 0.6s ease-out;
+        }
+        .nav-link {
+            padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500;
+            color: var(--text-muted); text-decoration: none; transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+        .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
+        .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+
+        /* Save/Publish buttons */
+        .action-buttons { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+        .action-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--bg-elevated); color: var(--text-muted); cursor: pointer;
+            font-size: 0.82em; font-weight: 500; font-family: 'DM Sans', sans-serif;
+            transition: all 0.2s ease;
+        }
+        .action-btn:hover { border-color: var(--border-hover); color: var(--text); background: var(--bg-surface); }
+        .action-btn.primary { border-color: var(--accent); color: var(--accent); }
+        .action-btn.primary:hover { background: rgba(247,147,26,0.1); }
+        .action-btn.liked { color: #ef4444; border-color: #ef4444; }
+        .action-btn svg { width: 16px; height: 16px; }
+
+        /* Publish modal */
+        .publish-modal-overlay {
+            display: none; position: fixed; inset: 0; z-index: 1000;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            align-items: center; justify-content: center;
+        }
+        .publish-modal-overlay.open { display: flex; }
+        .publish-modal {
+            background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px;
+            padding: 28px; width: 90%; max-width: 500px; position: relative;
+        }
+        .publish-modal h3 { font-size: 1.1em; font-weight: 600; margin-bottom: 16px; }
+        .publish-modal label { display: block; font-size: 0.8em; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
+        .publish-modal input, .publish-modal textarea {
+            width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+            background: var(--bg-deep); color: var(--text); font-size: 0.9em; font-family: 'DM Sans', sans-serif;
+            transition: border-color 0.2s ease; margin-bottom: 14px;
+        }
+        .publish-modal input:focus, .publish-modal textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .publish-modal textarea { resize: vertical; min-height: 80px; }
+        .publish-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+        .publish-modal .close-btn {
+            position: absolute; top: 12px; right: 16px; background: none; border: none;
+            color: var(--text-dim); cursor: pointer; font-size: 1.2em;
+        }
+
+        /* Community page styles */
+        .page-title { font-size: 1.4em; font-weight: 700; margin-bottom: 6px; }
+        .page-subtitle { font-size: 0.85em; color: var(--text-muted); margin-bottom: 20px; }
+        .sort-tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+        .sort-tab {
+            padding: 6px 16px; border-radius: 8px; font-size: 0.8em; font-weight: 500;
+            color: var(--text-muted); text-decoration: none; border: 1px solid transparent;
+            transition: all 0.2s ease;
+        }
+        .sort-tab:hover { color: var(--text); background: var(--bg-elevated); }
+        .sort-tab.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+
+        .backtest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+        .backtest-card {
+            background: var(--bg-surface); border: 1px solid var(--border); border-radius: 14px;
+            padding: 18px; transition: all 0.2s ease; cursor: pointer; text-decoration: none; color: inherit;
+        }
+        .backtest-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .backtest-card-title { font-size: 1em; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+        .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .backtest-card-metrics { display: flex; gap: 14px; margin-bottom: 10px; }
+        .backtest-card-metric { font-family: 'JetBrains Mono', monospace; font-size: 0.75em; }
+        .backtest-card-metric .label { color: var(--text-dim); font-size: 0.85em; }
+        .backtest-card-metric .value { color: var(--text); font-weight: 500; }
+        .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
+        .backtest-card-footer .engagement { display: flex; gap: 12px; }
+        .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
+        .backtest-card-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
+        .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
+        .badge-private { background: rgba(136,144,164,0.15); color: var(--text-muted); }
+
+        /* Detail page */
+        .detail-header { margin-bottom: 20px; }
+        .detail-title { font-size: 1.3em; font-weight: 700; margin-bottom: 4px; }
+        .detail-meta { font-size: 0.8em; color: var(--text-muted); display: flex; gap: 16px; align-items: center; }
+        .detail-description { font-size: 0.9em; color: var(--text-muted); line-height: 1.6; margin-bottom: 20px; white-space: pre-wrap; }
+
+        /* Comments */
+        .comments-section { margin-top: 24px; }
+        .comments-title { font-size: 1em; font-weight: 600; margin-bottom: 14px; }
+        .comment-form { margin-bottom: 20px; }
+        .comment-form textarea {
+            width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+            background: var(--bg-deep); color: var(--text); font-size: 0.85em; font-family: 'DM Sans', sans-serif;
+            resize: vertical; min-height: 60px; margin-bottom: 8px;
+        }
+        .comment-form textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .comment { padding: 12px 0; border-bottom: 1px solid var(--border); }
+        .comment:last-child { border-bottom: none; }
+        .comment-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 0.8em; }
+        .comment-author { font-weight: 600; color: var(--text); }
+        .comment-time { color: var(--text-dim); }
+        .comment-body { font-size: 0.85em; color: var(--text-muted); line-height: 1.5; }
+        .comment-actions { margin-top: 6px; display: flex; gap: 12px; }
+        .comment-action-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.75em; font-family: 'DM Sans', sans-serif; }
+        .comment-action-btn:hover { color: var(--text); }
+        .comment-replies { margin-left: 24px; border-left: 2px solid var(--border); padding-left: 14px; }
+        .reply-form { margin-top: 8px; }
+        .reply-form textarea { min-height: 40px; font-size: 0.8em; }
+
+        /* Pagination */
+        .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 24px; }
+        .pagination a {
+            padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border);
+            color: var(--text-muted); text-decoration: none; font-size: 0.82em; transition: all 0.2s ease;
+        }
+        .pagination a:hover { border-color: var(--border-hover); color: var(--text); }
+        .pagination a.active { border-color: var(--accent); color: var(--accent); }
+
+        /* CTA banner for non-auth */
+        .cta-banner {
+            background: linear-gradient(135deg, rgba(247,147,26,0.1), rgba(100,149,237,0.1));
+            border: 1px solid var(--accent); border-radius: 12px; padding: 20px; text-align: center; margin-top: 20px;
+        }
+        .cta-banner h3 { font-size: 1em; margin-bottom: 6px; }
+        .cta-banner p { font-size: 0.85em; color: var(--text-muted); margin-bottom: 12px; }
+        .cta-banner a {
+            display: inline-block; padding: 10px 24px; background: var(--accent); color: #fff;
+            border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.85em;
+        }
+
         /* Animations */
         @keyframes fadeUp {
             from { opacity: 0; transform: translateY(16px); }
@@ -760,6 +949,14 @@ HTML = """\
         <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px;font-family:'DM Sans',sans-serif">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a> at the-bitcoin-strategy.com</div>
     </div>
+    <nav class="nav-bar">
+        <a href="/" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Backtester</a>
+        <a href="/community" class="nav-link {{ 'active' if nav_active|default('')=='community' }}">Community</a>
+        <a href="/featured" class="nav-link {{ 'active' if nav_active|default('')=='featured' }}">Featured</a>
+        {% if session.get('user_id') %}
+        <a href="/my-backtests" class="nav-link {{ 'active' if nav_active|default('')=='my-backtests' }}">My Backtests</a>
+        {% endif %}
+    </nav>
     <div class="layout">
         <div class="panel">
             <form method="POST" id="form">
@@ -1227,6 +1424,22 @@ HTML = """\
                     ind2Label: {{ ind2_label|tojson }}
                 };
                 </script>
+                {% endif %}
+                {% if session.get('user_id') %}
+                <div class="action-buttons" id="backtest-actions">
+                    <button class="action-btn" onclick="saveBacktest()" id="save-btn">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v10h10V6l-3-3H3z"/><path d="M5 3v3h4V3"/><path d="M5 9h6v4H5z"/></svg>
+                        Save
+                    </button>
+                    <button class="action-btn primary" onclick="openPublishModal()">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l4-4 4 4"/><path d="M8 8v6"/><path d="M13.5 10.5A3.5 3.5 0 0010 5a4 4 0 00-7.5 2"/></svg>
+                        Publish
+                    </button>
+                    <button class="action-btn hidden" onclick="copyShortLink()" id="copy-link-btn">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a3 3 0 004.24 0l2-2a3 3 0 00-4.24-4.24L6.5 3.26"/><path d="M10 8a3 3 0 00-4.24 0l-2 2a3 3 0 004.24 4.24L9.5 12.74"/></svg>
+                        Copy Link
+                    </button>
+                </div>
                 {% endif %}
                 {% if best and not lev_sweep|default(none) %}
                 {# Compact 3-column metrics table: Metric | Strategy | Buy & Hold #}
@@ -1867,7 +2080,140 @@ window.addEventListener('popstate', function(e) {
     _isPopstate = true;
     form.dispatchEvent(new Event('submit', { cancelable: true }));
 });
+
+// --- Save / Publish / Like / Comment functionality ---
+var _currentShortCode = null;
+
+function saveBacktest() {
+    var btn = document.getElementById('save-btn');
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+    var formData = new FormData(document.getElementById('form'));
+    var params = {};
+    formData.forEach(function(v, k) { params[k] = v; });
+    var qs = new URLSearchParams(params).toString();
+    var resultsHtml = document.getElementById('results-panel').innerHTML;
+    fetch('/api/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({params: JSON.stringify(params), query_string: qs, cached_html: resultsHtml})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        btn.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8l4 4 8-8"/></svg> Saved!';
+        _currentShortCode = data.short_code;
+        setTimeout(function() {
+            btn.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v10h10V6l-3-3H3z"/><path d="M5 3v3h4V3"/><path d="M5 9h6v4H5z"/></svg> Save';
+            btn.disabled = false;
+        }, 2000);
+    }).catch(function() { btn.textContent = 'Save'; btn.disabled = false; });
+}
+
+function openPublishModal() {
+    document.getElementById('publish-modal-overlay').classList.add('open');
+    document.getElementById('publish-title').focus();
+}
+function closePublishModal() {
+    document.getElementById('publish-modal-overlay').classList.remove('open');
+}
+
+function publishBacktest(visibility) {
+    var title = document.getElementById('publish-title').value.trim();
+    var desc = document.getElementById('publish-desc').value.trim();
+    if (!title) { alert('Title is required'); return; }
+    if (!desc) { alert('Description is required'); return; }
+    var formData = new FormData(document.getElementById('form'));
+    var params = {};
+    formData.forEach(function(v, k) { params[k] = v; });
+    var qs = new URLSearchParams(params).toString();
+    var resultsHtml = document.getElementById('results-panel').innerHTML;
+    fetch('/api/publish', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            params: JSON.stringify(params), query_string: qs, cached_html: resultsHtml,
+            title: title, description: desc, visibility: visibility || 'community'
+        })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        _currentShortCode = data.short_code;
+        closePublishModal();
+        var copyBtn = document.getElementById('copy-link-btn');
+        if (copyBtn) { copyBtn.classList.remove('hidden'); }
+        alert('Published! Short link: ' + location.origin + '/s/' + data.short_code);
+    }).catch(function() { alert('Failed to publish'); });
+}
+
+function copyShortLink() {
+    if (!_currentShortCode) return;
+    var url = location.origin + '/s/' + _currentShortCode;
+    navigator.clipboard.writeText(url).then(function() {
+        var btn = document.getElementById('copy-link-btn');
+        var orig = btn.innerHTML;
+        btn.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8l4 4 8-8"/></svg> Copied!';
+        setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    });
+}
+
+function toggleLike(backtestId, btn) {
+    fetch('/api/backtest/' + backtestId + '/like', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.querySelector('.like-count').textContent = data.likes_count;
+        if (data.liked) { btn.classList.add('liked'); } else { btn.classList.remove('liked'); }
+    });
+}
+
+function submitComment(backtestId, parentId) {
+    var textareaId = parentId ? 'reply-' + parentId : 'comment-body';
+    var body = document.getElementById(textareaId).value.trim();
+    if (!body) return;
+    fetch('/api/backtest/' + backtestId + '/comment', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({body: body, parent_id: parentId || null})
+    }).then(function(r) { return r.json(); })
+    .then(function() { location.reload(); });
+}
+
+function deleteComment(commentId) {
+    if (!confirm('Delete this comment?')) return;
+    fetch('/api/comment/' + commentId, { method: 'DELETE' })
+    .then(function() { location.reload(); });
+}
+
+function showReplyForm(commentId) {
+    var el = document.getElementById('reply-form-' + commentId);
+    if (el) el.classList.toggle('hidden');
+}
+
+function deleteBacktest(backtestId) {
+    if (!confirm('Delete this backtest?')) return;
+    fetch('/api/backtest/' + backtestId, { method: 'DELETE' })
+    .then(function() { location.reload(); });
+}
+
+function featureBacktest(backtestId) {
+    fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' })
+    .then(function() { location.reload(); });
+}
 </script>
+
+<!-- Publish Modal -->
+<div class="publish-modal-overlay" id="publish-modal-overlay">
+    <div class="publish-modal">
+        <button class="close-btn" onclick="closePublishModal()">&times;</button>
+        <h3>Publish to Community</h3>
+        <label for="publish-title">Title</label>
+        <input type="text" id="publish-title" placeholder="e.g. Bitcoin EMA(20)/SMA(100) Crossover" maxlength="120">
+        <label for="publish-desc">Description</label>
+        <textarea id="publish-desc" placeholder="Describe your findings, strategy rationale, or key takeaways..."></textarea>
+        <div class="publish-modal-actions">
+            <button class="action-btn" onclick="closePublishModal()">Cancel</button>
+            <button class="action-btn primary" onclick="publishBacktest('community')">Publish</button>
+            {% if session.get('email') == '""" + db.ADMIN_EMAIL + """' %}
+            <button class="action-btn" style="border-color:var(--green);color:var(--green)" onclick="publishBacktest('featured')">Publish as Featured</button>
+            {% endif %}
+        </div>
+    </div>
+</div>
 </body>
 </html>
 """
@@ -2059,7 +2405,7 @@ def index():
             p = Params(request.args)
         else:
             p = Params()
-        return render_template_string(HTML, p=p, chart=None, best=None, table_rows=None, col_header=col_header,
+        return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       price_json=None, ind1_json='[]', ind2_json='[]', ind1_label='', ind2_label='')
 
@@ -2119,7 +2465,7 @@ def _run_post_handler(cancel_event):
     # --- Regression Analysis Mode ---
     if p.mode == "regression":
         if not is_oscillator:
-            return render_template_string(HTML, p=p, chart=None, best=None, table_rows=None, col_header=col_header,
+            return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
                                           asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                           error="Regression analysis requires an oscillator indicator. Please select one from Indicator 2.",
                                           price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
@@ -2132,7 +2478,7 @@ def _run_post_handler(cancel_event):
                                                       p.buy_threshold, p.sell_threshold)
         sweep_chart_b64 = bt.generate_regression_sweep_chart(sweep_result)
 
-        return render_template_string(HTML, p=p, chart=chart_b64, best=None, table_rows=None, col_header=col_header,
+        return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=None, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       regression=reg_result, regression_sweep_chart=sweep_chart_b64, regression_sweep=sweep_result,
                                       price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
@@ -2285,7 +2631,7 @@ def _run_post_handler(cancel_event):
         price_json = _series_to_lw_json(df["close"])
         ind1_json = _series_to_lw_json(best["ind1_series"]) if best.get("ind1_name") != "price" else "[]"
         ind2_json = _series_to_lw_json(best["ind2_series"])
-        return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
+        return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info,
                                       price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
@@ -2433,7 +2779,7 @@ def _run_post_handler(cancel_event):
         price_json = _series_to_lw_json(df["close"])
         ind1_json = _series_to_lw_json(best["ind1_series"]) if best.get("ind1_name") != "price" else "[]"
         ind2_json = _series_to_lw_json(best["ind2_series"])
-        return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
+        return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       hide_buyhold=(p.exposure == "short-cash"),
                                       price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
@@ -2693,12 +3039,710 @@ def _run_post_handler(cancel_event):
     else:
         ind1_json = _series_to_lw_json(best["ind1_series"]) if best and best.get("ind1_name") != "price" else "[]"
         ind2_json = _series_to_lw_json(best["ind2_series"]) if best else "[]"
-    return render_template_string(HTML, p=p, chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
+    return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
                                   asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                   hide_buyhold=(p.exposure == "short-cash"),
                                   ls_breakdown=long_short_breakdown,
                                   price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                   ind1_label=best.get("ind1_label", "") if best else "", ind2_label=best.get("ind2_label", "") if best else "")
+
+
+# --- Community / Save / Publish Templates ---
+
+COMMUNITY_HTML = """\
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ page_title }} — Strategy Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #080a10; --bg-base: #0f1117; --bg-surface: #161922; --bg-elevated: #1c2030;
+            --border: #252a3a; --border-hover: #3a4060; --text: #e8eaf0; --text-muted: #8890a4; --text-dim: #555d74;
+            --accent: #f7931a; --accent-hover: #ffa940; --accent-glow: rgba(247, 147, 26, 0.15);
+            --green: #34d399; --blue: #6495ED;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'DM Sans', sans-serif; background: var(--bg-deep); color: var(--text); min-height: 100vh; }
+        body::before {
+            content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(247, 147, 26, 0.06), transparent),
+                        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100, 149, 237, 0.04), transparent);
+            pointer-events: none; z-index: 0;
+        }
+        .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
+        .header { text-align: center; margin-bottom: 32px; }
+        .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
+        .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; border-radius: 0; font-weight: 700; }
+        .header h1 .brand-analytics { background: var(--bg-elevated); color: var(--text); padding: 6px 14px; border-radius: 0; border: 1px solid var(--border); border-left: none; }
+        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; }
+        .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
+        .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
+        .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); }
+        .page-title { font-size: 1.4em; font-weight: 700; margin-bottom: 6px; }
+        .page-subtitle { font-size: 0.85em; color: var(--text-muted); margin-bottom: 20px; }
+        .sort-tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+        .sort-tab { padding: 6px 16px; border-radius: 8px; font-size: 0.8em; font-weight: 500; color: var(--text-muted); text-decoration: none; border: 1px solid transparent; transition: all 0.2s ease; }
+        .sort-tab:hover { color: var(--text); background: var(--bg-elevated); }
+        .sort-tab.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        .backtest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+        .backtest-card { display: block; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: all 0.2s ease; cursor: pointer; text-decoration: none; color: inherit; }
+        .backtest-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .backtest-card-title { font-size: 1em; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+        .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .backtest-card-metrics { display: flex; gap: 14px; margin-bottom: 10px; flex-wrap: wrap; }
+        .backtest-card-metric { font-family: 'JetBrains Mono', monospace; font-size: 0.75em; }
+        .backtest-card-metric .label { color: var(--text-dim); font-size: 0.85em; }
+        .backtest-card-metric .value { color: var(--text); font-weight: 500; }
+        .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
+        .backtest-card-footer .engagement { display: flex; gap: 12px; }
+        .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
+        .backtest-card-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+        .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
+        .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
+        .badge-private { background: rgba(136,144,164,0.15); color: var(--text-muted); }
+        .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 24px; }
+        .pagination a { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); color: var(--text-muted); text-decoration: none; font-size: 0.82em; transition: all 0.2s ease; }
+        .pagination a:hover { border-color: var(--border-hover); color: var(--text); }
+        .pagination a.active { border-color: var(--accent); color: var(--accent); }
+        .cta-banner { background: linear-gradient(135deg, rgba(247,147,26,0.1), rgba(100,149,237,0.1)); border: 1px solid var(--accent); border-radius: 12px; padding: 20px; text-align: center; margin-top: 20px; }
+        .cta-banner h3 { font-size: 1em; margin-bottom: 6px; }
+        .cta-banner p { font-size: 0.85em; color: var(--text-muted); margin-bottom: 12px; }
+        .cta-banner a { display: inline-block; padding: 10px 24px; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.85em; }
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+        .empty-state h3 { font-size: 1.1em; margin-bottom: 8px; color: var(--text); }
+        .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); cursor: pointer; font-size: 0.82em; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; text-decoration: none; }
+        .action-btn:hover { border-color: var(--border-hover); color: var(--text); }
+        .action-btn.primary { border-color: var(--accent); color: var(--accent); }
+        .action-btn.liked { color: #ef4444; border-color: #ef4444; }
+        .action-btn.danger { border-color: #ef4444; color: #ef4444; }
+        .action-btn.danger:hover { background: rgba(239,68,68,0.1); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
+        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
+    </div>
+    <nav class="nav-bar">
+        <a href="/" class="nav-link {{ 'active' if nav_active=='backtester' }}">Backtester</a>
+        <a href="/community" class="nav-link {{ 'active' if nav_active=='community' }}">Community</a>
+        <a href="/featured" class="nav-link {{ 'active' if nav_active=='featured' }}">Featured</a>
+        {% if session.get('user_id') %}
+        <a href="/my-backtests" class="nav-link {{ 'active' if nav_active=='my-backtests' }}">My Backtests</a>
+        {% endif %}
+    </nav>
+    <div class="panel">
+        <h2 class="page-title">{{ page_title }}</h2>
+        <p class="page-subtitle">{{ page_subtitle }}</p>
+
+        {% if show_sort|default(true) %}
+        <div class="sort-tabs">
+            <a href="?sort=newest&page=1" class="sort-tab {{ 'active' if sort=='newest' }}">Newest</a>
+            <a href="?sort=popular&page=1" class="sort-tab {{ 'active' if sort=='popular' }}">Most Liked</a>
+        </div>
+        {% endif %}
+
+        {% if backtests %}
+        <div class="backtest-grid">
+            {% for bt in backtests %}
+            <a class="backtest-card" href="/backtest/{{ bt.id }}">
+                {% if bt.visibility == 'featured' %}<span class="backtest-card-badge badge-featured">Featured</span>{% endif %}
+                {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
+                {% if bt.visibility == 'private' %}<span class="backtest-card-badge badge-private">Private</span>{% endif %}
+                <div class="backtest-card-title">{{ bt.title or 'Untitled Backtest' }}</div>
+                {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:120] }}</div>{% endif %}
+                <div class="backtest-card-footer">
+                    <span>{{ bt.user_email.split('@')[0] }} · {{ time_ago(bt.created_at) }}</span>
+                    <div class="engagement">
+                        <span>♥ {{ bt.likes_count }}</span>
+                        <span>💬 {{ bt.comments_count }}</span>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+
+        {% if total_pages > 1 %}
+        <div class="pagination">
+            {% if page > 1 %}<a href="?sort={{ sort }}&page={{ page - 1 }}">← Prev</a>{% endif %}
+            {% for pg in range(1, total_pages + 1) %}
+                {% if pg == page %}<a class="active" href="?sort={{ sort }}&page={{ pg }}">{{ pg }}</a>
+                {% elif (pg - page)|abs <= 2 or pg == 1 or pg == total_pages %}<a href="?sort={{ sort }}&page={{ pg }}">{{ pg }}</a>{% endif %}
+            {% endfor %}
+            {% if page < total_pages %}<a href="?sort={{ sort }}&page={{ page + 1 }}">Next →</a>{% endif %}
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="empty-state">
+            <h3>No backtests yet</h3>
+            <p>{{ empty_message|default('Be the first to publish a backtest!') }}</p>
+        </div>
+        {% endif %}
+
+        {% if not is_authenticated %}
+        <div class="cta-banner">
+            <h3>Want to run your own backtests?</h3>
+            <p>Sign up for a premium membership to access the full backtesting engine.</p>
+            <a href="https://the-bitcoin-strategy.com">Get Started</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+<script>
+function deleteBacktest(backtestId) {
+    if (!confirm('Delete this backtest?')) return;
+    fetch('/api/backtest/' + backtestId, { method: 'DELETE' })
+    .then(function() { location.reload(); });
+}
+function featureBacktest(backtestId) {
+    fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' })
+    .then(function() { location.reload(); });
+}
+</script>
+</body>
+</html>
+"""
+
+
+DETAIL_HTML = """\
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ backtest.title or 'Backtest' }} — Strategy Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #080a10; --bg-base: #0f1117; --bg-surface: #161922; --bg-elevated: #1c2030;
+            --border: #252a3a; --border-hover: #3a4060; --text: #e8eaf0; --text-muted: #8890a4; --text-dim: #555d74;
+            --accent: #f7931a; --accent-hover: #ffa940; --accent-glow: rgba(247, 147, 26, 0.15);
+            --green: #34d399; --blue: #6495ED;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'DM Sans', sans-serif; background: var(--bg-deep); color: var(--text); min-height: 100vh; }
+        body::before {
+            content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(247, 147, 26, 0.06), transparent),
+                        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100, 149, 237, 0.04), transparent);
+            pointer-events: none; z-index: 0;
+        }
+        .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
+        .header { text-align: center; margin-bottom: 32px; }
+        .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
+        .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; font-weight: 700; }
+        .header h1 .brand-analytics { background: var(--bg-elevated); color: var(--text); padding: 6px 14px; border: 1px solid var(--border); border-left: none; }
+        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; }
+        .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
+        .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
+        .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); margin-bottom: 16px; }
+        .detail-header { margin-bottom: 20px; }
+        .detail-title { font-size: 1.3em; font-weight: 700; margin-bottom: 4px; }
+        .detail-meta { font-size: 0.8em; color: var(--text-muted); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+        .detail-description { font-size: 0.9em; color: var(--text-muted); line-height: 1.6; margin-bottom: 20px; white-space: pre-wrap; }
+        .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); cursor: pointer; font-size: 0.82em; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; text-decoration: none; }
+        .action-btn:hover { border-color: var(--border-hover); color: var(--text); }
+        .action-btn.primary { border-color: var(--accent); color: var(--accent); }
+        .action-btn.liked { color: #ef4444; border-color: #ef4444; }
+        .action-buttons { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .comments-section { margin-top: 24px; }
+        .comments-title { font-size: 1em; font-weight: 600; margin-bottom: 14px; }
+        .comment-form textarea { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-size: 0.85em; font-family: 'DM Sans', sans-serif; resize: vertical; min-height: 60px; margin-bottom: 8px; }
+        .comment-form textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .comment { padding: 12px 0; border-bottom: 1px solid var(--border); }
+        .comment:last-child { border-bottom: none; }
+        .comment-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 0.8em; }
+        .comment-author { font-weight: 600; color: var(--text); }
+        .comment-time { color: var(--text-dim); }
+        .comment-body { font-size: 0.85em; color: var(--text-muted); line-height: 1.5; }
+        .comment-actions { margin-top: 6px; display: flex; gap: 12px; }
+        .comment-action-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.75em; font-family: 'DM Sans', sans-serif; }
+        .comment-action-btn:hover { color: var(--text); }
+        .comment-replies { margin-left: 24px; border-left: 2px solid var(--border); padding-left: 14px; }
+        .reply-form { margin-top: 8px; }
+        .reply-form textarea { min-height: 40px; font-size: 0.8em; width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-family: 'DM Sans', sans-serif; resize: vertical; margin-bottom: 6px; }
+        .reply-form textarea:focus { outline: none; border-color: var(--accent); }
+        .cta-banner { background: linear-gradient(135deg, rgba(247,147,26,0.1), rgba(100,149,237,0.1)); border: 1px solid var(--accent); border-radius: 12px; padding: 20px; text-align: center; margin-top: 20px; }
+        .cta-banner h3 { font-size: 1em; margin-bottom: 6px; }
+        .cta-banner p { font-size: 0.85em; color: var(--text-muted); margin-bottom: 12px; }
+        .cta-banner a { display: inline-block; padding: 10px 24px; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.85em; }
+        .hidden { display: none !important; }
+        .chart-img { width: 100%; height: auto; border-radius: 12px; }
+        .backtest-card-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
+        .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
+        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
+    </div>
+    <nav class="nav-bar">
+        <a href="/" class="nav-link">Backtester</a>
+        <a href="/community" class="nav-link {{ 'active' if backtest.visibility=='community' }}">Community</a>
+        <a href="/featured" class="nav-link {{ 'active' if backtest.visibility=='featured' }}">Featured</a>
+        {% if session.get('user_id') %}
+        <a href="/my-backtests" class="nav-link">My Backtests</a>
+        {% endif %}
+    </nav>
+
+    <div class="panel">
+        <div class="detail-header">
+            {% if backtest.visibility == 'featured' %}<span class="backtest-card-badge badge-featured">Featured</span>{% endif %}
+            {% if backtest.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
+            <h2 class="detail-title">{{ backtest.title or 'Backtest' }}</h2>
+            <div class="detail-meta">
+                <span>by {{ backtest.user_email.split('@')[0] }}</span>
+                <span>{{ time_ago(backtest.created_at) }}</span>
+                <span>♥ {{ backtest.likes_count }} · 💬 {{ backtest.comments_count }}</span>
+            </div>
+        </div>
+        {% if backtest.description %}
+        <div class="detail-description">{{ backtest.description }}</div>
+        {% endif %}
+
+        {% if is_authenticated %}
+        <div class="action-buttons">
+            <button class="action-btn {{ 'liked' if has_liked }}" onclick="toggleLike('{{ backtest.id }}', this)">
+                ♥ <span class="like-count">{{ backtest.likes_count }}</span>
+            </button>
+            <a class="action-btn" href="/?{{ backtest.query_string }}">Open in Backtester</a>
+            <button class="action-btn" onclick="copyLink()">Copy Link</button>
+            {% if is_admin %}
+            {% if backtest.visibility != 'featured' %}
+            <button class="action-btn primary" onclick="featureBacktest('{{ backtest.id }}')">Feature</button>
+            {% endif %}
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    {% if backtest.cached_html %}
+    <div class="panel" id="results-panel">
+        {{ backtest.cached_html|safe }}
+    </div>
+    {% endif %}
+
+    <div class="panel">
+        <div class="comments-section">
+            <h3 class="comments-title">Comments ({{ comments|length }})</h3>
+
+            {% if is_authenticated %}
+            <div class="comment-form">
+                <textarea id="comment-body" placeholder="Share your thoughts..."></textarea>
+                <button class="action-btn primary" onclick="submitComment('{{ backtest.id }}', null)">Post Comment</button>
+            </div>
+            {% endif %}
+
+            {% for comment in comments %}
+            <div class="comment">
+                <div class="comment-header">
+                    <span class="comment-author">{{ comment.user_email.split('@')[0] }}</span>
+                    <span class="comment-time">{{ time_ago(comment.created_at) }}</span>
+                </div>
+                <div class="comment-body">{{ comment.body }}</div>
+                <div class="comment-actions">
+                    {% if is_authenticated %}
+                    <button class="comment-action-btn" onclick="showReplyForm('{{ comment.id }}')">Reply</button>
+                    {% endif %}
+                    {% if is_authenticated and (comment.user_id == session.get('user_id') or is_admin) %}
+                    <button class="comment-action-btn" onclick="deleteComment('{{ comment.id }}')">Delete</button>
+                    {% endif %}
+                </div>
+                <div class="reply-form hidden" id="reply-form-{{ comment.id }}">
+                    <textarea id="reply-{{ comment.id }}" placeholder="Write a reply..."></textarea>
+                    <button class="action-btn" onclick="submitComment('{{ backtest.id }}', '{{ comment.id }}')">Reply</button>
+                </div>
+                {% if comment.replies %}
+                <div class="comment-replies">
+                    {% for reply in comment.replies %}
+                    <div class="comment">
+                        <div class="comment-header">
+                            <span class="comment-author">{{ reply.user_email.split('@')[0] }}</span>
+                            <span class="comment-time">{{ time_ago(reply.created_at) }}</span>
+                        </div>
+                        <div class="comment-body">{{ reply.body }}</div>
+                        {% if is_authenticated and (reply.user_id == session.get('user_id') or is_admin) %}
+                        <div class="comment-actions">
+                            <button class="comment-action-btn" onclick="deleteComment('{{ reply.id }}')">Delete</button>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if not is_authenticated %}
+        <div class="cta-banner">
+            <h3>Want to join the conversation?</h3>
+            <p>Sign up for a premium membership to like, comment, and publish your own backtests.</p>
+            <a href="https://the-bitcoin-strategy.com">Get Started</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+<script>
+function toggleLike(backtestId, btn) {
+    fetch('/api/backtest/' + backtestId + '/like', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.querySelector('.like-count').textContent = data.likes_count;
+        if (data.liked) { btn.classList.add('liked'); } else { btn.classList.remove('liked'); }
+    });
+}
+function submitComment(backtestId, parentId) {
+    var textareaId = parentId ? 'reply-' + parentId : 'comment-body';
+    var body = document.getElementById(textareaId).value.trim();
+    if (!body) return;
+    fetch('/api/backtest/' + backtestId + '/comment', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({body: body, parent_id: parentId || null})
+    }).then(function() { location.reload(); });
+}
+function deleteComment(commentId) {
+    if (!confirm('Delete this comment?')) return;
+    fetch('/api/comment/' + commentId, { method: 'DELETE' }).then(function() { location.reload(); });
+}
+function showReplyForm(commentId) {
+    var el = document.getElementById('reply-form-' + commentId);
+    if (el) el.classList.toggle('hidden');
+}
+function featureBacktest(backtestId) {
+    fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' }).then(function() { location.reload(); });
+}
+function copyLink() {
+    navigator.clipboard.writeText(location.origin + '/s/{{ backtest.short_code }}');
+    alert('Link copied!');
+}
+</script>
+</body>
+</html>
+"""
+
+
+MY_BACKTESTS_HTML = """\
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Backtests — Strategy Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #080a10; --bg-base: #0f1117; --bg-surface: #161922; --bg-elevated: #1c2030;
+            --border: #252a3a; --border-hover: #3a4060; --text: #e8eaf0; --text-muted: #8890a4; --text-dim: #555d74;
+            --accent: #f7931a; --accent-hover: #ffa940; --accent-glow: rgba(247, 147, 26, 0.15);
+            --green: #34d399; --blue: #6495ED;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'DM Sans', sans-serif; background: var(--bg-deep); color: var(--text); min-height: 100vh; }
+        body::before {
+            content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(247, 147, 26, 0.06), transparent),
+                        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100, 149, 237, 0.04), transparent);
+            pointer-events: none; z-index: 0;
+        }
+        .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
+        .header { text-align: center; margin-bottom: 32px; }
+        .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
+        .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; font-weight: 700; }
+        .header h1 .brand-analytics { background: var(--bg-elevated); color: var(--text); padding: 6px 14px; border: 1px solid var(--border); border-left: none; }
+        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; }
+        .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
+        .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
+        .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); margin-bottom: 16px; }
+        .page-title { font-size: 1.4em; font-weight: 700; margin-bottom: 6px; }
+        .section-header { font-size: 1em; font-weight: 600; margin-bottom: 14px; color: var(--text-muted); }
+        .backtest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .backtest-card { display: block; background: var(--bg-base); border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: all 0.2s ease; color: inherit; text-decoration: none; }
+        .backtest-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .backtest-card-title { font-size: 1em; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+        .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
+        .backtest-card-footer .engagement { display: flex; gap: 12px; }
+        .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
+        .backtest-card-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+        .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
+        .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
+        .badge-private { background: rgba(136,144,164,0.15); color: var(--text-muted); }
+        .card-actions { display: flex; gap: 8px; margin-top: 10px; }
+        .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); cursor: pointer; font-size: 0.75em; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; text-decoration: none; }
+        .action-btn:hover { border-color: var(--border-hover); color: var(--text); }
+        .action-btn.danger { border-color: #ef4444; color: #ef4444; }
+        .action-btn.danger:hover { background: rgba(239,68,68,0.1); }
+        .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+        .empty-state h3 { font-size: 1.1em; margin-bottom: 8px; color: var(--text); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
+        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
+    </div>
+    <nav class="nav-bar">
+        <a href="/" class="nav-link">Backtester</a>
+        <a href="/community" class="nav-link">Community</a>
+        <a href="/featured" class="nav-link">Featured</a>
+        <a href="/my-backtests" class="nav-link active">My Backtests</a>
+    </nav>
+
+    <div class="panel">
+        <h2 class="page-title">My Backtests</h2>
+
+        {% if published %}
+        <h3 class="section-header" style="margin-top:16px">Published ({{ published|length }})</h3>
+        <div class="backtest-grid">
+            {% for bt in published %}
+            <div class="backtest-card">
+                <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
+                    {% if bt.visibility == 'featured' %}<span class="backtest-card-badge badge-featured">Featured</span>{% endif %}
+                    {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
+                    <div class="backtest-card-title">{{ bt.title or 'Untitled' }}</div>
+                    {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:120] }}</div>{% endif %}
+                    <div class="backtest-card-footer">
+                        <span>{{ time_ago(bt.created_at) }}</span>
+                        <div class="engagement">
+                            <span>♥ {{ bt.likes_count }}</span>
+                            <span>💬 {{ bt.comments_count }}</span>
+                        </div>
+                    </div>
+                </a>
+                <div class="card-actions">
+                    <a class="action-btn" href="/?{{ bt.query_string }}">Open</a>
+                    <button class="action-btn danger" onclick="event.stopPropagation();deleteBacktest('{{ bt.id }}')">Delete</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if saved %}
+        <h3 class="section-header" style="margin-top:16px">Saved / Private ({{ saved|length }})</h3>
+        <div class="backtest-grid">
+            {% for bt in saved %}
+            <div class="backtest-card">
+                <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
+                    <span class="backtest-card-badge badge-private">Private</span>
+                    <div class="backtest-card-title">{{ bt.title or 'Saved Backtest' }}</div>
+                    <div class="backtest-card-footer">
+                        <span>{{ time_ago(bt.created_at) }}</span>
+                    </div>
+                </a>
+                <div class="card-actions">
+                    <a class="action-btn" href="/?{{ bt.query_string }}">Open</a>
+                    <button class="action-btn danger" onclick="event.stopPropagation();deleteBacktest('{{ bt.id }}')">Delete</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if not published and not saved %}
+        <div class="empty-state">
+            <h3>No backtests yet</h3>
+            <p>Run a backtest and click Save or Publish to add it here.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+<script>
+function deleteBacktest(backtestId) {
+    if (!confirm('Delete this backtest?')) return;
+    fetch('/api/backtest/' + backtestId, { method: 'DELETE' })
+    .then(function() { location.reload(); });
+}
+</script>
+</body>
+</html>
+"""
+
+
+# --- API Routes ---
+
+@app.route('/s/<code>')
+def short_link(code):
+    """Public short link redirect."""
+    bt_entry = db.get_backtest_by_short_code(code)
+    if not bt_entry:
+        abort(404)
+    return redirect('/?' + bt_entry['query_string'], code=302)
+
+
+@app.route('/api/save', methods=['POST'])
+def api_save():
+    """Save a backtest privately."""
+    user_id, email = _require_auth_api()
+    data = request.get_json()
+    if not data:
+        abort(400)
+    result = db.save_backtest(
+        user_id=user_id, email=email,
+        params=data.get('params', '{}'),
+        query_string=data.get('query_string', ''),
+        cached_html=data.get('cached_html', ''),
+        visibility='private'
+    )
+    return jsonify(result)
+
+
+@app.route('/api/publish', methods=['POST'])
+def api_publish():
+    """Publish a backtest to community."""
+    user_id, email = _require_auth_api()
+    data = request.get_json()
+    if not data:
+        abort(400)
+    title = data.get('title', '').strip()
+    description = data.get('description', '').strip()
+    if not title:
+        return jsonify({'error': 'Title is required'}), 400
+    if not description:
+        return jsonify({'error': 'Description is required'}), 400
+    visibility = data.get('visibility', 'community')
+    # Only admin can publish as featured
+    if visibility == 'featured' and email != db.ADMIN_EMAIL:
+        visibility = 'community'
+    result = db.save_backtest(
+        user_id=user_id, email=email,
+        params=data.get('params', '{}'),
+        query_string=data.get('query_string', ''),
+        cached_html=data.get('cached_html', ''),
+        visibility=visibility,
+        title=title, description=description
+    )
+    return jsonify(result)
+
+
+@app.route('/api/backtest/<bt_id>', methods=['DELETE'])
+def api_delete_backtest(bt_id):
+    """Delete a backtest."""
+    user_id, email = _require_auth_api()
+    if email == db.ADMIN_EMAIL:
+        db.delete_backtest_admin(bt_id)
+    else:
+        if not db.delete_backtest(bt_id, user_id):
+            abort(403)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/backtest/<bt_id>/feature', methods=['POST'])
+def api_feature_backtest(bt_id):
+    """Admin: promote to featured."""
+    user_id, email = _require_auth_api()
+    if email != db.ADMIN_EMAIL:
+        abort(403)
+    db.update_visibility(bt_id, 'featured')
+    return jsonify({'ok': True})
+
+
+@app.route('/api/backtest/<bt_id>/like', methods=['POST'])
+def api_like(bt_id):
+    """Toggle like."""
+    user_id, email = _require_auth_api()
+    likes_count, liked = db.toggle_like(user_id, bt_id)
+    return jsonify({'likes_count': likes_count, 'liked': liked})
+
+
+@app.route('/api/backtest/<bt_id>/comment', methods=['POST'])
+def api_comment(bt_id):
+    """Add a comment."""
+    user_id, email = _require_auth_api()
+    data = request.get_json()
+    if not data or not data.get('body', '').strip():
+        abort(400)
+    comment = db.add_comment(bt_id, user_id, email, data['body'].strip(), data.get('parent_id'))
+    return jsonify(comment)
+
+
+@app.route('/api/comment/<comment_id>', methods=['DELETE'])
+def api_delete_comment(comment_id):
+    """Delete a comment."""
+    user_id, email = _require_auth_api()
+    if email == db.ADMIN_EMAIL:
+        if not db.delete_comment_admin(comment_id):
+            abort(404)
+    else:
+        if not db.delete_comment(comment_id, user_id):
+            abort(403)
+    return jsonify({'ok': True})
+
+
+# --- Page Routes ---
+
+@app.route('/community')
+def community():
+    """Community backtests page."""
+    sort = request.args.get('sort', 'newest')
+    page = int(request.args.get('page', 1))
+    backtests, total = db.list_backtests(visibility=['community', 'featured'], sort=sort, page=page, per_page=20)
+    total_pages = max(1, (total + 19) // 20)
+    return render_template_string(COMMUNITY_HTML,
+        nav_active='community', page_title='Community Backtests',
+        page_subtitle='Strategies shared by the community',
+        backtests=backtests, sort=sort, page=page, total_pages=total_pages,
+        is_authenticated=_is_authenticated(), time_ago=_time_ago)
+
+
+@app.route('/featured')
+def featured():
+    """Featured backtests page."""
+    sort = request.args.get('sort', 'newest')
+    page = int(request.args.get('page', 1))
+    backtests, total = db.list_backtests(visibility='featured', sort=sort, page=page, per_page=20)
+    total_pages = max(1, (total + 19) // 20)
+    return render_template_string(COMMUNITY_HTML,
+        nav_active='featured', page_title='Featured Backtests',
+        page_subtitle='Curated strategies hand-picked by our team',
+        backtests=backtests, sort=sort, page=page, total_pages=total_pages,
+        is_authenticated=_is_authenticated(), time_ago=_time_ago)
+
+
+@app.route('/my-backtests')
+@require_auth
+def my_backtests():
+    """User's personal backtest dashboard."""
+    user_id = session.get('user_id')
+    all_bt = db.list_user_backtests(user_id)
+    published = [b for b in all_bt if b['visibility'] in ('community', 'featured')]
+    saved = [b for b in all_bt if b['visibility'] == 'private']
+    return render_template_string(MY_BACKTESTS_HTML,
+        published=published, saved=saved, time_ago=_time_ago)
+
+
+@app.route('/backtest/<bt_id>')
+def backtest_detail(bt_id):
+    """Single backtest detail page with comments."""
+    bt_entry = db.get_backtest(bt_id)
+    if not bt_entry:
+        abort(404)
+    # Private backtests only visible to owner
+    if bt_entry['visibility'] == 'private':
+        if not _is_authenticated() or session.get('user_id') != bt_entry['user_id']:
+            abort(404)
+    comments = db.get_comments(bt_id)
+    is_auth = _is_authenticated()
+    liked = db.has_liked(session.get('user_id', ''), bt_id) if is_auth else False
+    return render_template_string(DETAIL_HTML,
+        backtest=bt_entry, comments=comments,
+        is_authenticated=is_auth, is_admin=_is_admin(),
+        has_liked=liked, time_ago=_time_ago)
 
 
 if __name__ == "__main__":

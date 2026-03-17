@@ -5,3 +5,4 @@ cache/
 .env
 *.egg-info/
 venv/
+backtests.db
