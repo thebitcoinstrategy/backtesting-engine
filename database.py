@@ -131,12 +131,15 @@ def save_backtest(user_id, email, params, query_string, cached_html, visibility=
     bt_id = str(uuid.uuid4())
     short_code = generate_short_code()
     now = datetime.utcnow().isoformat()
+    # Place new backtests at the end of the sort order
+    max_order = conn.execute("SELECT COALESCE(MAX(sort_order), -1) FROM backtests").fetchone()[0]
+    new_order = max_order + 1
     conn.execute(
         """INSERT INTO backtests (id, short_code, user_id, user_email, title, description,
-           params, query_string, cached_html, visibility, thumbnail, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           params, query_string, cached_html, visibility, thumbnail, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (bt_id, short_code, user_id, email, title, description,
-         params, query_string, cached_html, visibility, thumbnail, now, now)
+         params, query_string, cached_html, visibility, thumbnail, new_order, now, now)
     )
     conn.commit()
     row = conn.execute("SELECT * FROM backtests WHERE id=?", (bt_id,)).fetchone()
@@ -246,9 +249,12 @@ def update_visibility(bt_id, new_visibility):
     """Update backtest visibility. Returns True if updated."""
     conn = _get_conn()
     now = datetime.utcnow().isoformat()
+    # Place at end of sort order when promoting to featured
+    max_order = conn.execute("SELECT COALESCE(MAX(sort_order), -1) FROM backtests").fetchone()[0]
+    new_order = max_order + 1
     conn.execute(
-        "UPDATE backtests SET visibility=?, updated_at=? WHERE id=?",
-        (new_visibility, now, bt_id)
+        "UPDATE backtests SET visibility=?, sort_order=?, updated_at=? WHERE id=?",
+        (new_visibility, new_order, now, bt_id)
     )
     conn.commit()
     conn.close()
