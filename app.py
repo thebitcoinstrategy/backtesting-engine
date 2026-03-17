@@ -38,10 +38,29 @@ def _cache_version():
 
 _CODE_VERSION = _cache_version()
 
+def _normalize_param(value):
+    """Normalize a form parameter value for consistent cache keys."""
+    v = value.strip()
+    if not v:
+        return ""
+    # Try to normalize numeric values (0.10 -> 0.1, 20.0 -> 20)
+    try:
+        n = float(v)
+        # Use int representation if it's a whole number
+        if n == int(n) and "e" not in v.lower():
+            return str(int(n))
+        return str(n)
+    except (ValueError, OverflowError):
+        return v
+
 def _cache_key(form_params):
     """Build a deterministic cache key from form parameters (excludes _request_id)."""
     excluded = {"_request_id"}
-    items = sorted((k, v) for k, v in form_params.items() if k not in excluded)
+    items = sorted(
+        (k, _normalize_param(v))
+        for k, v in form_params.items()
+        if k not in excluded and v.strip()
+    )
     raw = _CODE_VERSION + "|" + "&".join(f"{k}={v}" for k, v in items)
     return hashlib.sha256(raw.encode()).hexdigest()
 
