@@ -3241,7 +3241,7 @@ COMMUNITY_HTML = """\
         .card-metric-val { display: block; font-size: 0.95em; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
         .card-metric-val.positive { color: var(--green); }
         .card-metric-val.negative { color: #ef4444; }
-        .card-metric-vs { display: block; font-size: 0.6em; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; margin-top: 1px; }
+        .card-metric-vs { display: block; font-size: 0.6em; color: #ffffff; font-family: 'JetBrains Mono', monospace; margin-top: 1px; }
         .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
         .backtest-card-footer .engagement { display: flex; gap: 12px; }
         .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
@@ -3924,7 +3924,7 @@ MY_BACKTESTS_HTML = """\
         .card-metric-val { display: block; font-size: 0.95em; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
         .card-metric-val.positive { color: var(--green); }
         .card-metric-val.negative { color: #ef4444; }
-        .card-metric-vs { display: block; font-size: 0.6em; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; margin-top: 1px; }
+        .card-metric-vs { display: block; font-size: 0.6em; color: #ffffff; font-family: 'JetBrains Mono', monospace; margin-top: 1px; }
         .backtest-card-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
         .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
         .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
