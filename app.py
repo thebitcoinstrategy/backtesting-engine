@@ -193,6 +193,18 @@ def require_auth(f):
     return decorated
 
 
+def _try_token_auth():
+    """Process token from query string if present (for public pages). Does not redirect."""
+    token = request.args.get('token')
+    if token:
+        payload = _validate_token(token)
+        if payload:
+            session.permanent = True
+            session['user_id'] = payload.get('user_id')
+            session['email'] = payload.get('email')
+            session['auth_time'] = time.time()
+
+
 def _is_authenticated():
     """Check if current request has a valid session."""
     auth_time = session.get('auth_time')
@@ -4578,6 +4590,7 @@ def _enrich_backtest_cards(backtests):
 @app.route('/community')
 def community():
     """Community backtests page."""
+    _try_token_auth()
     sort = request.args.get('sort', 'newest')
     page = int(request.args.get('page', 1))
     backtests, total = db.list_backtests(visibility='community', sort=sort, page=page, per_page=20)
@@ -4594,6 +4607,7 @@ def community():
 @app.route('/featured')
 def featured():
     """Featured backtests page."""
+    _try_token_auth()
     sort = request.args.get('sort', 'manual')
     backtests, total = db.list_backtests(visibility='featured', sort=sort, page=1, per_page=200)
     _enrich_backtest_cards(backtests)
@@ -4643,6 +4657,7 @@ def my_backtests():
 @app.route('/backtest/<bt_id>')
 def backtest_detail(bt_id):
     """Single backtest detail page with comments."""
+    _try_token_auth()
     bt_entry = db.get_backtest(bt_id)
     if not bt_entry:
         abort(404)
