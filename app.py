@@ -2128,14 +2128,28 @@ function saveBacktest() {
 }
 
 function openPublishModal() {
-    // Fetch saved display name
+    var nameInput = document.getElementById('publish-display-name');
+    // Fetch saved display name (or email prefix fallback)
     fetch('/api/display-name').then(function(r) { return r.json(); }).then(function(data) {
-        if (data.display_name) {
-            document.getElementById('publish-display-name').value = data.display_name;
+        nameInput.value = data.display_name || '';
+        if (data.is_custom) {
+            nameInput.readOnly = true;
+            nameInput.style.opacity = '0.8';
+        } else {
+            // First time — make editable
+            nameInput.readOnly = false;
+            nameInput.style.opacity = '1';
         }
     });
     document.getElementById('publish-modal-overlay').classList.add('open');
-    document.getElementById('publish-display-name').focus();
+    document.getElementById('publish-title').focus();
+}
+function toggleUsernameEdit() {
+    var nameInput = document.getElementById('publish-display-name');
+    nameInput.readOnly = false;
+    nameInput.style.opacity = '1';
+    nameInput.focus();
+    nameInput.select();
 }
 function closePublishModal() {
     document.getElementById('publish-modal-overlay').classList.remove('open');
@@ -2261,7 +2275,12 @@ function saveEdit() {
         <button class="close-btn" onclick="closePublishModal()">&times;</button>
         <h3>Publish to Community</h3>
         <label for="publish-display-name">Public Username</label>
-        <input type="text" id="publish-display-name" placeholder="How should your name appear?" maxlength="40">
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:14px">
+            <input type="text" id="publish-display-name" placeholder="How should your name appear?" maxlength="40" style="margin-bottom:0;flex:1" readonly>
+            <button type="button" class="action-btn" id="edit-username-btn" onclick="toggleUsernameEdit()" title="Edit username" style="padding:8px 10px;flex-shrink:0">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z"/></svg>
+            </button>
+        </div>
         <label for="publish-title">Title</label>
         <input type="text" id="publish-title" placeholder="e.g. Bitcoin EMA(20)/SMA(100) Crossover" maxlength="120">
         <label for="publish-desc">Description</label>
@@ -3630,8 +3649,11 @@ MY_BACKTESTS_HTML = """\
 
         <div class="username-section">
             <label>Public Username:</label>
-            <input type="text" id="display-name-input" value="{{ display_name or '' }}" placeholder="Set your public username" maxlength="40">
-            <button class="action-btn" onclick="saveDisplayName()">Save</button>
+            <input type="text" id="display-name-input" value="{{ display_name or email_prefix }}" placeholder="Set your public username" maxlength="40" {% if display_name %}readonly style="opacity:0.8"{% endif %}>
+            <button class="action-btn" id="edit-name-btn" onclick="toggleMyUsername()" title="Edit username" style="padding:8px 10px">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z"/></svg>
+            </button>
+            <button class="action-btn hidden" id="save-name-btn" onclick="saveDisplayName()">Save</button>
         </div>
 
         {% if published %}
@@ -3726,14 +3748,30 @@ function deleteBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId, { method: 'DELETE' })
     .then(function() { location.reload(); });
 }
+function toggleMyUsername() {
+    var input = document.getElementById('display-name-input');
+    input.readOnly = false;
+    input.style.opacity = '1';
+    input.focus();
+    input.select();
+    document.getElementById('edit-name-btn').classList.add('hidden');
+    document.getElementById('save-name-btn').classList.remove('hidden');
+}
 function saveDisplayName() {
-    var name = document.getElementById('display-name-input').value.trim();
+    var input = document.getElementById('display-name-input');
+    var name = input.value.trim();
     if (!name) { alert('Please enter a username'); return; }
     fetch('/api/display-name', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({display_name: name})
     }).then(function(r) { return r.json(); }).then(function(data) {
-        if (data.ok) { alert('Username saved!'); }
+        if (data.ok) {
+            input.readOnly = true;
+            input.style.opacity = '0.8';
+            document.getElementById('edit-name-btn').classList.remove('hidden');
+            document.getElementById('save-name-btn').classList.add('hidden');
+            alert('Username saved! This applies to all your backtests and comments.');
+        }
     });
 }
 function openEditModal(backtestId, title, desc) {
@@ -3862,12 +3900,17 @@ def api_update_backtest(bt_id):
 
 @app.route('/api/display-name', methods=['GET'])
 def api_get_display_name():
-    """Get current user's display name."""
+    """Get current user's display name (or email prefix as fallback)."""
     if not _is_authenticated():
-        return jsonify({'display_name': None})
+        return jsonify({'display_name': None, 'is_custom': False})
     user_id = session.get('user_id')
+    email = session.get('email', '')
     name = db.get_display_name(user_id)
-    return jsonify({'display_name': name})
+    if name:
+        return jsonify({'display_name': name, 'is_custom': True})
+    # Fallback: email prefix
+    fallback = email.split('@')[0] if email else ''
+    return jsonify({'display_name': fallback, 'is_custom': False})
 
 
 @app.route('/api/display-name', methods=['POST'])
@@ -4052,9 +4095,11 @@ def my_backtests():
     _enrich_backtest_cards(published)
     _enrich_backtest_cards(saved)
     display_name = db.get_display_name(user_id)
+    email = session.get('email', '')
+    email_prefix = email.split('@')[0] if email else ''
     return render_template_string(MY_BACKTESTS_HTML,
         published=published, saved=saved, time_ago=_time_ago,
-        display_name=display_name)
+        display_name=display_name, email_prefix=email_prefix)
 
 
 @app.route('/backtest/<bt_id>')
