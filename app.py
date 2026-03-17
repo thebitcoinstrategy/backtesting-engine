@@ -1429,6 +1429,22 @@ HTML = """\
                 };
                 </script>
                 {% endif %}
+                {% if session.get('user_id') %}
+                <div class="action-buttons" id="backtest-actions">
+                    <button class="action-btn" onclick="saveBacktest()" id="save-btn">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v10h10V6l-3-3H3z"/><path d="M5 3v3h4V3"/><path d="M5 9h6v4H5z"/></svg>
+                        Save
+                    </button>
+                    <button class="action-btn primary" onclick="openPublishModal()">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l4-4 4 4"/><path d="M8 8v6"/><path d="M13.5 10.5A3.5 3.5 0 0010 5a4 4 0 00-7.5 2"/></svg>
+                        Publish
+                    </button>
+                    <button class="action-btn hidden" onclick="copyShortLink()" id="copy-link-btn">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a3 3 0 004.24 0l2-2a3 3 0 00-4.24-4.24L6.5 3.26"/><path d="M10 8a3 3 0 00-4.24 0l-2 2a3 3 0 004.24 4.24L9.5 12.74"/></svg>
+                        Copy Link
+                    </button>
+                </div>
+                {% endif %}
                 {% if best and not lev_sweep|default(none) %}
                 {# Compact 3-column metrics table: Metric | Strategy | Buy & Hold #}
                 <div class="metrics-panel">
