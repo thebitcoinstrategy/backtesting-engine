@@ -824,7 +824,7 @@ HTML = """\
                         <div class="asset-grid">
                             {% for a in index_assets %}
                             <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
-                                <div class="asset-card-placeholder">{{ a[:3]|upper }}</div>
+                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a }}</span>
                             </div>
                             {% endfor %}
@@ -1842,7 +1842,10 @@ ASSET_LOGOS = {
     "BNB": "bnb-bnb-logo.png", "Cardano": "cardano-ada-logo.png",
     "Chainlink": "chainlink-link-logo.png", "Dogecoin": "dogecoin-doge-logo.png",
     "Monero": "monero-xmr-logo.png", "Bitcoin Cash": "bitcoin-cash-bch-logo.png",
-    "Hyperliquid": None,
+    "Hyperliquid": "hyperliquid-logo.png",
+    "Dax": "dax-logo.svg", "Dow Jones": "dowjones-logo.svg",
+    "Hang Seng": "hangseng-logo.svg", "Nasdaq100": "nasdaq-logo.svg",
+    "SP500": "sp500-logo.svg",
     "Gold": "gold-logo.svg", "Silver": "silver-logo.svg", "Palladium": "palladium-logo.svg",
     "Apple": "apple-logo.png", "Microsoft": "microsoft-logo.png", "Amazon": "amazon-logo.png",
     "Alphabet": "alphabet-logo.png", "Tesla": "tesla-logo.png", "Nvidia": "nvidia-logo.png",
