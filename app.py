@@ -106,6 +106,7 @@ app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') != 'developmen
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB for save/publish payloads
 
 # In-memory nonce tracking for token replay protection
 _used_nonces = {}
@@ -2113,14 +2114,17 @@ function saveBacktest() {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({params: JSON.stringify(params), query_string: qs, cached_html: resultsHtml, thumbnail: thumb})
-    }).then(function(r) { return r.json(); }).then(function(data) {
+    }).then(function(r) {
+        if (!r.ok) throw new Error('Server error: ' + r.status);
+        return r.json();
+    }).then(function(data) {
         btn.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8l4 4 8-8"/></svg> Saved!';
         _currentShortCode = data.short_code;
         setTimeout(function() {
             btn.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v10h10V6l-3-3H3z"/><path d="M5 3v3h4V3"/><path d="M5 9h6v4H5z"/></svg> Save';
             btn.disabled = false;
         }, 2000);
-    }).catch(function() { btn.textContent = 'Save'; btn.disabled = false; });
+    }).catch(function(e) { btn.textContent = 'Save'; btn.disabled = false; alert('Save failed: ' + e.message); });
 }
 
 function openPublishModal() {
@@ -2158,14 +2162,17 @@ function publishBacktest(visibility) {
             title: title, description: desc, visibility: visibility || 'community',
             display_name: displayName, thumbnail: thumb
         })
-    }).then(function(r) { return r.json(); }).then(function(data) {
+    }).then(function(r) {
+        if (!r.ok) throw new Error('Server error: ' + r.status + ' ' + r.statusText);
+        return r.json();
+    }).then(function(data) {
         if (data.error) { alert(data.error); return; }
         _currentShortCode = data.short_code;
         closePublishModal();
         var copyBtn = document.getElementById('copy-link-btn');
         if (copyBtn) { copyBtn.classList.remove('hidden'); }
         alert('Published! Short link: ' + location.origin + '/s/' + data.short_code);
-    }).catch(function() { alert('Failed to publish'); });
+    }).catch(function(e) { alert('Failed to publish: ' + e.message); });
 }
 
 function copyShortLink() {
