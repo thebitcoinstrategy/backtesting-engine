@@ -1283,7 +1283,7 @@ HTML = """\
                 {% if regression|default(none) %}
                 {# Regression analysis results #}
                 <div style="position:relative">
-                    <img class="chart-img" id="backtest-chart-img" src="data:image/png;base64,{{ chart }}" data-equity-top="{{ equity_top|default(0.7) }}" />
+                    <img class="chart-img" id="backtest-chart-img" src="data:image/png;base64,{{ chart }}" data-equity-top="{{ equity_top|default(0.7) }}" data-equity-bottom="{{ equity_bottom|default(1.0) }}" />
                     <button onclick="downloadChart()" class="chart-download-btn" title="Download chart as PNG">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12h10"/>
@@ -1402,7 +1402,7 @@ HTML = """\
                 {% endif %}
                 <div id="backtest-chart-tab">
                     <div style="position:relative">
-                        <img class="chart-img" id="backtest-chart-img" src="data:image/png;base64,{{ chart }}" data-equity-top="{{ equity_top|default(0.7) }}" />
+                        <img class="chart-img" id="backtest-chart-img" src="data:image/png;base64,{{ chart }}" data-equity-top="{{ equity_top|default(0.7) }}" data-equity-bottom="{{ equity_bottom|default(1.0) }}" />
                         <button onclick="downloadChart()" class="chart-download-btn" title="Download chart as PNG">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12h10"/>
@@ -2090,8 +2090,9 @@ function _getChartThumbnail() {
     if (!img) return '';
     try {
         var equityTop = parseFloat(img.getAttribute('data-equity-top') || '0.7');
+        var equityBottom = parseFloat(img.getAttribute('data-equity-bottom') || '1.0');
         var srcY = Math.round(img.naturalHeight * equityTop);
-        var srcH = img.naturalHeight - srcY;
+        var srcH = Math.round(img.naturalHeight * equityBottom) - srcY;
         var canvas = document.createElement('canvas');
         var maxW = 400;
         var ratio = srcH / img.naturalWidth;
@@ -2999,23 +3000,27 @@ def _run_post_handler(cancel_event):
                     fig, (ax1, ax_osc, ax2, ax3) = plt.subplots(4, 1, figsize=(14, 16), dpi=150,
                                                                   gridspec_kw={"height_ratios": [4, 2, 2.5, 2.5]}, sharex=True)
                     bt._apply_dark_theme(fig, [ax1, ax_osc, ax2, ax3])
-                    equity_top = (4 + 2) / (4 + 2 + 2.5 + 2.5)  # skip price+osc
+                    equity_top = (4 + 2) / (4 + 2 + 2.5 + 2.5)
+                    equity_bottom = (4 + 2 + 2.5) / (4 + 2 + 2.5 + 2.5)
                 else:
                     fig, (ax1, ax_osc, ax2) = plt.subplots(3, 1, figsize=(14, 13), dpi=150,
                                                              gridspec_kw={"height_ratios": [5, 2, 3]}, sharex=True)
                     bt._apply_dark_theme(fig, [ax1, ax_osc, ax2])
-                    equity_top = (5 + 2) / (5 + 2 + 3)  # skip price+osc
+                    equity_top = (5 + 2) / (5 + 2 + 3)
+                    equity_bottom = 1.0
             else:
                 if show_ratio:
                     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 13), dpi=150,
                                                          gridspec_kw={"height_ratios": [5, 2.5, 2.5]}, sharex=True)
                     bt._apply_dark_theme(fig, [ax1, ax2, ax3])
-                    equity_top = 5 / (5 + 2.5 + 2.5)  # skip price
+                    equity_top = 5 / (5 + 2.5 + 2.5)
+                    equity_bottom = (5 + 2.5) / (5 + 2.5 + 2.5)
                 else:
                     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), dpi=150,
                                                     gridspec_kw={"height_ratios": [7, 3]}, sharex=True)
                     bt._apply_dark_theme(fig, [ax1, ax2])
-                    equity_top = 7 / (7 + 3)  # skip price
+                    equity_top = 7 / (7 + 3)
+                    equity_bottom = 1.0
 
             ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color="#e8eaf0", linewidth=0.8)
 
@@ -3147,7 +3152,7 @@ def _run_post_handler(cancel_event):
                                   asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                   hide_buyhold=(p.exposure == "short-cash"),
                                   ls_breakdown=long_short_breakdown,
-                                  equity_top=equity_top if best else 0.7,
+                                  equity_top=equity_top if best else 0.7, equity_bottom=equity_bottom if best else 1.0,
                                   price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                   ind1_label=best.get("ind1_label", "") if best else "", ind2_label=best.get("ind2_label", "") if best else "")
 
