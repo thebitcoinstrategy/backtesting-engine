@@ -1019,7 +1019,7 @@ HTML = """\
         {% if session.get('user_id') %}
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active|default('')=='my-backtests' }}">My Backtests</a>
         {% endif %}
-        <a href="/backtester" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Backtester</a>
+        <a href="/backtester" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Create Backtest</a>
     </nav>
     <div class="layout">
         <div class="panel">
@@ -3463,7 +3463,7 @@ COMMUNITY_HTML = """\
         {% if session.get('user_id') %}
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active=='my-backtests' }}">My Backtests</a>
         {% endif %}
-        <a href="/backtester" class="nav-link {{ 'active' if nav_active=='backtester' }}">Backtester</a>
+        <a href="/backtester" class="nav-link {{ 'active' if nav_active=='backtester' }}">Create Backtest</a>
     </nav>
     <div class="panel">
         <h2 class="page-title">{{ page_title }}</h2>
@@ -3912,7 +3912,7 @@ DETAIL_HTML = """\
         {% if session.get('user_id') %}
         <a href="/my-backtests" class="nav-link">My Backtests</a>
         {% endif %}
-        <a href="/backtester" class="nav-link">Backtester</a>
+        <a href="/backtester" class="nav-link">Create Backtest</a>
     </nav>
 
     <div class="panel">
@@ -4309,7 +4309,7 @@ MY_BACKTESTS_HTML = """\
         <a href="/" class="nav-link">Featured</a>
         <a href="/community" class="nav-link">Community</a>
         <a href="/my-backtests" class="nav-link active">My Backtests</a>
-        <a href="/backtester" class="nav-link">Backtester</a>
+        <a href="/backtester" class="nav-link">Create Backtest</a>
     </nav>
 
     <div class="panel">
