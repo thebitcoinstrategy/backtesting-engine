@@ -3350,7 +3350,7 @@ COMMUNITY_HTML = """\
                 <a class="backtest-card" href="/backtest/{{ bt.id }}">
                     <div class="backtest-card-head">
                         <div class="backtest-card-head-text">
-                            <div class="backtest-card-title">{{ (bt.title[:1]|upper ~ bt.title[1:]) if bt.title else 'Untitled Backtest' }}</div>
+                            <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled Backtest' }}</div>
                         </div>
                         <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
                     </div>
@@ -3407,7 +3407,7 @@ COMMUNITY_HTML = """\
                 <div class="backtest-card-head">
                     {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                     <div class="backtest-card-head-text">
-                        <div class="backtest-card-title">{{ (bt.title[:1]|upper ~ bt.title[1:]) if bt.title else 'Untitled Backtest' }}</div>
+                        <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled Backtest' }}</div>
                         <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
                     </div>
                     <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
@@ -3525,7 +3525,7 @@ DETAIL_HTML = """\
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{{ (backtest.title[:1]|upper ~ backtest.title[1:]) if backtest.title else 'Backtest' }} — Strategy Analytics</title>
+    <title>{{ backtest.title|title if backtest.title else 'Backtest' }} — Strategy Analytics</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -3709,7 +3709,7 @@ DETAIL_HTML = """\
     <div class="panel">
         <div class="detail-header">
             {% if backtest.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
-            <h2 class="detail-title">{{ (backtest.title[:1]|upper ~ backtest.title[1:]) if backtest.title else 'Backtest' }}</h2>
+            <h2 class="detail-title">{{ backtest.title|title if backtest.title else 'Backtest' }}</h2>
             <div class="detail-meta">
                 <span>by {{ display_name or backtest.user_email.split('@')[0] }}</span>
                 <span>{{ time_ago(backtest.created_at) }}</span>
@@ -4050,7 +4050,7 @@ MY_BACKTESTS_HTML = """\
                     <div class="backtest-card-head">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                         <div class="backtest-card-head-text">
-                            <div class="backtest-card-title">{{ (bt.title[:1]|upper ~ bt.title[1:]) if bt.title else 'Untitled' }}</div>
+                            <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled' }}</div>
                             <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
                         </div>
                         <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
@@ -4105,7 +4105,7 @@ MY_BACKTESTS_HTML = """\
                     <div class="backtest-card-head">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                         <div class="backtest-card-head-text">
-                            <div class="backtest-card-title">{{ (bt.title[:1]|upper ~ bt.title[1:]) if bt.title else 'Saved Backtest' }}</div>
+                            <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Saved Backtest' }}</div>
                             <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
                         </div>
                         <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
