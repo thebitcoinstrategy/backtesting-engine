@@ -2720,6 +2720,27 @@ def _run_post_handler(cancel_event):
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode()
 
+        # Generate small leverage-sweep thumbnail
+        thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
+        bt._apply_dark_theme(thumb_fig, [thumb_ax])
+        if show_long:
+            thumb_ax.plot(long_levs, long_sweep, color="#6495ED", linewidth=1.5)
+            thumb_ax.scatter([best_long_lev], [best_long_ann], color="#6495ED", s=40, zorder=5)
+        if show_short:
+            thumb_ax.plot(short_levs, short_sweep, color="#f7931a", linewidth=1.5)
+            thumb_ax.scatter([best_short_lev], [best_short_ann], color="#f7931a", s=40, zorder=5)
+        if p.exposure != "short-cash":
+            thumb_ax.axhline(y=bh_ann, color="#8890a4", linestyle="--", linewidth=1, alpha=0.7)
+        thumb_ax.set_xlabel("")
+        thumb_ax.grid(True, which="major", alpha=0.3, color="#252a3a")
+        thumb_ax.tick_params(labelsize=7)
+        plt.tight_layout()
+        thumb_buf = BytesIO()
+        plt.savefig(thumb_buf, format="png", facecolor=thumb_fig.get_facecolor())
+        plt.close()
+        thumb_buf.seek(0)
+        thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
+
         best_result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, ind2_period_val,
                                        p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
         best = _enrich_best(best_result, df)
@@ -2738,7 +2759,7 @@ def _run_post_handler(cancel_event):
         ind2_json = _series_to_lw_json(best["ind2_series"])
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
-                                      hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info,
+                                      hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info, thumb_b64=thumb_b64,
                                       price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                       ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
 
