@@ -1187,7 +1187,7 @@ def generate_regression_chart(result):
     import matplotlib.pyplot as plt
 
     osc_values = result["osc_values"]
-    forward_returns = result["forward_returns"]
+    log_returns = result["log_returns"]
     buy_thr = result["buy_threshold"]
     sell_thr = result["sell_threshold"]
 
@@ -1199,17 +1199,16 @@ def generate_regression_chart(result):
     overbought_mask = osc_values > sell_thr
     neutral_mask = ~oversold_mask & ~overbought_mask
 
-    ax.scatter(osc_values[neutral_mask], forward_returns[neutral_mask],
+    ax.scatter(osc_values[neutral_mask], log_returns[neutral_mask],
                c="#8890a4", alpha=0.25, s=8, label="Neutral", rasterized=True)
-    ax.scatter(osc_values[oversold_mask], forward_returns[oversold_mask],
+    ax.scatter(osc_values[oversold_mask], log_returns[oversold_mask],
                c="#34d399", alpha=0.35, s=12, label="Oversold", rasterized=True)
-    ax.scatter(osc_values[overbought_mask], forward_returns[overbought_mask],
+    ax.scatter(osc_values[overbought_mask], log_returns[overbought_mask],
                c="#ef4444", alpha=0.35, s=12, label="Overbought", rasterized=True)
 
-    # Regression line (fitted in log space, converted back to simple returns for display)
+    # Regression line (fitted in log space — straight line through log return data)
     x_range = np.linspace(osc_values.min(), osc_values.max(), 100)
-    y_log = result["slope"] * x_range + result["intercept"]
-    y_pred = (np.exp(y_log / 100) - 1) * 100
+    y_pred = result["slope"] * x_range + result["intercept"]
     ax.plot(x_range, y_pred, color="#f7931a", linewidth=2, label="Regression line")
 
     # Threshold lines
@@ -1236,8 +1235,8 @@ def generate_regression_chart(result):
 
     osc_label = result["osc_data"]["label"]
     ax.set_xlabel(f"{osc_label} Value")
-    ax.set_ylabel(f"Forward {result['forward_days']}-Day Return (%)")
-    ax.set_title(f"{osc_label} vs Forward {result['forward_days']}-Day Return — Regression Analysis")
+    ax.set_ylabel(f"Forward {result['forward_days']}-Day Log Return (%)")
+    ax.set_title(f"{osc_label} vs Forward {result['forward_days']}-Day Log Return — Regression Analysis")
     ax.legend(loc="upper right", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
     ax.grid(True, alpha=0.3, color="#252a3a")
     plt.tight_layout()
