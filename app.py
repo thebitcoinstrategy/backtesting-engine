@@ -3148,10 +3148,10 @@ def _run_post_handler(cancel_event):
             thumb_ax.xaxis.set_major_locator(mdates.YearLocator(year_step))
             plt.tight_layout()
             thumb_buf = BytesIO()
-            plt.savefig(thumb_buf, format="jpeg", facecolor=thumb_fig.get_facecolor(), quality=60)
+            plt.savefig(thumb_buf, format="png", facecolor=thumb_fig.get_facecolor())
             plt.close()
             thumb_buf.seek(0)
-            thumb_b64 = "data:image/jpeg;base64," + base64.b64encode(thumb_buf.read()).decode()
+            thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
 
     price_json = _series_to_lw_json(df["close"]) if best else None
     if is_oscillator:
