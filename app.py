@@ -4431,8 +4431,13 @@ MY_BACKTESTS_HTML = """\
 
         {% if not published and not saved %}
         <div class="empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f7931a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;opacity:0.7"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
             <h3>No backtests yet</h3>
-            <p>Run a backtest and click Save or Publish to add it here.</p>
+            <p style="margin-bottom:20px">Create your first backtest, then save or publish it to build your collection.</p>
+            <a href="/backtester" style="display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border-radius:10px;background:#f7931a;color:#fff;font-weight:600;font-size:0.9em;text-decoration:none;font-family:'DM Sans',sans-serif;transition:all 0.2s ease;box-shadow:0 2px 12px rgba(247,147,26,0.3);" onmouseover="this.style.background='#e8850f';this.style.transform='translateY(-1px)'" onmouseout="this.style.background='#f7931a';this.style.transform=''">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Create Your First Backtest
+            </a>
         </div>
         {% endif %}
     </div>
