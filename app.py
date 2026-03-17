@@ -2557,6 +2557,8 @@ def _run_post_handler(cancel_event):
     col_header = "Strategy"
     long_short_breakdown = None
     is_oscillator = False
+    equity_top = 0.7
+    equity_bottom = 1.0
 
     p = Params(request.form)
     is_oscillator = p.signal_type == "oscillator"
@@ -3030,8 +3032,6 @@ def _run_post_handler(cancel_event):
 
             asset_name = p.asset.capitalize()
             show_ratio = p.exposure != "short-cash" and p.sizing != "fixed"
-            equity_top = 0.7
-            equity_bottom = 1.0
 
             if is_oscillator:
                 # Oscillator chart: price panel + oscillator panel + equity panel
