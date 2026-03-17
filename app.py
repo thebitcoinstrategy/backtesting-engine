@@ -54,12 +54,42 @@ def _normalize_param(value):
         return v
 
 def _cache_key(form_params):
-    """Build a deterministic cache key from form parameters (excludes _request_id)."""
-    excluded = {"_request_id"}
+    """Build a deterministic cache key from form parameters.
+
+    Only includes parameters actually used by the given mode to avoid
+    cache fragmentation from irrelevant hidden fields.
+    """
+    # Core params always relevant
+    core = {"mode", "asset", "start_date", "end_date", "initial_cash", "fee", "sizing", "reverse"}
+    mode = form_params.get("mode", "backtest")
+    signal_type = form_params.get("signal_type", "crossover")
+
+    # Build set of relevant keys based on mode and signal type
+    relevant = set(core)
+    relevant.add("signal_type")
+
+    if signal_type == "oscillator":
+        relevant.update(["osc_name", "osc_period", "buy_threshold", "sell_threshold"])
+        relevant.update(["ind1_name", "period1"])  # ind1 still used in oscillator mode
+    else:
+        relevant.update(["ind1_name", "period1", "ind2_name", "period2"])
+
+    if mode == "sweep-lev":
+        relevant.update(["lev_min", "lev_max", "lev_step", "lev_mode"])
+        # exposure is forced to long-short in code, don't include
+    elif mode == "sweep":
+        relevant.update(["range_min", "range_max", "step", "exposure", "long_leverage", "short_leverage", "lev_mode"])
+    elif mode == "heatmap":
+        relevant.update(["range_min", "range_max", "step", "exposure", "long_leverage", "short_leverage", "lev_mode"])
+    elif mode == "regression":
+        relevant.update(["osc_name", "osc_period", "forward_days", "range_min", "range_max"])
+    else:  # backtest
+        relevant.update(["exposure", "long_leverage", "short_leverage", "lev_mode"])
+
     items = sorted(
         (k, _normalize_param(v))
         for k, v in form_params.items()
-        if k not in excluded and v.strip()
+        if k in relevant and v.strip()
     )
     raw = _CODE_VERSION + "|" + "&".join(f"{k}={v}" for k, v in items)
     return hashlib.sha256(raw.encode()).hexdigest()
