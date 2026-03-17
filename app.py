@@ -4578,6 +4578,11 @@ def backtest_detail(bt_id):
         c['_display_name'] = commenter_names.get(c['user_id'], c['user_email'].split('@')[0])
         for r in c.get('replies', []):
             r['_display_name'] = commenter_names.get(r['user_id'], r['user_email'].split('@')[0])
+    # Strip save/publish action buttons from cached HTML
+    cached = bt_entry.get('cached_html', '') or ''
+    cached = re.sub(r'<div class="action-buttons"[^>]*id="backtest-actions"[^>]*>.*?</div>', '', cached, flags=re.DOTALL)
+    bt_entry = dict(bt_entry)
+    bt_entry['cached_html'] = cached
     return render_template_string(DETAIL_HTML,
         backtest=bt_entry, comments=comments,
         is_authenticated=is_auth, is_admin=_is_admin(),
