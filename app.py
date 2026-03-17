@@ -4492,14 +4492,26 @@ def _enrich_backtest_cards(backtests):
         bt['_exposure'] = p.get('exposure', 'long-cash')
         # Extract key metrics from cached HTML
         html = bt.get('cached_html', '') or ''
-        # Ann. Return (strategy vs buy & hold)
+        # Ann. Return (strategy vs buy & hold) — metrics-panel format
         m = re.search(r'Ann\. Return.*?m-val[^>]*>([\-\d.]+)%.*?m-val[^>]*>([\-\d.]+)%', html, re.DOTALL)
         bt['_apr'] = m.group(1) if m else None
         bt['_apr_bh'] = m.group(2) if m else None
-        # Max Drawdown (strategy vs buy & hold)
+        # Max Drawdown (strategy vs buy & hold) — metrics-panel format
         m = re.search(r'Max Drawdown.*?m-val[^>]*>([\-\d.]+)%.*?m-val[^>]*>([\-\d.]+)%', html, re.DOTALL)
         bt['_max_dd'] = m.group(1) if m else None
         bt['_max_dd_bh'] = m.group(2) if m else None
+        # Fallback: leverage sweep results-table format (plain <td> tags)
+        if not bt['_apr'] and 'results-table' in html:
+            # Buy & Hold row: <td>Ann%</td><td>DD%</td>
+            m_bh = re.search(r'Buy &amp; Hold.*?<td>([\-\d.]+)%</td>\s*<td>([\-\d.]+)%</td>', html, re.DOTALL)
+            if m_bh:
+                bt['_apr_bh'] = m_bh.group(1)
+                bt['_max_dd_bh'] = m_bh.group(2)
+            # Best combined row (class="best"): <td>Ann%</td><td>DD%</td>
+            m_best = re.search(r'class="best".*?<td>([\-\d.]+)%</td>\s*<td>([\-\d.]+)%</td>', html, re.DOTALL)
+            if m_best:
+                bt['_apr'] = m_best.group(1)
+                bt['_max_dd'] = m_best.group(2)
     return backtests
 
 
