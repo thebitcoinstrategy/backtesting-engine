@@ -3406,7 +3406,88 @@ DETAIL_HTML = """\
         .cta-banner p { font-size: 0.85em; color: var(--text-muted); margin-bottom: 12px; }
         .cta-banner a { display: inline-block; padding: 10px 24px; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.85em; }
         .hidden { display: none !important; }
-        .chart-img { width: 100%; height: auto; border-radius: 12px; }
+        .chart-img { width: 100%; border-radius: 12px; border: 1px solid var(--border); }
+        .chart-download-btn {
+            position: absolute; top: 12px; right: 12px;
+            background: var(--bg-surface); color: var(--text-muted);
+            border: 1px solid var(--border); border-radius: 8px;
+            padding: 6px 8px; cursor: pointer; opacity: 0;
+            transition: opacity 0.2s ease, background 0.15s ease, color 0.15s ease;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .chart-download-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+        div:hover > .chart-download-btn { opacity: 1; }
+        .results-table {
+            width: 100%; border-collapse: collapse; margin-bottom: 16px;
+            font-size: 0.85em; font-family: 'JetBrains Mono', monospace;
+        }
+        .results-table th, .results-table td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--border); }
+        .results-table th { color: var(--text-muted); font-weight: 500; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.05em; }
+        .results-table tr { transition: background 0.15s ease; }
+        .results-table tr:hover { background: var(--bg-elevated); }
+        .best { color: var(--green); font-weight: 600; }
+        .best td:first-child::before {
+            content: ''; display: inline-block; width: 6px; height: 6px;
+            background: var(--green); border-radius: 50%; margin-right: 8px;
+            vertical-align: middle; box-shadow: 0 0 8px var(--green);
+        }
+        .metrics-panel { margin-bottom: 16px; }
+        .metrics-table {
+            width: 100%; border-collapse: collapse;
+            font-size: 0.9em; font-family: 'JetBrains Mono', monospace;
+        }
+        .metrics-table th {
+            padding: 6px 10px; font-size: 0.8em; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            border-bottom: 1px solid var(--border);
+        }
+        .metrics-table th.col-metric { text-align: left; color: var(--text-muted); }
+        .metrics-table th.col-strategy { text-align: right; color: var(--green); }
+        .metrics-table th.col-buyhold { text-align: right; color: var(--blue); }
+        .metrics-table td { padding: 5px 10px; border-bottom: 1px solid rgba(37,42,58,0.4); }
+        .metrics-table td.m-label {
+            font-size: 0.95em; color: var(--text-muted); font-family: 'DM Sans', sans-serif; font-weight: 500;
+        }
+        .metrics-table td.m-val { text-align: right; font-weight: 600; color: var(--text); }
+        .metrics-table td.m-val.positive { color: var(--green); }
+        .metrics-table td.m-val.negative { color: #ef4444; }
+        .metrics-table td.m-val.muted { color: var(--text-dim); }
+        .metrics-table tr.section-row td {
+            padding: 8px 8px 3px; font-size: 0.65em; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            color: var(--text-dim); border-bottom: 1px solid var(--border);
+        }
+        .m-ls {
+            display: block; font-size: 0.75em; font-weight: 400;
+            color: var(--text-dim); margin-top: 1px; line-height: 1.3;
+        }
+        .m-ls .ls-l { color: var(--green); }
+        .m-ls .ls-s { color: #f7931a; }
+        .m-info {
+            font-size: 0.7em; color: var(--text-dim); cursor: help;
+            margin-left: 4px; opacity: 0.5; position: relative; transition: opacity 0.2s;
+        }
+        .m-info:hover { opacity: 1; }
+        .m-info:hover::after {
+            content: attr(data-tip);
+            position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%);
+            background: var(--bg-elevated); color: var(--text);
+            border: 1px solid var(--border-hover); border-radius: 8px; padding: 8px 12px;
+            font-size: 11px; font-family: 'DM Sans', sans-serif;
+            font-weight: 400; line-height: 1.5;
+            white-space: pre-line; width: max-content; max-width: 260px;
+            z-index: 100; pointer-events: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+        .chart-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+        .chart-tab {
+            padding: 6px 16px; background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: 8px 8px 0 0; color: var(--text-muted);
+            cursor: pointer; font-size: 0.8em; font-family: 'DM Sans', sans-serif; font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .chart-tab:hover { color: var(--text); background: var(--bg-elevated); }
+        .chart-tab.active { background: var(--bg-elevated); color: var(--text); border-bottom-color: var(--bg-elevated); }
         .backtest-card-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
         .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
         .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
@@ -3447,7 +3528,7 @@ DETAIL_HTML = """\
             <button class="action-btn {{ 'liked' if has_liked }}" onclick="toggleLike('{{ backtest.id }}', this)">
                 ♥ <span class="like-count">{{ backtest.likes_count }}</span>
             </button>
-            <a class="action-btn" href="/?{{ backtest.query_string }}">Open in Backtester</a>
+            <a class="action-btn" href="/backtester?{{ backtest.query_string }}">Open in Backtester</a>
             <button class="action-btn" onclick="copyLink()">Copy Link</button>
             {% if is_admin %}
             {% if backtest.visibility != 'featured' %}
