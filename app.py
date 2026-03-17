@@ -178,7 +178,7 @@ def require_auth(f):
                 session['email'] = payload.get('email')
                 session['auth_time'] = time.time()
                 # Redirect to clean URL (strip token from query string)
-                return redirect('/', code=302)
+                return redirect('/backtester', code=302)
             # Invalid token — fall through to session check
 
         # Check existing session
@@ -951,12 +951,12 @@ HTML = """\
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px;font-family:'DM Sans',sans-serif">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a> at the-bitcoin-strategy.com</div>
     </div>
     <nav class="nav-bar">
-        <a href="/featured" class="nav-link {{ 'active' if nav_active|default('')=='featured' }}">Featured</a>
+        <a href="/" class="nav-link {{ 'active' if nav_active|default('')=='featured' }}">Featured</a>
         <a href="/community" class="nav-link {{ 'active' if nav_active|default('')=='community' }}">Community</a>
         {% if session.get('user_id') %}
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active|default('')=='my-backtests' }}">My Backtests</a>
         {% endif %}
-        <a href="/" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Backtester</a>
+        <a href="/backtester" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Backtester</a>
     </nav>
     <div class="layout">
         <div class="panel">
@@ -2490,7 +2490,7 @@ def cancel():
     return '', 204
 
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/backtester", methods=["GET", "POST"])
 @require_auth
 def index():
     chart_b64 = None
@@ -3241,12 +3241,12 @@ COMMUNITY_HTML = """\
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
     </div>
     <nav class="nav-bar">
-        <a href="/" class="nav-link {{ 'active' if nav_active=='backtester' }}">Backtester</a>
+        <a href="/" class="nav-link {{ 'active' if nav_active=='featured' }}">Featured</a>
         <a href="/community" class="nav-link {{ 'active' if nav_active=='community' }}">Community</a>
-        <a href="/featured" class="nav-link {{ 'active' if nav_active=='featured' }}">Featured</a>
         {% if session.get('user_id') %}
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active=='my-backtests' }}">My Backtests</a>
         {% endif %}
+        <a href="/backtester" class="nav-link {{ 'active' if nav_active=='backtester' }}">Backtester</a>
     </nav>
     <div class="panel">
         <h2 class="page-title">{{ page_title }}</h2>
@@ -3414,12 +3414,12 @@ DETAIL_HTML = """\
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
     </div>
     <nav class="nav-bar">
-        <a href="/" class="nav-link">Backtester</a>
+        <a href="/" class="nav-link {{ 'active' if backtest.visibility=='featured' }}">Featured</a>
         <a href="/community" class="nav-link {{ 'active' if backtest.visibility=='community' }}">Community</a>
-        <a href="/featured" class="nav-link {{ 'active' if backtest.visibility=='featured' }}">Featured</a>
         {% if session.get('user_id') %}
         <a href="/my-backtests" class="nav-link">My Backtests</a>
         {% endif %}
+        <a href="/backtester" class="nav-link">Backtester</a>
     </nav>
 
     <div class="panel">
@@ -3646,10 +3646,10 @@ MY_BACKTESTS_HTML = """\
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
     </div>
     <nav class="nav-bar">
-        <a href="/" class="nav-link">Backtester</a>
+        <a href="/" class="nav-link">Featured</a>
         <a href="/community" class="nav-link">Community</a>
-        <a href="/featured" class="nav-link">Featured</a>
         <a href="/my-backtests" class="nav-link active">My Backtests</a>
+        <a href="/backtester" class="nav-link">Backtester</a>
     </nav>
 
     <div class="panel">
@@ -3836,7 +3836,7 @@ def short_link(code):
     bt_entry = db.get_backtest_by_short_code(code)
     if not bt_entry:
         abort(404)
-    return redirect('/?' + bt_entry['query_string'], code=302)
+    return redirect('/backtester?' + bt_entry['query_string'], code=302)
 
 
 @app.route('/api/save', methods=['POST'])
@@ -4077,6 +4077,7 @@ def community():
         is_authenticated=_is_authenticated(), time_ago=_time_ago)
 
 
+@app.route('/')
 @app.route('/featured')
 def featured():
     """Featured backtests page."""
