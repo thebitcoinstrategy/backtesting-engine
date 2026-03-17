@@ -3212,6 +3212,11 @@ COMMUNITY_HTML = """\
         .sort-tab:hover { color: var(--text); background: var(--bg-elevated); }
         .sort-tab.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
         .backtest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+        .backtest-card-wrapper { position: relative; }
+        .reorder-controls { position: absolute; top: 8px; right: 8px; z-index: 10; display: flex; flex-direction: column; gap: 2px; opacity: 0; transition: opacity 0.2s ease; }
+        .backtest-card-wrapper:hover .reorder-controls { opacity: 1; }
+        .reorder-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-muted); cursor: pointer; font-size: 0.7em; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease; }
+        .reorder-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
         .backtest-card { display: block; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: all 0.2s ease; cursor: pointer; text-decoration: none; color: inherit; }
         .backtest-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
         .backtest-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -3285,10 +3290,16 @@ COMMUNITY_HTML = """\
         {% endif %}
 
         {% if backtests %}
-        <div class="backtest-grid">
+        <div class="backtest-grid" id="backtest-grid">
             {% for bt in backtests %}
+            <div class="backtest-card-wrapper" data-id="{{ bt.id }}">
+            {% if is_admin|default(false) and nav_active == 'featured' %}
+            <div class="reorder-controls">
+                <button class="reorder-btn" onclick="event.preventDefault();moveCard('{{ bt.id }}', -1)" title="Move up">&#9650;</button>
+                <button class="reorder-btn" onclick="event.preventDefault();moveCard('{{ bt.id }}', 1)" title="Move down">&#9660;</button>
+            </div>
+            {% endif %}
             <a class="backtest-card" href="/backtest/{{ bt.id }}">
-                {% if bt.visibility == 'featured' %}<span class="backtest-card-badge badge-featured">Featured</span>{% endif %}
                 {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
                 {% if bt.visibility == 'private' %}<span class="backtest-card-badge badge-private">Private</span>{% endif %}
                 <div class="backtest-card-head">
@@ -3330,6 +3341,7 @@ COMMUNITY_HTML = """\
                     </div>
                 </div>
             </a>
+            </div>
             {% endfor %}
         </div>
 
@@ -3369,6 +3381,26 @@ function deleteBacktest(backtestId) {
 function featureBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' })
     .then(function() { location.reload(); });
+}
+function moveCard(id, direction) {
+    var grid = document.getElementById('backtest-grid');
+    var wrappers = Array.from(grid.querySelectorAll('.backtest-card-wrapper'));
+    var idx = wrappers.findIndex(function(w) { return w.getAttribute('data-id') === id; });
+    if (idx < 0) return;
+    var newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= wrappers.length) return;
+    var el = wrappers[idx];
+    if (direction < 0) {
+        grid.insertBefore(el, wrappers[newIdx]);
+    } else {
+        grid.insertBefore(wrappers[newIdx], el);
+    }
+    var orderedIds = Array.from(grid.querySelectorAll('.backtest-card-wrapper')).map(function(w) { return w.getAttribute('data-id'); });
+    fetch('/api/reorder-featured', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ordered_ids: orderedIds})
+    });
 }
 </script>
 </body>
@@ -3544,7 +3576,6 @@ DETAIL_HTML = """\
 
     <div class="panel">
         <div class="detail-header">
-            {% if backtest.visibility == 'featured' %}<span class="backtest-card-badge badge-featured">Featured</span>{% endif %}
             {% if backtest.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
             <h2 class="detail-title">{{ backtest.title or 'Backtest' }}</h2>
             <div class="detail-meta">
@@ -3797,7 +3828,6 @@ MY_BACKTESTS_HTML = """\
             {% for bt in published %}
             <div class="backtest-card">
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
-                    {% if bt.visibility == 'featured' %}<span class="backtest-card-badge badge-featured">Featured</span>{% endif %}
                     {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
                     <div class="backtest-card-head">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
@@ -4109,6 +4139,18 @@ def api_feature_backtest(bt_id):
     return jsonify({'ok': True})
 
 
+@app.route('/api/reorder-featured', methods=['POST'])
+def api_reorder_featured():
+    """Admin: reorder featured backtests."""
+    user_id, email = _require_auth_api()
+    if email != db.ADMIN_EMAIL:
+        abort(403)
+    data = request.get_json(force=True)
+    ordered_ids = data.get('ordered_ids', [])
+    db.reorder_backtests(ordered_ids)
+    return jsonify({'ok': True})
+
+
 @app.route('/api/backtest/<bt_id>/like', methods=['POST'])
 def api_like(bt_id):
     """Toggle like."""
@@ -4246,7 +4288,7 @@ def community():
 @app.route('/featured')
 def featured():
     """Featured backtests page."""
-    sort = request.args.get('sort', 'newest')
+    sort = request.args.get('sort', 'manual')
     page = int(request.args.get('page', 1))
     backtests, total = db.list_backtests(visibility='featured', sort=sort, page=page, per_page=20)
     _enrich_backtest_cards(backtests)
@@ -4255,7 +4297,7 @@ def featured():
         nav_active='featured', page_title='Featured Backtests',
         page_subtitle='Curated strategies hand-picked by our team',
         backtests=backtests, sort=sort, page=page, total_pages=total_pages,
-        is_authenticated=_is_authenticated(), time_ago=_time_ago)
+        is_authenticated=_is_authenticated(), is_admin=_is_admin(), time_ago=_time_ago)
 
 
 @app.route('/my-backtests')

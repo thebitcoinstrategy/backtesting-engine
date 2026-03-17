@@ -75,6 +75,11 @@ def init_db():
         conn.execute("ALTER TABLE backtests ADD COLUMN thumbnail TEXT")
     except sqlite3.OperationalError:
         pass  # column already exists
+    # Add sort_order column if missing (migration for existing DBs)
+    try:
+        conn.execute("ALTER TABLE backtests ADD COLUMN sort_order INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # column already exists
     conn.close()
 
 
@@ -169,7 +174,12 @@ def list_backtests(visibility=None, sort='newest', page=1, per_page=20):
             where = "WHERE visibility=?"
             params = [visibility]
 
-    order = "created_at DESC" if sort == 'newest' else "likes_count DESC, created_at DESC"
+    if sort == 'manual':
+        order = "sort_order ASC, created_at DESC"
+    elif sort == 'newest':
+        order = "created_at DESC"
+    else:
+        order = "likes_count DESC, created_at DESC"
     offset = (page - 1) * per_page
 
     total = conn.execute(f"SELECT COUNT(*) FROM backtests {where}", params).fetchone()[0]
@@ -217,6 +227,16 @@ def delete_backtest_admin(bt_id):
     """Admin delete — no ownership check."""
     conn = _get_conn()
     conn.execute("DELETE FROM backtests WHERE id=?", (bt_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def reorder_backtests(ordered_ids):
+    """Update sort_order for a list of backtest IDs. Index = order position."""
+    conn = _get_conn()
+    for i, bt_id in enumerate(ordered_ids):
+        conn.execute("UPDATE backtests SET sort_order=? WHERE id=?", (i, bt_id))
     conn.commit()
     conn.close()
     return True
