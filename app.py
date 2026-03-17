@@ -248,6 +248,7 @@ HTML = """\
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         :root {
             --bg-deep: #080a10;
@@ -865,7 +866,7 @@ HTML = """\
             padding: 18px; transition: all 0.2s ease; cursor: pointer; text-decoration: none; color: inherit;
         }
         .backtest-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-        .backtest-card-title { font-size: 1em; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+        .backtest-card-title { font-size: 1em; font-weight: 600; margin-bottom: 6px; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
         .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .backtest-card-metrics { display: flex; gap: 14px; margin-bottom: 10px; }
         .backtest-card-metric { font-family: 'JetBrains Mono', monospace; font-size: 0.75em; }
@@ -1487,6 +1488,10 @@ HTML = """\
     </div>
 </div>
 <script>
+var _swal = Swal.mixin({
+    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
+    customClass: { popup: 'swal-dark' }
+});
 var assetStarts = {{ asset_starts_json|tojson }};
 function selectMode(mode, el) {
     document.getElementById('mode').value = mode;
@@ -2116,7 +2121,7 @@ function saveBacktest() {
             btn.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v10h10V6l-3-3H3z"/><path d="M5 3v3h4V3"/><path d="M5 9h6v4H5z"/></svg> Save';
             btn.disabled = false;
         }, 2000);
-    }).catch(function(e) { btn.textContent = 'Save'; btn.disabled = false; alert('Save failed: ' + e.message); });
+    }).catch(function(e) { btn.textContent = 'Save'; btn.disabled = false; _swal.fire({icon:'error', title:'Save failed', text:e.message}); });
 }
 
 function openPublishModal() {
@@ -2151,9 +2156,9 @@ function publishBacktest(visibility) {
     var displayName = document.getElementById('publish-display-name').value.trim();
     var title = document.getElementById('publish-title').value.trim();
     var desc = document.getElementById('publish-desc').value.trim();
-    if (!displayName) { alert('Public username is required'); document.getElementById('publish-display-name').focus(); return; }
-    if (!title) { alert('Title is required'); return; }
-    if (!desc) { alert('Description is required'); return; }
+    if (!displayName) { _swal.fire({icon:'warning', title:'Username required', text:'Please enter a public username.'}); document.getElementById('publish-display-name').focus(); return; }
+    if (!title) { _swal.fire({icon:'warning', title:'Title required', text:'Please enter a title for your backtest.'}); return; }
+    if (!desc) { _swal.fire({icon:'warning', title:'Description required', text:'Please add a description.'}); return; }
     var formData = new FormData(document.getElementById('form'));
     var params = {};
     formData.forEach(function(v, k) { params[k] = v; });
@@ -2172,13 +2177,13 @@ function publishBacktest(visibility) {
         if (!r.ok) throw new Error('Server error: ' + r.status + ' ' + r.statusText);
         return r.json();
     }).then(function(data) {
-        if (data.error) { alert(data.error); return; }
-        _currentShortCode = data.short_code;
+        if (data.error) { _swal.fire({icon:'error', title:'Error', text:data.error}); return; }
         closePublishModal();
-        var copyBtn = document.getElementById('copy-link-btn');
-        if (copyBtn) { copyBtn.classList.remove('hidden'); }
-        alert('Published! Short link: ' + location.origin + '/s/' + data.short_code);
-    }).catch(function(e) { alert('Failed to publish: ' + e.message); });
+        var dest = (visibility === 'featured') ? '/featured' : '/community';
+        _swal.fire({icon:'success', title:'Published!', text:'Your backtest is now live.', timer:2000, showConfirmButton:false}).then(function() {
+            window.location.href = dest;
+        });
+    }).catch(function(e) { _swal.fire({icon:'error', title:'Publish failed', text:e.message}); });
 }
 
 function copyShortLink() {
@@ -2214,9 +2219,14 @@ function submitComment(backtestId, parentId) {
 }
 
 function deleteComment(commentId) {
-    if (!confirm('Delete this comment?')) return;
-    fetch('/api/comment/' + commentId, { method: 'DELETE' })
-    .then(function() { location.reload(); });
+    _swal.fire({
+        title: 'Delete this comment?', icon: 'warning',
+        showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        fetch('/api/comment/' + commentId, { method: 'DELETE' })
+        .then(function() { location.reload(); });
+    });
 }
 
 function showReplyForm(commentId) {
@@ -2225,9 +2235,14 @@ function showReplyForm(commentId) {
 }
 
 function deleteBacktest(backtestId) {
-    if (!confirm('Delete this backtest?')) return;
-    fetch('/api/backtest/' + backtestId, { method: 'DELETE' })
-    .then(function() { location.reload(); });
+    _swal.fire({
+        title: 'Delete this backtest?', icon: 'warning',
+        showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        fetch('/api/backtest/' + backtestId, { method: 'DELETE' })
+        .then(function() { location.reload(); });
+    });
 }
 
 function featureBacktest(backtestId) {
@@ -2254,10 +2269,10 @@ function saveEdit() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({title: title, description: desc})
     }).then(function(r) { return r.json(); }).then(function(data) {
-        if (data.error) { alert(data.error); return; }
+        if (data.error) { _swal.fire({icon:'error', title:'Error', text:data.error}); return; }
         closeEditModal();
         location.reload();
-    }).catch(function() { alert('Failed to save'); });
+    }).catch(function() { _swal.fire({icon:'error', title:'Failed to save'}); });
 }
 </script>
 
@@ -3180,6 +3195,7 @@ COMMUNITY_HTML = """\
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         :root {
             --bg-deep: #080a10; --bg-base: #0f1117; --bg-surface: #161922; --bg-elevated: #1c2030;
@@ -3227,7 +3243,7 @@ COMMUNITY_HTML = """\
         .backtest-card-asset-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); flex-shrink: 0; }
         .backtest-card-asset-fallback { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8em; color: var(--text-muted); flex-shrink: 0; }
         .backtest-card-head-text { flex: 1; min-width: 0; }
-        .backtest-card-title { font-size: 1em; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .backtest-card-title { font-size: 1em; font-weight: 600; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
         .backtest-card-asset-name { font-size: 0.75em; color: var(--text-muted); }
         .backtest-card-mode-icon { color: var(--text-dim); flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--bg-deep); }
         .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -3438,10 +3454,19 @@ COMMUNITY_HTML = """\
     </div>
 </div>
 <script>
+var _swal = Swal.mixin({
+    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
+    customClass: { popup: 'swal-dark' }
+});
 function deleteBacktest(backtestId) {
-    if (!confirm('Delete this backtest?')) return;
-    fetch('/api/backtest/' + backtestId, { method: 'DELETE' })
-    .then(function() { location.reload(); });
+    _swal.fire({
+        title: 'Delete this backtest?', icon: 'warning',
+        showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        fetch('/api/backtest/' + backtestId, { method: 'DELETE' })
+        .then(function() { location.reload(); });
+    });
 }
 function featureBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' })
@@ -3483,6 +3508,7 @@ DETAIL_HTML = """\
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         :root {
             --bg-deep: #080a10; --bg-base: #0f1117; --bg-surface: #161922; --bg-elevated: #1c2030;
@@ -3771,6 +3797,10 @@ DETAIL_HTML = """\
         </div>
 </div>
 <script>
+var _swal = Swal.mixin({
+    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
+    customClass: { popup: 'swal-dark' }
+});
 function toggleLike(backtestId, btn) {
     fetch('/api/backtest/' + backtestId + '/like', { method: 'POST' })
     .then(function(r) { return r.json(); })
@@ -3782,10 +3812,15 @@ function toggleLike(backtestId, btn) {
     });
 }
 function deleteThisBacktest() {
-    if (!confirm('Delete this backtest? This cannot be undone.')) return;
-    fetch('/api/backtest/{{ backtest.id }}', { method: 'DELETE' })
-    .then(function(r) {
-        if (r.ok) { window.location.href = '/'; } else { alert('Failed to delete'); }
+    _swal.fire({
+        title: 'Delete this backtest?', text: 'This cannot be undone.',
+        icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        fetch('/api/backtest/{{ backtest.id }}', { method: 'DELETE' })
+        .then(function(r) {
+            if (r.ok) { window.location.href = '/'; } else { _swal.fire({icon:'error', title:'Failed to delete'}); }
+        });
     });
 }
 function openDetailEditModal() {
@@ -3806,7 +3841,7 @@ function saveDetailEdit() {
         return r.json();
     }).then(function() {
         location.reload();
-    }).catch(function(e) { alert('Failed to save: ' + e.message); });
+    }).catch(function(e) { _swal.fire({icon:'error', title:'Failed to save', text:e.message}); });
 }
 function submitComment(backtestId, parentId) {
     var textareaId = parentId ? 'reply-' + parentId : 'comment-body';
@@ -3818,8 +3853,13 @@ function submitComment(backtestId, parentId) {
     }).then(function() { location.reload(); });
 }
 function deleteComment(commentId) {
-    if (!confirm('Delete this comment?')) return;
-    fetch('/api/comment/' + commentId, { method: 'DELETE' }).then(function() { location.reload(); });
+    _swal.fire({
+        title: 'Delete this comment?', icon: 'warning',
+        showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        fetch('/api/comment/' + commentId, { method: 'DELETE' }).then(function() { location.reload(); });
+    });
 }
 function showReplyForm(commentId) {
     var el = document.getElementById('reply-form-' + commentId);
@@ -3830,7 +3870,7 @@ function featureBacktest(backtestId) {
 }
 function copyLink() {
     navigator.clipboard.writeText(location.origin + '/s/{{ backtest.short_code }}');
-    alert('Link copied!');
+    _swal.fire({icon:'success', title:'Link copied!', timer:1500, showConfirmButton:false});
 }
 // Move like button between chart and metrics table
 (function() {
@@ -3874,6 +3914,7 @@ MY_BACKTESTS_HTML = """\
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         :root {
             --bg-deep: #080a10; --bg-base: #0f1117; --bg-surface: #161922; --bg-elevated: #1c2030;
@@ -3904,7 +3945,7 @@ MY_BACKTESTS_HTML = """\
         .backtest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .backtest-card { display: block; background: var(--bg-base); border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: all 0.2s ease; color: inherit; text-decoration: none; }
         .backtest-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-        .backtest-card-title { font-size: 1em; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+        .backtest-card-title { font-size: 1em; font-weight: 600; margin-bottom: 6px; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
         .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
         .backtest-card-footer .engagement { display: flex; gap: 12px; }
@@ -4092,10 +4133,19 @@ MY_BACKTESTS_HTML = """\
     </div>
 </div>
 <script>
+var _swal = Swal.mixin({
+    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
+    customClass: { popup: 'swal-dark' }
+});
 function deleteBacktest(backtestId) {
-    if (!confirm('Delete this backtest?')) return;
-    fetch('/api/backtest/' + backtestId, { method: 'DELETE' })
-    .then(function() { location.reload(); });
+    _swal.fire({
+        title: 'Delete this backtest?', icon: 'warning',
+        showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        fetch('/api/backtest/' + backtestId, { method: 'DELETE' })
+        .then(function() { location.reload(); });
+    });
 }
 function toggleMyUsername() {
     var input = document.getElementById('display-name-input');
@@ -4109,7 +4159,7 @@ function toggleMyUsername() {
 function saveDisplayName() {
     var input = document.getElementById('display-name-input');
     var name = input.value.trim();
-    if (!name) { alert('Please enter a username'); return; }
+    if (!name) { _swal.fire({icon:'warning', title:'Please enter a username'}); return; }
     fetch('/api/display-name', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({display_name: name})
@@ -4119,7 +4169,7 @@ function saveDisplayName() {
             input.style.opacity = '0.8';
             document.getElementById('edit-name-btn').classList.remove('hidden');
             document.getElementById('save-name-btn').classList.add('hidden');
-            alert('Username saved! This applies to all your backtests and comments.');
+            _swal.fire({icon:'success', title:'Username saved!', text:'This applies to all your backtests and comments.', timer:2000, showConfirmButton:false});
         }
     });
 }
@@ -4146,7 +4196,7 @@ function saveEdit() {
     }).then(function(data) {
         closeEditModal();
         location.reload();
-    }).catch(function(e) { alert('Failed to save: ' + e.message); });
+    }).catch(function(e) { _swal.fire({icon:'error', title:'Failed to save', text:e.message}); });
 }
 </script>
 
