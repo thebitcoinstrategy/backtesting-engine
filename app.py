@@ -699,7 +699,7 @@ HTML = """\
                     <div class="section-title">Mode</div>
                     <input type="hidden" name="mode" id="mode" value="{{ p.mode }}">
                     <div class="mode-selector">
-                        <div class="mode-card {{ 'active' if p.mode=='backtest' }}" onclick="selectMode('backtest', this)">
+                        <div class="mode-card {{ 'active' if p.mode=='backtest' }}" data-mode="backtest" onclick="selectMode('backtest', this)">
                             <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="4 20 10 12 16 16 24 6"/>
                                 <line x1="4" y1="24" x2="24" y2="24" opacity="0.4"/>
@@ -707,7 +707,7 @@ HTML = """\
                             </svg>
                             <span class="mode-card-label">Backtest</span>
                         </div>
-                        <div class="mode-card {{ 'active' if p.mode=='sweep' }}" onclick="selectMode('sweep', this)">
+                        <div class="mode-card {{ 'active' if p.mode=='sweep' }}" data-mode="sweep" onclick="selectMode('sweep', this)">
                             <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <circle cx="12" cy="14" r="8" opacity="0.4"/>
                                 <line x1="18" y1="20" x2="24" y2="26"/>
@@ -715,7 +715,7 @@ HTML = """\
                             </svg>
                             <span class="mode-card-label">Single Indicator Optimization</span>
                         </div>
-                        <div class="mode-card {{ 'active' if p.mode=='heatmap' }}" onclick="selectMode('heatmap', this)">
+                        <div class="mode-card {{ 'active' if p.mode=='heatmap' }}" data-mode="heatmap" onclick="selectMode('heatmap', this)">
                             <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="3" y="3" width="6" height="6" rx="1" fill="currentColor" opacity="0.6"/>
                                 <rect x="11" y="3" width="6" height="6" rx="1" fill="currentColor" opacity="0.3"/>
@@ -729,13 +729,13 @@ HTML = """\
                             </svg>
                             <span class="mode-card-label">Indicator Combination</span>
                         </div>
-                        <div class="mode-card {{ 'active' if p.mode=='sweep-lev' }}" onclick="selectMode('sweep-lev', this)">
+                        <div class="mode-card {{ 'active' if p.mode=='sweep-lev' }}" data-mode="sweep-lev" onclick="selectMode('sweep-lev', this)">
                             <svg class="mode-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
                             </svg>
                             <span class="mode-card-label">Leverage Optimization</span>
                         </div>
-                        <div class="mode-card {{ 'active' if p.mode=='regression' }}" onclick="selectMode('regression', this)">
+                        <div class="mode-card {{ 'active' if p.mode=='regression' }}" data-mode="regression" onclick="selectMode('regression', this)">
                             <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <circle cx="7" cy="20" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/>
                                 <circle cx="10" cy="16" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/>
@@ -1751,6 +1751,7 @@ window.addEventListener('popstate', function(e) {
     var params = new URLSearchParams(window.location.search);
     if (params.toString() === '') return;
     var form = document.getElementById('form');
+
     // Restore all form fields from URL params
     params.forEach(function(value, key) {
         var el = form.querySelector('[name="' + key + '"]');
@@ -1761,6 +1762,24 @@ window.addEventListener('popstate', function(e) {
             el.value = value;
         }
     });
+
+    // Restore ind2 dropdown: if oscillator, set to osc_<name> prefix
+    var sigType = params.get('signal_type');
+    var oscName = params.get('osc_name');
+    if (sigType === 'oscillator' && oscName) {
+        document.getElementById('ind2_name').value = 'osc_' + oscName;
+    }
+
+    // Restore mode card active state
+    var mode = params.get('mode');
+    if (mode) {
+        var cards = document.querySelectorAll('.mode-card');
+        for (var i = 0; i < cards.length; i++) {
+            cards[i].classList.remove('active');
+            if (cards[i].getAttribute('data-mode') === mode) cards[i].classList.add('active');
+        }
+    }
+
     // Update asset button display
     var assetName = params.get('asset');
     if (assetName) {
@@ -1774,6 +1793,7 @@ window.addEventListener('popstate', function(e) {
                 '<svg width="10" height="6" viewBox="0 0 10 6" style="margin-left:6px;opacity:0.5"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>';
         }
     }
+
     toggleFields();
     // Re-submit form to load the backtest (flag to use replaceState, not pushState)
     _isPopstate = true;
