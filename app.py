@@ -2597,9 +2597,33 @@ def _run_post_handler(cancel_event):
                                                       p.buy_threshold, p.sell_threshold)
         sweep_chart_b64 = bt.generate_regression_sweep_chart(sweep_result)
 
+        # Generate small regression thumbnail (scatter plot)
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import numpy as np
+        thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
+        bt._apply_dark_theme(thumb_fig, [thumb_ax])
+        osc_vals = reg_result["osc_values"]
+        fwd_rets = reg_result["forward_returns"]
+        thumb_ax.scatter(osc_vals, fwd_rets, c="#8890a4", alpha=0.15, s=3, rasterized=True)
+        x_range = np.linspace(osc_vals.min(), osc_vals.max(), 100)
+        y_pred = reg_result["slope"] * x_range + reg_result["intercept"]
+        thumb_ax.plot(x_range, y_pred, color="#f7931a", linewidth=1.5)
+        thumb_ax.axhline(y=0, color="#8890a4", linestyle="--", linewidth=0.5, alpha=0.5)
+        thumb_ax.grid(True, which="major", alpha=0.3, color="#252a3a")
+        thumb_ax.tick_params(labelsize=7)
+        thumb_ax.set_xlabel("")
+        plt.tight_layout()
+        thumb_buf = BytesIO()
+        plt.savefig(thumb_buf, format="png", facecolor=thumb_fig.get_facecolor())
+        plt.close()
+        thumb_buf.seek(0)
+        thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
+
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=None, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
-                                      regression=reg_result, regression_sweep_chart=sweep_chart_b64, regression_sweep=sweep_result,
+                                      regression=reg_result, regression_sweep_chart=sweep_chart_b64, regression_sweep=sweep_result, thumb_b64=thumb_b64,
                                       price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
     # --- Leverage Sweep Mode ---
@@ -2912,6 +2936,19 @@ def _run_post_handler(cancel_event):
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode()
 
+        # Generate small heatmap thumbnail
+        thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
+        bt._apply_dark_theme(thumb_fig, [thumb_ax])
+        thumb_im = thumb_ax.imshow(matrix, cmap="RdYlGn", aspect="auto", origin="lower", interpolation="nearest")
+        thumb_ax.set_xticks([])
+        thumb_ax.set_yticks([])
+        plt.tight_layout()
+        thumb_buf = BytesIO()
+        plt.savefig(thumb_buf, format="png", facecolor=thumb_fig.get_facecolor())
+        plt.close()
+        thumb_buf.seek(0)
+        thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
+
         best_result = bt.run_strategy(df_full, ind1_name, best_p1, ind2_name, best_p2,
                                        p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
         best = _enrich_best(best_result, df)
@@ -2921,7 +2958,7 @@ def _run_post_handler(cancel_event):
         ind2_json = _series_to_lw_json(best["ind2_series"])
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
-                                      hide_buyhold=(p.exposure == "short-cash"),
+                                      hide_buyhold=(p.exposure == "short-cash"), thumb_b64=thumb_b64,
                                       price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                       ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
 
@@ -2978,6 +3015,23 @@ def _run_post_handler(cancel_event):
         plt.close()
         buf.seek(0)
         chart_b64 = base64.b64encode(buf.read()).decode()
+
+        # Generate small sweep thumbnail
+        thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
+        bt._apply_dark_theme(thumb_fig, [thumb_ax])
+        thumb_ax.plot(periods, annualized_returns, color="#6495ED", linewidth=1.5)
+        thumb_ax.scatter([best_period], [best_ann], color="#f7931a", s=40, zorder=5)
+        if p.exposure != "short-cash":
+            thumb_ax.axhline(y=bh_annualized, color="#8890a4", linestyle="--", linewidth=1, alpha=0.7)
+        thumb_ax.grid(True, which="major", alpha=0.3, color="#252a3a")
+        thumb_ax.tick_params(labelsize=7)
+        thumb_ax.set_xlabel("")
+        plt.tight_layout()
+        thumb_buf = BytesIO()
+        plt.savefig(thumb_buf, format="png", facecolor=thumb_fig.get_facecolor())
+        plt.close()
+        thumb_buf.seek(0)
+        thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
 
         best_result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, best_period,
                                        p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
