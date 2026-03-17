@@ -1024,30 +1024,42 @@ def run_regression_analysis(df, osc_name, osc_period, forward_days=365,
     if sell_threshold is None:
         sell_threshold = spec["sell_threshold"]
 
-    # Forward return: (close[i+forward_days] / close[i]) - 1 as percentage
-    forward_return = (df["close"].shift(-forward_days) / df["close"] - 1) * 100
+    # Forward log return: ln(close[i+forward_days] / close[i]) * 100 (as percentage)
+    # Log returns have better statistical properties (additive, more normal distribution)
+    price_ratio = df["close"].shift(-forward_days) / df["close"]
+    log_forward_return = np.log(price_ratio) * 100
 
     # Combine and drop NaN
     combined = pd.DataFrame({
         "osc": primary,
-        "fwd_return": forward_return,
+        "fwd_log_return": log_forward_return,
     }).dropna()
 
     osc_values = combined["osc"].values
-    forward_returns = combined["fwd_return"].values
+    log_returns = combined["fwd_log_return"].values
     n_points = len(combined)
 
-    # Linear regression
+    # Linear regression on log returns
     if n_points >= 3:
-        slope, intercept, r_value, p_value, std_err = stats.linregress(osc_values, forward_returns)
-        spearman_r, spearman_p = stats.spearmanr(osc_values, forward_returns)
+        slope, intercept, r_value, p_value, std_err = stats.linregress(osc_values, log_returns)
+        spearman_r, spearman_p = stats.spearmanr(osc_values, log_returns)
     else:
         slope = intercept = r_value = p_value = std_err = 0
         spearman_r = spearman_p = 0
 
     r_squared = r_value ** 2
 
-    # Zone analysis
+    # Convert log returns back to simple returns: (exp(log_ret/100) - 1) * 100
+    def _log_to_simple(log_pct):
+        return (np.exp(log_pct / 100) - 1) * 100
+
+    # Simple returns for display (zone stats, chart y-axis)
+    forward_returns = _log_to_simple(log_returns)
+
+    # Convert regression intercept to simple return for display
+    intercept_simple = float(_log_to_simple(intercept))
+
+    # Zone analysis (using simple returns for display)
     def _zone_stats(mask):
         vals = forward_returns[mask]
         if len(vals) == 0:
@@ -1073,6 +1085,7 @@ def run_regression_analysis(df, osc_name, osc_period, forward_days=365,
         "osc_data": osc_data,
         "osc_values": osc_values,
         "forward_returns": forward_returns,
+        "log_returns": log_returns,
         "forward_days": forward_days,
         "r_squared": r_squared,
         "pearson_r": r_value,
@@ -1081,6 +1094,7 @@ def run_regression_analysis(df, osc_name, osc_period, forward_days=365,
         "p_value": p_value,
         "slope": slope,
         "intercept": intercept,
+        "intercept_simple": intercept_simple,
         "std_err": std_err,
         "n_points": n_points,
         "zone_stats": zone_stats,
@@ -1108,7 +1122,7 @@ def sweep_regression_r_squared(df, osc_name, osc_period, buy_threshold=None, sel
     spearman_list = []
 
     for fwd in days_list:
-        forward_return = (df["close"].shift(-fwd) / df["close"] - 1) * 100
+        forward_return = np.log(df["close"].shift(-fwd) / df["close"]) * 100
         combined = pd.DataFrame({"osc": primary, "fwd": forward_return}).dropna()
         if len(combined) >= 3:
             _, _, r_value, _, _ = stats.linregress(combined["osc"].values, combined["fwd"].values)
@@ -1192,9 +1206,10 @@ def generate_regression_chart(result):
     ax.scatter(osc_values[overbought_mask], forward_returns[overbought_mask],
                c="#ef4444", alpha=0.35, s=12, label="Overbought", rasterized=True)
 
-    # Regression line
+    # Regression line (fitted in log space, converted back to simple returns for display)
     x_range = np.linspace(osc_values.min(), osc_values.max(), 100)
-    y_pred = result["slope"] * x_range + result["intercept"]
+    y_log = result["slope"] * x_range + result["intercept"]
+    y_pred = (np.exp(y_log / 100) - 1) * 100
     ax.plot(x_range, y_pred, color="#f7931a", linewidth=2, label="Regression line")
 
     # Threshold lines
