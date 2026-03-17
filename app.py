@@ -3255,6 +3255,17 @@ COMMUNITY_HTML = """\
         .section-reorder-controls { display: flex; gap: 4px; margin-left: auto; }
         .backtest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
         .backtest-card-wrapper { position: relative; }
+        .backtest-card-wrapper.locked .backtest-card { pointer-events: none; }
+        .backtest-card-wrapper.locked .backtest-card-thumb { filter: blur(8px); transition: filter 0.3s ease; }
+        .backtest-card-wrapper.locked .backtest-card-metrics { filter: blur(6px); }
+        .backtest-card-wrapper.locked .backtest-card-desc { filter: blur(4px); }
+        .locked-overlay { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 5; cursor: pointer; border-radius: 14px; background: rgba(22,25,34,0.3); align-items: center; justify-content: center; flex-direction: column; gap: 8px; transition: background 0.2s ease; }
+        .backtest-card-wrapper.locked .locked-overlay { display: flex; }
+        .locked-overlay:hover { background: rgba(22,25,34,0.5); }
+        .locked-overlay svg { width: 32px; height: 32px; color: var(--text-muted); transition: transform 0.3s ease; }
+        .locked-overlay.shake svg { animation: lockShake 0.5s ease; }
+        .locked-overlay span { font-size: 0.8em; font-weight: 600; color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase; }
+        @keyframes lockShake { 0%,100% { transform: translateX(0) rotate(0); } 15% { transform: translateX(-4px) rotate(-5deg); } 30% { transform: translateX(4px) rotate(5deg); } 45% { transform: translateX(-3px) rotate(-3deg); } 60% { transform: translateX(3px) rotate(3deg); } 75% { transform: translateX(-1px) rotate(-1deg); } }
         .reorder-controls { position: absolute; top: 8px; right: 8px; z-index: 10; display: flex; flex-direction: column; gap: 2px; opacity: 0; transition: opacity 0.2s ease; }
         .backtest-card-wrapper:hover .reorder-controls { opacity: 1; }
         .reorder-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-muted); cursor: pointer; font-size: 0.7em; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease; }
@@ -3347,14 +3358,20 @@ COMMUNITY_HTML = """\
             </div>
             <div class="backtest-grid" id="backtest-grid-{{ section.asset }}">
                 {% for bt in section.backtests %}
-                <div class="backtest-card-wrapper" data-id="{{ bt.id }}">
+                <div class="backtest-card-wrapper{{ ' locked' if not is_authenticated and not loop.first else '' }}" data-id="{{ bt.id }}">
+                {% if not is_authenticated and not loop.first %}
+                <div class="locked-overlay" onclick="shakeLock(this)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                    <span>Locked</span>
+                </div>
+                {% endif %}
                 {% if is_admin|default(false) %}
                 <div class="reorder-controls">
                     <button class="reorder-btn" onclick="event.preventDefault();moveCard('{{ bt.id }}', -1)" title="Move up">&#9650;</button>
                     <button class="reorder-btn" onclick="event.preventDefault();moveCard('{{ bt.id }}', 1)" title="Move down">&#9660;</button>
                 </div>
                 {% endif %}
-                <a class="backtest-card" href="/backtest/{{ bt.id }}">
+                <a class="backtest-card" href="{{ '/backtest/' ~ bt.id if is_authenticated or loop.first else '#' }}">
                     <div class="backtest-card-head">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% endif %}
                         <div class="backtest-card-head-text">
@@ -3402,14 +3419,20 @@ COMMUNITY_HTML = """\
         {% elif backtests %}
         <div class="backtest-grid" id="backtest-grid">
             {% for bt in backtests %}
-            <div class="backtest-card-wrapper" data-id="{{ bt.id }}">
+            <div class="backtest-card-wrapper{{ ' locked' if not is_authenticated and not loop.first else '' }}" data-id="{{ bt.id }}">
+            {% if not is_authenticated and not loop.first %}
+            <div class="locked-overlay" onclick="shakeLock(this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                <span>Locked</span>
+            </div>
+            {% endif %}
             {% if is_admin|default(false) and nav_active == 'featured' %}
             <div class="reorder-controls">
                 <button class="reorder-btn" onclick="event.preventDefault();moveCard('{{ bt.id }}', -1)" title="Move up">&#9650;</button>
                 <button class="reorder-btn" onclick="event.preventDefault();moveCard('{{ bt.id }}', 1)" title="Move down">&#9660;</button>
             </div>
             {% endif %}
-            <a class="backtest-card" href="/backtest/{{ bt.id }}">
+            <a class="backtest-card" href="{{ '/backtest/' ~ bt.id if is_authenticated or loop.first else '#' }}">
                 {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
                 {% if bt.visibility == 'private' %}<span class="backtest-card-badge badge-private">Private</span>{% endif %}
                 <div class="backtest-card-head">
@@ -3522,6 +3545,12 @@ function moveCard(id, direction) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ordered_ids: orderedIds})
     });
+}
+function shakeLock(el) {
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+    setTimeout(function() { el.classList.remove('shake'); }, 600);
 }
 function moveSection(asset, direction) {
     var sections = Array.from(document.querySelectorAll('.asset-section'));
