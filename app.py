@@ -1608,6 +1608,7 @@ document.getElementById('btn').addEventListener('click', function(e) {
     }
 });
 
+var _isPopstate = false;
 document.getElementById('form').addEventListener('submit', function(e) {
     e.preventDefault();
     var btn = document.getElementById('btn');
@@ -1615,7 +1616,8 @@ document.getElementById('form').addEventListener('submit', function(e) {
 
     if (currentAbort) {
         currentAbort.abort();
-        return;
+        currentAbort = null;
+        if (!_isPopstate) return;
     }
 
     var errors = validateForm();
@@ -1671,11 +1673,16 @@ document.getElementById('form').addEventListener('submit', function(e) {
                 panel.style.opacity = '1';
                 panel.innerHTML = '<div class="placeholder">Error loading results. Try refreshing the page.</div>';
             }
-            // Update URL with form params for shareable links
+            // Update URL with form params for browser back/forward navigation
             var qs = new URLSearchParams(formData);
             var viewParam = new URLSearchParams(window.location.search).get('view');
             if (viewParam) qs.set('view', viewParam);
-            history.replaceState(null, '', '?' + qs.toString());
+            if (_isPopstate) {
+                history.replaceState({ formParams: qs.toString() }, '', '?' + qs.toString());
+            } else {
+                history.pushState({ formParams: qs.toString() }, '', '?' + qs.toString());
+            }
+            _isPopstate = false;
             activateViewFromURL();
             resetBtn();
         })
@@ -1738,6 +1745,40 @@ document.getElementById('form').addEventListener('submit', function(e) {
         });
 })();
 {% endif %}
+
+// Browser back/forward: restore form fields from URL and re-submit
+window.addEventListener('popstate', function(e) {
+    var params = new URLSearchParams(window.location.search);
+    if (params.toString() === '') return;
+    var form = document.getElementById('form');
+    // Restore all form fields from URL params
+    params.forEach(function(value, key) {
+        var el = form.querySelector('[name="' + key + '"]');
+        if (!el) return;
+        if (el.type === 'checkbox') {
+            el.checked = (value === 'on' || value === 'true' || value === '1');
+        } else {
+            el.value = value;
+        }
+    });
+    // Update asset button display
+    var assetName = params.get('asset');
+    if (assetName) {
+        var selectedBtn = document.getElementById('asset-selected');
+        var assetInput = document.getElementById('asset');
+        if (assetInput) assetInput.value = assetName;
+        if (selectedBtn) {
+            var logo = assetLogos[assetName];
+            selectedBtn.innerHTML = (logo ? '<img class="asset-selected-logo" src="/static/logos/' + logo + '" alt="' + assetName + '">' : '') +
+                '<span>' + assetName.charAt(0).toUpperCase() + assetName.slice(1) + '</span>' +
+                '<svg width="10" height="6" viewBox="0 0 10 6" style="margin-left:6px;opacity:0.5"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>';
+        }
+    }
+    toggleFields();
+    // Re-submit form to load the backtest (flag to use replaceState, not pushState)
+    _isPopstate = true;
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+});
 </script>
 </body>
 </html>
