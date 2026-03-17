@@ -3449,7 +3449,25 @@ DETAIL_HTML = """\
         .action-btn:hover { border-color: var(--border-hover); color: var(--text); }
         .action-btn.primary { border-color: var(--accent); color: var(--accent); }
         .action-btn.liked { color: #ef4444; border-color: #ef4444; }
+        .action-btn.danger { border-color: #ef4444; color: #ef4444; }
+        .action-btn.danger:hover { background: rgba(239,68,68,0.1); }
         .action-buttons { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .like-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-muted); cursor: pointer; font-size: 0.9em; font-weight: 600; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; }
+        .like-btn:hover { border-color: #ef4444; color: #ef4444; }
+        .like-btn.liked { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,0.08); }
+        .like-btn.disabled { cursor: default; opacity: 0.5; }
+        .like-heart { font-size: 1.1em; }
+        .like-btn.liked .like-heart { animation: heartPop 0.3s ease; }
+        @keyframes heartPop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+        .edit-modal-overlay { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+        .edit-modal-overlay.open { display: flex; }
+        .edit-modal { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 90%; max-width: 500px; position: relative; }
+        .edit-modal h3 { font-size: 1.1em; font-weight: 600; margin-bottom: 16px; }
+        .edit-modal label { display: block; font-size: 0.8em; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
+        .edit-modal input, .edit-modal textarea { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-size: 0.9em; font-family: 'DM Sans', sans-serif; margin-bottom: 14px; }
+        .edit-modal input:focus, .edit-modal textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .edit-modal textarea { resize: vertical; min-height: 80px; }
+        .edit-modal .close-btn { position: absolute; top: 12px; right: 16px; background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2em; }
         .comments-section { margin-top: 24px; }
         .comments-title { font-size: 1em; font-weight: 600; margin-bottom: 14px; }
         .comment-form textarea { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-size: 0.85em; font-family: 'DM Sans', sans-serif; resize: vertical; min-height: 60px; margin-bottom: 8px; }
@@ -3590,11 +3608,12 @@ DETAIL_HTML = """\
 
         {% if is_authenticated %}
         <div class="action-buttons">
-            <button class="action-btn {{ 'liked' if has_liked }}" onclick="toggleLike('{{ backtest.id }}', this)">
-                ♥ <span class="like-count">{{ backtest.likes_count }}</span>
-            </button>
             <a class="action-btn" href="/backtester?{{ backtest.query_string }}">Open in Backtester</a>
             <button class="action-btn" onclick="copyLink()">Copy Link</button>
+            {% if is_admin or backtest.user_id == session.get('user_id') %}
+            <button class="action-btn" onclick="openDetailEditModal()">Edit</button>
+            <button class="action-btn danger" onclick="deleteThisBacktest()">Delete</button>
+            {% endif %}
             {% if is_admin %}
             {% if backtest.visibility != 'featured' %}
             <button class="action-btn primary" onclick="featureBacktest('{{ backtest.id }}')">Feature</button>
@@ -3609,6 +3628,18 @@ DETAIL_HTML = """\
         {{ backtest.cached_html|safe }}
     </div>
     {% endif %}
+
+    <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+        {% if is_authenticated %}
+        <button class="like-btn {{ 'liked' if has_liked }}" onclick="toggleLike('{{ backtest.id }}', this)">
+            <span class="like-heart">♥</span> <span class="like-count">{{ backtest.likes_count }}</span> <span class="like-text">{{ 'Liked' if has_liked else 'Like' }}</span>
+        </button>
+        {% else %}
+        <div class="like-btn disabled">
+            <span class="like-heart">♥</span> <span class="like-count">{{ backtest.likes_count }}</span> <span class="like-text">Like</span>
+        </div>
+        {% endif %}
+    </div>
 
     <div class="panel">
         <div class="comments-section">
@@ -3677,8 +3708,37 @@ function toggleLike(backtestId, btn) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
         btn.querySelector('.like-count').textContent = data.likes_count;
-        if (data.liked) { btn.classList.add('liked'); } else { btn.classList.remove('liked'); }
+        var textEl = btn.querySelector('.like-text');
+        if (data.liked) { btn.classList.add('liked'); if (textEl) textEl.textContent = 'Liked'; }
+        else { btn.classList.remove('liked'); if (textEl) textEl.textContent = 'Like'; }
     });
+}
+function deleteThisBacktest() {
+    if (!confirm('Delete this backtest? This cannot be undone.')) return;
+    fetch('/api/backtest/{{ backtest.id }}', { method: 'DELETE' })
+    .then(function(r) {
+        if (r.ok) { window.location.href = '/'; } else { alert('Failed to delete'); }
+    });
+}
+function openDetailEditModal() {
+    document.getElementById('detail-edit-overlay').classList.add('open');
+    document.getElementById('detail-edit-title').focus();
+}
+function closeDetailEditModal() {
+    document.getElementById('detail-edit-overlay').classList.remove('open');
+}
+function saveDetailEdit() {
+    var title = document.getElementById('detail-edit-title').value.trim();
+    var desc = document.getElementById('detail-edit-desc').value.trim();
+    fetch('/api/backtest/{{ backtest.id }}', {
+        method: 'PATCH', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: title, description: desc})
+    }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    }).then(function() {
+        location.reload();
+    }).catch(function(e) { alert('Failed to save: ' + e.message); });
 }
 function submitComment(backtestId, parentId) {
     var textareaId = parentId ? 'reply-' + parentId : 'comment-body';
@@ -3705,6 +3765,22 @@ function copyLink() {
     alert('Link copied!');
 }
 </script>
+{% if is_authenticated and (is_admin or backtest.user_id == session.get('user_id')) %}
+<div class="edit-modal-overlay" id="detail-edit-overlay">
+    <div class="edit-modal">
+        <button class="close-btn" onclick="closeDetailEditModal()">&times;</button>
+        <h3>Edit Backtest</h3>
+        <label>Title</label>
+        <input type="text" id="detail-edit-title" value="{{ backtest.title|e }}">
+        <label>Description</label>
+        <textarea id="detail-edit-desc">{{ backtest.description or '' }}</textarea>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+            <button class="action-btn" onclick="closeDetailEditModal()">Cancel</button>
+            <button class="action-btn primary" onclick="saveDetailEdit()">Save Changes</button>
+        </div>
+    </div>
+</div>
+{% endif %}
 </body>
 </html>
 """
@@ -3984,11 +4060,13 @@ function saveEdit() {
     fetch('/api/backtest/' + btId, {
         method: 'PATCH', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({title: title, description: desc})
-    }).then(function(r) { return r.json(); }).then(function(data) {
-        if (data.error) { alert(data.error); return; }
+    }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    }).then(function(data) {
         closeEditModal();
         location.reload();
-    }).catch(function() { alert('Failed to save'); });
+    }).catch(function(e) { alert('Failed to save: ' + e.message); });
 }
 </script>
 
@@ -4080,14 +4158,21 @@ def api_publish():
 def api_update_backtest(bt_id):
     """Update title/description of a backtest."""
     user_id, email = _require_auth_api()
-    data = request.get_json()
+    data = request.get_json(force=True)
     if not data:
-        abort(400)
+        return jsonify({'error': 'No data provided'}), 400
+    # Admin can edit any backtest
+    if email == db.ADMIN_EMAIL:
+        conn = db._get_conn()
+        row = conn.execute("SELECT user_id FROM backtests WHERE id=?", (bt_id,)).fetchone()
+        conn.close()
+        if row:
+            user_id = row['user_id']
     result = db.update_backtest(bt_id, user_id,
         title=data.get('title'),
         description=data.get('description'))
     if not result:
-        abort(403)
+        return jsonify({'error': 'Not found or not authorized'}), 403
     return jsonify(result)
 
 
