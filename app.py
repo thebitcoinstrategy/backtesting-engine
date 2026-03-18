@@ -3736,6 +3736,7 @@ DETAIL_HTML = """\
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         :root {
@@ -4194,6 +4195,58 @@ function downloadChart() {
     a.href = img.src;
     a.download = '{{ backtest.title or bt_params.asset or "chart" }}_backtest.png';
     a.click();
+}
+var lwChartLoaded = false;
+function switchChartTab(tab, btn) {
+    var bt = document.getElementById('backtest-chart-tab');
+    var lw = document.getElementById('livechart-tab');
+    if (!bt || !lw) return;
+    bt.style.display = tab === 'backtest' ? '' : 'none';
+    lw.style.display = tab === 'livechart' ? '' : 'none';
+    var tabs = btn.parentElement.querySelectorAll('.chart-tab');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+    btn.classList.add('active');
+    if (tab === 'livechart' && !lwChartLoaded) { loadLWChart(); }
+}
+function loadLWChart() {
+    var container = document.getElementById('lw-chart-container');
+    if (!container || typeof __lwData === 'undefined') return;
+    lwChartLoaded = true;
+    container.innerHTML = '';
+    var priceData = __lwData.price || [];
+    var ind1Data = __lwData.ind1 || [];
+    var ind2Data = __lwData.ind2 || [];
+    var ind1Label = __lwData.ind1Label || '';
+    var ind2Label = __lwData.ind2Label || '';
+    if (priceData.length === 0) return;
+    var chart = LightweightCharts.createChart(container, {
+        width: container.clientWidth, height: 600,
+        layout: { background: { color: '#161922' }, textColor: '#8890a4', fontFamily: "'DM Sans', sans-serif" },
+        grid: { vertLines: { color: '#252a3a' }, horzLines: { color: '#252a3a' } },
+        rightPriceScale: { mode: LightweightCharts.PriceScaleMode.Logarithmic, borderColor: '#252a3a' },
+        timeScale: { borderColor: '#252a3a', timeVisible: false },
+        crosshair: { horzLine: { color: '#555d74', labelBackgroundColor: '#252a3a' }, vertLine: { color: '#555d74', labelBackgroundColor: '#252a3a' } }
+    });
+    var priceSeries = chart.addSeries(LightweightCharts.LineSeries, { color: '#e8eaf0', lineWidth: 2, title: 'Price', priceLineVisible: false });
+    priceSeries.setData(priceData);
+    if (ind2Data.length > 0) {
+        var ind2Series = chart.addSeries(LightweightCharts.LineSeries, { color: '#6495ED', lineWidth: 2, title: ind2Label, priceLineVisible: false });
+        ind2Series.setData(ind2Data);
+    }
+    if (ind1Data.length > 0) {
+        var ind1Series = chart.addSeries(LightweightCharts.LineSeries, { color: '#f7931a', lineWidth: 2, title: ind1Label, priceLineVisible: false });
+        ind1Series.setData(ind1Data);
+    }
+    if (priceData.length > 0) {
+        var lastPoint = priceData[priceData.length - 1];
+        var lastDate = new Date(lastPoint.time);
+        var fromDate = new Date(lastDate);
+        fromDate.setFullYear(fromDate.getFullYear() - 1);
+        chart.timeScale().setVisibleRange({ from: fromDate.toISOString().split('T')[0], to: lastPoint.time });
+    } else {
+        chart.timeScale().fitContent();
+    }
+    window.addEventListener('resize', function() { chart.applyOptions({ width: container.clientWidth }); });
 }
 function copyLink(el) {
     navigator.clipboard.writeText(location.origin + '/s/{{ backtest.short_code }}');
