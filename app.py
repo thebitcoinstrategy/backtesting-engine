@@ -578,6 +578,92 @@ HTML = """\
             letter-spacing: 0.08em; margin: 8px 0 4px; font-weight: 600;
         }
 
+        /* Upload asset modal */
+        .upload-asset-btn {
+            background: none; border: 1px solid var(--border); border-radius: 8px;
+            color: var(--text-dim); font-size: 0.7em; padding: 4px 10px;
+            cursor: pointer; transition: all 0.15s ease; font-family: 'DM Sans', sans-serif;
+            display: flex; align-items: center; gap: 4px;
+        }
+        .upload-asset-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .upload-modal-overlay {
+            display: none; position: fixed; inset: 0; z-index: 1100;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+            align-items: center; justify-content: center;
+        }
+        .upload-modal-overlay.open { display: flex; animation: fadeIn 0.15s ease-out; }
+        .upload-modal {
+            background: var(--bg-base); border: 1px solid var(--border);
+            border-radius: 16px; padding: 24px; width: 90%; max-width: 440px;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.4);
+            animation: fadeUp 0.2s ease-out;
+        }
+        .upload-modal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 20px;
+            font-size: 0.9em; font-weight: 600; color: var(--text);
+        }
+        .upload-dropzone {
+            border: 2px dashed var(--border); border-radius: 12px;
+            padding: 32px 16px; text-align: center; cursor: pointer;
+            transition: all 0.2s ease; margin-bottom: 16px;
+            background: var(--bg-deep);
+        }
+        .upload-dropzone:hover, .upload-dropzone.dragover {
+            border-color: var(--accent); background: rgba(247, 147, 26, 0.04);
+        }
+        .upload-dropzone-icon { font-size: 2em; margin-bottom: 8px; opacity: 0.4; }
+        .upload-dropzone-text { font-size: 0.8em; color: var(--text-dim); }
+        .upload-dropzone-text strong { color: var(--accent); }
+        .upload-dropzone-file {
+            font-size: 0.75em; color: var(--green); margin-top: 8px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .upload-form-group {
+            margin-bottom: 14px;
+        }
+        .upload-form-group label {
+            display: block; font-size: 0.7em; font-weight: 600;
+            color: var(--text-dim); text-transform: uppercase;
+            letter-spacing: 0.05em; margin-bottom: 6px;
+        }
+        .upload-form-group input, .upload-form-group select {
+            width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+            border-radius: 8px; background: var(--bg-deep); color: var(--text);
+            font-size: 0.85em; font-family: 'DM Sans', sans-serif;
+            outline: none; transition: border-color 0.15s ease;
+            box-sizing: border-box;
+        }
+        .upload-form-group input:focus, .upload-form-group select:focus {
+            border-color: var(--accent);
+        }
+        .upload-actions {
+            display: flex; gap: 8px; margin-top: 20px;
+        }
+        .upload-actions button {
+            flex: 1; padding: 10px 16px; border: none; border-radius: 10px;
+            font-size: 0.85em; font-weight: 600; cursor: pointer;
+            font-family: 'DM Sans', sans-serif; transition: all 0.15s ease;
+        }
+        .upload-cancel-btn {
+            background: var(--bg-elevated); color: var(--text-dim);
+            border: 1px solid var(--border) !important;
+        }
+        .upload-cancel-btn:hover { border-color: var(--text-dim) !important; color: var(--text); }
+        .upload-confirm-btn {
+            background: linear-gradient(135deg, var(--accent), #e8850f);
+            color: var(--bg-deep);
+        }
+        .upload-confirm-btn:hover { opacity: 0.9; }
+        .upload-confirm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .upload-error {
+            font-size: 0.75em; color: var(--red); margin-top: 8px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .upload-success {
+            font-size: 0.75em; color: var(--green); margin-top: 8px;
+        }
+
         /* Separator */
         .sep { width: 1px; background: var(--border); align-self: stretch; margin: 0 2px; flex: 0 0 1px; opacity: 0.6; }
 
@@ -1110,7 +1196,15 @@ HTML = """\
                     <div class="asset-modal" onclick="event.stopPropagation()">
                         <div class="asset-modal-header">
                             <span>Select Asset</span>
-                            <button type="button" class="asset-modal-close" onclick="closeAssetModal()">&times;</button>
+                            <div style="display:flex;align-items:center;gap:8px">
+                                {% if session.get('email') == '""" + db.ADMIN_EMAIL + """' %}
+                                <button type="button" class="upload-asset-btn" onclick="openUploadModal()">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                    Add Asset
+                                </button>
+                                {% endif %}
+                                <button type="button" class="asset-modal-close" onclick="closeAssetModal()">&times;</button>
+                            </div>
                         </div>
                         <div class="asset-grid">
                             {% for a in priority_assets %}
@@ -1170,6 +1264,44 @@ HTML = """\
                             {% endfor %}
                         </div>
                         {% endif %}
+                    </div>
+                </div>
+                <!-- Upload Asset Modal -->
+                <div class="upload-modal-overlay" id="upload-modal-overlay" onclick="closeUploadModal()">
+                    <div class="upload-modal" onclick="event.stopPropagation()">
+                        <div class="upload-modal-header">
+                            <span>Add New Asset</span>
+                            <button type="button" class="asset-modal-close" onclick="closeUploadModal()">&times;</button>
+                        </div>
+                        <div class="upload-dropzone" id="upload-dropzone" onclick="document.getElementById('upload-file-input').click()">
+                            <div class="upload-dropzone-icon">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            </div>
+                            <div class="upload-dropzone-text">
+                                <strong>Click to browse</strong> or drag & drop<br>CSV file with <code>time</code> and <code>close</code> columns
+                            </div>
+                            <div class="upload-dropzone-file" id="upload-file-name"></div>
+                            <input type="file" id="upload-file-input" accept=".csv" style="display:none" onchange="handleUploadFile(this.files[0])">
+                        </div>
+                        <div class="upload-form-group">
+                            <label>Asset Name</label>
+                            <input type="text" id="upload-asset-name" placeholder="e.g. Litecoin, AMD, Natural Gas">
+                        </div>
+                        <div class="upload-form-group">
+                            <label>Asset Type</label>
+                            <select id="upload-asset-type">
+                                <option value="crypto">Crypto</option>
+                                <option value="stock">Stock</option>
+                                <option value="index">Stock Index</option>
+                                <option value="metal">Precious Metal</option>
+                                <option value="commodity">Commodity</option>
+                            </select>
+                        </div>
+                        <div id="upload-message"></div>
+                        <div class="upload-actions">
+                            <button type="button" class="upload-cancel-btn" onclick="closeUploadModal()">Cancel</button>
+                            <button type="button" class="upload-confirm-btn" id="upload-confirm-btn" onclick="submitUploadAsset()" disabled>Upload Asset</button>
+                        </div>
                     </div>
                 </div>
                 <div class="form-section">
@@ -1789,6 +1921,92 @@ function openAssetModal() {
 function closeAssetModal() {
     document.getElementById('asset-modal-overlay').classList.remove('open');
 }
+
+// Upload asset modal
+var _uploadFile = null;
+function openUploadModal() {
+    closeAssetModal();
+    _uploadFile = null;
+    document.getElementById('upload-file-input').value = '';
+    document.getElementById('upload-file-name').textContent = '';
+    document.getElementById('upload-asset-name').value = '';
+    document.getElementById('upload-asset-type').value = 'crypto';
+    document.getElementById('upload-message').innerHTML = '';
+    document.getElementById('upload-confirm-btn').disabled = true;
+    document.getElementById('upload-modal-overlay').classList.add('open');
+}
+function closeUploadModal() {
+    document.getElementById('upload-modal-overlay').classList.remove('open');
+}
+function handleUploadFile(file) {
+    if (!file) return;
+    if (!file.name.endsWith('.csv')) {
+        document.getElementById('upload-message').innerHTML = '<div class="upload-error">Please select a CSV file</div>';
+        return;
+    }
+    _uploadFile = file;
+    document.getElementById('upload-file-name').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+    document.getElementById('upload-message').innerHTML = '';
+    _checkUploadReady();
+}
+function _checkUploadReady() {
+    var hasFile = !!_uploadFile;
+    var hasName = document.getElementById('upload-asset-name').value.trim().length > 0;
+    document.getElementById('upload-confirm-btn').disabled = !(hasFile && hasName);
+}
+document.getElementById('upload-asset-name').addEventListener('input', _checkUploadReady);
+
+// Drag and drop
+(function() {
+    var dz = document.getElementById('upload-dropzone');
+    if (!dz) return;
+    ['dragenter','dragover'].forEach(function(ev) {
+        dz.addEventListener(ev, function(e) { e.preventDefault(); e.stopPropagation(); dz.classList.add('dragover'); });
+    });
+    ['dragleave','drop'].forEach(function(ev) {
+        dz.addEventListener(ev, function(e) { e.preventDefault(); e.stopPropagation(); dz.classList.remove('dragover'); });
+    });
+    dz.addEventListener('drop', function(e) {
+        var files = e.dataTransfer.files;
+        if (files.length > 0) handleUploadFile(files[0]);
+    });
+})();
+
+function submitUploadAsset() {
+    var btn = document.getElementById('upload-confirm-btn');
+    var msgEl = document.getElementById('upload-message');
+    var assetName = document.getElementById('upload-asset-name').value.trim();
+    var assetType = document.getElementById('upload-asset-type').value;
+    if (!_uploadFile || !assetName) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Uploading...';
+    msgEl.innerHTML = '';
+
+    var fd = new FormData();
+    fd.append('file', _uploadFile);
+    fd.append('asset_name', assetName);
+    fd.append('asset_type', assetType);
+
+    fetch('/api/upload-asset', { method: 'POST', body: fd })
+        .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+        .then(function(res) {
+            if (res.ok && res.data.ok) {
+                msgEl.innerHTML = '<div class="upload-success">Asset "' + res.data.asset + '" added successfully! Reloading page...</div>';
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                msgEl.innerHTML = '<div class="upload-error">' + (res.data.error || 'Upload failed') + '</div>';
+                btn.disabled = false;
+                btn.textContent = 'Upload Asset';
+            }
+        })
+        .catch(function(err) {
+            msgEl.innerHTML = '<div class="upload-error">Network error: ' + err.message + '</div>';
+            btn.disabled = false;
+            btn.textContent = 'Upload Asset';
+        });
+}
+
 toggleFields();
 
 // Re-enable Run button when any form parameter changes
@@ -2499,6 +2717,17 @@ _STOCK_ASSETS = {"Apple", "Microsoft", "Amazon", "Alphabet", "Tesla", "Nvidia", 
 _INDEX_ASSETS = {"Dax", "Dow Jones", "Hang Seng", "Nasdaq100", "SP500"}
 _METAL_ASSETS = {"Gold", "Silver", "Palladium"}
 _COMMODITY_ASSETS = {"Oil (Brent)", "Oil (Wti)"}
+
+# Load custom category assignments (from uploaded assets)
+_CATEGORIES_FILE = os.path.join(DATA_DIR, "_categories.json")
+if os.path.exists(_CATEGORIES_FILE):
+    with open(_CATEGORIES_FILE) as _f:
+        for _asset, _cat in json.load(_f).items():
+            if _cat == 'stock': _STOCK_ASSETS.add(_asset)
+            elif _cat == 'index': _INDEX_ASSETS.add(_asset)
+            elif _cat == 'metal': _METAL_ASSETS.add(_asset)
+            elif _cat == 'commodity': _COMMODITY_ASSETS.add(_asset)
+
 PRIORITY_ASSETS = [a for a in _PRIORITY_ORDER if a in ASSETS]
 OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER and a not in _STOCK_ASSETS and a not in _INDEX_ASSETS and a not in _METAL_ASSETS and a not in _COMMODITY_ASSETS]
 STOCK_ASSETS = [a for a in ASSET_NAMES if a in _STOCK_ASSETS]
@@ -2524,6 +2753,98 @@ ASSET_LOGOS = {
     "Meta": "meta-logo.png", "Netflix": "netflix-logo.png", "Coinbase": "coinbase-logo.png",
     "Strategy": "strategy-logo.png",
 }
+
+# Load custom logo assignments (from uploaded assets)
+_LOGOS_FILE = os.path.join(DATA_DIR, "_logos.json")
+if os.path.exists(_LOGOS_FILE):
+    with open(_LOGOS_FILE) as _f:
+        ASSET_LOGOS.update(json.load(_f))
+
+
+def _rebuild_asset_lists():
+    """Rebuild all asset name/category lists from current ASSETS dict."""
+    global ASSET_NAMES, PRIORITY_ASSETS, OTHER_ASSETS, STOCK_ASSETS, INDEX_ASSETS, METAL_ASSETS, COMMODITY_ASSETS
+    ASSET_NAMES = sorted(ASSETS.keys())
+    PRIORITY_ASSETS = [a for a in _PRIORITY_ORDER if a in ASSETS]
+    OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER and a not in _STOCK_ASSETS and a not in _INDEX_ASSETS and a not in _METAL_ASSETS and a not in _COMMODITY_ASSETS]
+    STOCK_ASSETS = [a for a in ASSET_NAMES if a in _STOCK_ASSETS]
+    INDEX_ASSETS = [a for a in ASSET_NAMES if a in _INDEX_ASSETS]
+    METAL_ASSETS = [a for a in ASSET_NAMES if a in _METAL_ASSETS]
+    COMMODITY_ASSETS = [a for a in ASSET_NAMES if a in _COMMODITY_ASSETS]
+
+
+def _download_logo(asset_name, asset_type):
+    """Try to download a logo for the asset. Returns filename or None."""
+    import urllib.request
+    import urllib.parse
+    logos_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "logos")
+    safe_name = re.sub(r'[^a-zA-Z0-9]', '-', asset_name.lower()).strip('-')
+    filename = f"{safe_name}-logo.png"
+    filepath = os.path.join(logos_dir, filename)
+
+    try:
+        if asset_type == 'crypto':
+            # Try CoinGecko search API
+            search_url = f"https://api.coingecko.com/api/v3/search?query={urllib.parse.quote(asset_name)}"
+            req = urllib.request.Request(search_url, headers={'User-Agent': 'BacktestingEngine/1.0'})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read())
+                coins = data.get('coins', [])
+                if coins:
+                    img_url = coins[0].get('large') or coins[0].get('thumb')
+                    if img_url:
+                        img_req = urllib.request.Request(img_url, headers={'User-Agent': 'BacktestingEngine/1.0'})
+                        with urllib.request.urlopen(img_req, timeout=10) as img_resp:
+                            with open(filepath, 'wb') as f:
+                                f.write(img_resp.read())
+                        return filename
+        else:
+            # Try Clearbit logo API with company name as domain
+            domain_guess = re.sub(r'[^a-zA-Z0-9]', '', asset_name.lower()) + '.com'
+            logo_url = f"https://logo.clearbit.com/{domain_guess}"
+            req = urllib.request.Request(logo_url, headers={'User-Agent': 'BacktestingEngine/1.0'})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                with open(filepath, 'wb') as f:
+                    f.write(resp.read())
+                return filename
+    except Exception:
+        pass
+    return None
+
+
+def _save_categories_file():
+    """Persist custom category assignments to JSON file."""
+    # Only save assets not in the original hardcoded sets
+    _ORIG_STOCK = {"Apple", "Microsoft", "Amazon", "Alphabet", "Tesla", "Nvidia", "Meta", "Netflix", "Coinbase", "Strategy"}
+    _ORIG_INDEX = {"Dax", "Dow Jones", "Hang Seng", "Nasdaq100", "SP500"}
+    _ORIG_METAL = {"Gold", "Silver", "Palladium"}
+    _ORIG_COMMODITY = {"Oil (Brent)", "Oil (Wti)"}
+    custom = {}
+    for a in _STOCK_ASSETS - _ORIG_STOCK:
+        custom[a] = 'stock'
+    for a in _INDEX_ASSETS - _ORIG_INDEX:
+        custom[a] = 'index'
+    for a in _METAL_ASSETS - _ORIG_METAL:
+        custom[a] = 'metal'
+    for a in _COMMODITY_ASSETS - _ORIG_COMMODITY:
+        custom[a] = 'commodity'
+    with open(_CATEGORIES_FILE, 'w') as f:
+        json.dump(custom, f, indent=2)
+
+
+def _save_logos_file():
+    """Persist custom logo assignments to JSON file."""
+    _ORIG_LOGOS = {
+        "bitcoin", "ethereum", "solana", "XRP", "BNB", "Cardano", "Chainlink", "Dogecoin",
+        "Monero", "Bitcoin Cash", "Hyperliquid", "Bittensor", "Dax", "Dow Jones", "Hang Seng",
+        "Nasdaq100", "SP500", "Gold", "Silver", "Palladium", "Oil (Brent)", "Oil (Wti)",
+        "Apple", "Microsoft", "Amazon", "Alphabet", "Tesla", "Nvidia", "Meta", "Netflix",
+        "Coinbase", "Strategy",
+    }
+    custom = {k: v for k, v in ASSET_LOGOS.items() if k not in _ORIG_LOGOS}
+    with open(_LOGOS_FILE, 'w') as f:
+        json.dump(custom, f, indent=2)
+
 
 def _series_to_lw_json(series):
     """Convert pandas Series (datetime index + float values) to Lightweight Charts format."""
@@ -4782,6 +5103,72 @@ def api_delete_comment(comment_id):
         if not db.delete_comment(comment_id, user_id):
             abort(403)
     return jsonify({'ok': True})
+
+
+@app.route('/api/upload-asset', methods=['POST'])
+def api_upload_asset():
+    """Admin-only: upload a new asset CSV file."""
+    if not _is_admin():
+        abort(403)
+
+    if 'file' not in request.files:
+        return jsonify(error='No file provided'), 400
+
+    file = request.files['file']
+    asset_name = request.form.get('asset_name', '').strip()
+    asset_type = request.form.get('asset_type', 'crypto')
+
+    if not asset_name:
+        return jsonify(error='Asset name is required'), 400
+    if asset_name in ASSETS:
+        return jsonify(error=f'Asset "{asset_name}" already exists'), 400
+
+    # Save CSV to temp file for validation
+    import tempfile
+    import shutil
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.csv')
+    tmp_path = tmp.name
+    tmp.close()
+    try:
+        file.save(tmp_path)
+        df = bt.load_data(tmp_path)
+        if df.empty or 'close' not in df.columns:
+            os.unlink(tmp_path)
+            return jsonify(error='CSV must have "time" and "close" columns'), 400
+    except Exception as e:
+        os.unlink(tmp_path)
+        return jsonify(error=f'Failed to parse CSV: {str(e)}'), 400
+
+    # Move to data/ directory
+    csv_path = os.path.join(DATA_DIR, f"{asset_name}.csv")
+    shutil.move(tmp_path, csv_path)
+
+    # Update in-memory state
+    ASSETS[asset_name] = df
+    ASSET_STARTS[asset_name] = str(df.index[0].date())
+
+    # Add to category set
+    category_map = {
+        'stock': _STOCK_ASSETS,
+        'index': _INDEX_ASSETS,
+        'metal': _METAL_ASSETS,
+        'commodity': _COMMODITY_ASSETS,
+    }
+    cat_set = category_map.get(asset_type)
+    if cat_set is not None:
+        cat_set.add(asset_name)
+
+    _save_categories_file()
+
+    # Try to download logo
+    logo_file = _download_logo(asset_name, asset_type)
+    if logo_file:
+        ASSET_LOGOS[asset_name] = logo_file
+        _save_logos_file()
+
+    _rebuild_asset_lists()
+
+    return jsonify(ok=True, asset=asset_name, logo=ASSET_LOGOS.get(asset_name, ''))
 
 
 MODE_SVGS = {
