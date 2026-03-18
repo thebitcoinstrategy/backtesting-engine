@@ -5434,6 +5434,10 @@ def backtest_detail(bt_id):
     # Strip save/publish action buttons from cached HTML
     cached = bt_entry.get('cached_html', '') or ''
     cached = re.sub(r'<div class="action-buttons"[^>]*id="backtest-actions"[^>]*>.*?</div>', '', cached, flags=re.DOTALL)
+    # Convert raw "XXXd" drawdown durations to human-readable "Xy Xm Xd"
+    cached = re.sub(r'(Drawdown Duration.*?m-val[^>]*>)(\d+)d(.*?m-val[^>]*>)(\d+)d',
+                    lambda m: m.group(1) + duration_filter(int(m.group(2))) + m.group(3) + duration_filter(int(m.group(4))),
+                    cached, flags=re.DOTALL)
     bt_entry = dict(bt_entry)
     bt_entry['cached_html'] = cached
     # Parse params for display
