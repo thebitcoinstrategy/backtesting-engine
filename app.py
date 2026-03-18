@@ -4187,6 +4187,14 @@ function showReplyForm(commentId) {
 function featureBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' }).then(function() { location.reload(); });
 }
+function downloadChart() {
+    var img = document.querySelector('.chart-img');
+    if (!img) return;
+    var a = document.createElement('a');
+    a.href = img.src;
+    a.download = '{{ backtest.title or bt_params.asset or "chart" }}_backtest.png';
+    a.click();
+}
 function copyLink(el) {
     navigator.clipboard.writeText(location.origin + '/s/{{ backtest.short_code }}');
     if (el) { el.classList.add('copied'); setTimeout(function(){ el.classList.remove('copied'); }, 1200); }
