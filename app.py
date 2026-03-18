@@ -20,6 +20,21 @@ import database as db
 app = Flask(__name__)
 db.init_db()
 
+@app.template_filter('duration')
+def duration_filter(days):
+    """Format days as 'Xy Xm Xd', e.g. 1000 → '2y 8m 25d'."""
+    days = int(days)
+    years, days = divmod(days, 365)
+    months, days = divmod(days, 30)
+    parts = []
+    if years:
+        parts.append(f"{years}y")
+    if months:
+        parts.append(f"{months}m")
+    if days or not parts:
+        parts.append(f"{days}d")
+    return " ".join(parts)
+
 # --- Disk cache for backtest results ---
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 CACHE_MAX_BYTES = 1 * 1024 * 1024 * 1024  # 1 GB
@@ -1710,7 +1725,7 @@ HTML = """\
                     <tr><td class="m-label">Sortino Ratio <span class="m-info" data-tip="Like Sharpe but only penalizes downside risk.&#10;Formula: mean daily return ÷ downside std × √365">ⓘ</span></td><td class="m-val">{{ "%.2f"|format(best.sortino) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sortino) }}</td></tr>
                     <tr class="section-row"><td colspan="3">Risk</td></tr>
                     <tr><td class="m-label">Max Drawdown <span class="m-info" data-tip="Largest peak-to-trough drop.&#10;Formula: (trough − peak) ÷ peak">ⓘ</span></td><td class="m-val negative">{{ "%.2f"|format(best.max_drawdown) }}%</td><td class="m-val negative">{{ "%.2f"|format(best.buyhold_max_drawdown) }}%</td></tr>
-                    <tr><td class="m-label">Drawdown Duration <span class="m-info" data-tip="Longest time spent below a previous high.&#10;Days from peak until recovery">ⓘ</span></td><td class="m-val">{{ best.max_dd_duration }}d</td><td class="m-val">{{ best.buyhold_max_dd_duration }}d</td></tr>
+                    <tr><td class="m-label">Drawdown Duration <span class="m-info" data-tip="Longest time spent below a previous high.&#10;Days from peak until recovery">ⓘ</span></td><td class="m-val">{{ best.max_dd_duration|duration }}</td><td class="m-val">{{ best.buyhold_max_dd_duration|duration }}</td></tr>
                     <tr><td class="m-label">Volatility <span class="m-info" data-tip="How much returns fluctuate day to day.&#10;Formula: annualized std dev of daily returns">ⓘ</span></td><td class="m-val">{{ "%.1f"|format(best.volatility) }}%</td><td class="m-val">{{ "%.1f"|format(best.buyhold_volatility) }}%</td></tr>
                     <tr><td class="m-label">Beta <span class="m-info" data-tip="How much the strategy moves with the market.&#10;Formula: Cov(strategy, market) ÷ Var(market)">ⓘ</span></td><td class="m-val">{{ "%.2f"|format(best.beta) }}</td><td class="m-val muted">1.00</td></tr>
                     <tr><td class="m-label">Calmar Ratio <span class="m-info" data-tip="Return relative to worst drawdown.&#10;Formula: Ann. return ÷ |max drawdown|">ⓘ</span></td><td class="m-val">{{ "%.2f"|format(best.calmar) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_calmar) }}</td></tr>
