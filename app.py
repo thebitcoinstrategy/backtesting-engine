@@ -353,6 +353,7 @@ HTML = """\
             text-align: center;
             margin-bottom: 32px;
             animation: fadeDown 0.6s ease-out;
+            position: relative;
         }
         .header h1 {
             font-size: 1.6em;
@@ -1080,6 +1081,25 @@ HTML = """\
             border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.85em;
         }
 
+        /* Auth buttons (top-right when logged out) */
+        .auth-buttons {
+            position: absolute; top: 0; right: 0;
+            display: flex; gap: 10px; align-items: center;
+        }
+        .auth-btn {
+            display: inline-block; padding: 10px 24px; border-radius: 8px;
+            font-weight: 700; font-size: 0.9em; text-decoration: none;
+            font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; cursor: pointer;
+        }
+        .auth-btn-login {
+            background: var(--accent); color: #fff; border: 2px solid var(--accent);
+        }
+        .auth-btn-login:hover { background: #e08a1a; border-color: #e08a1a; }
+        .auth-btn-signup {
+            background: var(--accent); color: #fff; border: 2px solid var(--accent);
+        }
+        .auth-btn-signup:hover { background: #e08a1a; border-color: #e08a1a; }
+
         /* Animations */
         @keyframes fadeUp {
             from { opacity: 0; transform: translateY(16px); }
@@ -1096,6 +1116,12 @@ HTML = """\
 <body>
 <div class="container">
     <div class="header">
+        {% if not session.get('user_id') %}
+        <div class="auth-buttons">
+            <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
+            <a href="https://the-bitcoin-strategy.com/register" class="auth-btn auth-btn-signup">Sign Up</a>
+        </div>
+        {% endif %}
         <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px;font-family:'DM Sans',sans-serif">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a> at the-bitcoin-strategy.com</div>
     </div>
@@ -3703,10 +3729,16 @@ COMMUNITY_HTML = """\
             pointer-events: none; z-index: 0;
         }
         .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
-        .header { text-align: center; margin-bottom: 32px; }
+        .header { text-align: center; margin-bottom: 32px; position: relative; }
         .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
         .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; border-radius: 0; font-weight: 700; }
         .header h1 .brand-analytics { background: var(--bg-elevated); color: var(--text); padding: 6px 14px; border-radius: 0; border: 1px solid var(--border); border-left: none; }
+        .auth-buttons { position: absolute; top: 0; right: 0; display: flex; gap: 10px; align-items: center; }
+        .auth-btn { display: inline-block; padding: 10px 24px; border-radius: 8px; font-weight: 700; font-size: 0.9em; text-decoration: none; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; cursor: pointer; }
+        .auth-btn-login { background: var(--accent); color: #fff; border: 2px solid var(--accent); }
+        .auth-btn-login:hover { background: #e08a1a; border-color: #e08a1a; }
+        .auth-btn-signup { background: var(--accent); color: #fff; border: 2px solid var(--accent); }
+        .auth-btn-signup:hover { background: #e08a1a; border-color: #e08a1a; }
         .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; }
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
@@ -3790,6 +3822,12 @@ COMMUNITY_HTML = """\
 <body>
 <div class="container">
     <div class="header">
+        {% if not session.get('user_id') %}
+        <div class="auth-buttons">
+            <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
+            <a href="https://the-bitcoin-strategy.com/register" class="auth-btn auth-btn-signup">Sign Up</a>
+        </div>
+        {% endif %}
         <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
     </div>
@@ -4075,10 +4113,16 @@ DETAIL_HTML = """\
             pointer-events: none; z-index: 0;
         }
         .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
-        .header { text-align: center; margin-bottom: 32px; }
+        .header { text-align: center; margin-bottom: 32px; position: relative; }
         .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
         .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; font-weight: 700; }
         .header h1 .brand-analytics { background: var(--bg-elevated); color: var(--text); padding: 6px 14px; border: 1px solid var(--border); border-left: none; }
+        .auth-buttons { position: absolute; top: 0; right: 0; display: flex; gap: 10px; align-items: center; }
+        .auth-btn { display: inline-block; padding: 10px 24px; border-radius: 8px; font-weight: 700; font-size: 0.9em; text-decoration: none; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; cursor: pointer; }
+        .auth-btn-login { background: var(--accent); color: #fff; border: 2px solid var(--accent); }
+        .auth-btn-login:hover { background: #e08a1a; border-color: #e08a1a; }
+        .auth-btn-signup { background: var(--accent); color: #fff; border: 2px solid var(--accent); }
+        .auth-btn-signup:hover { background: #e08a1a; border-color: #e08a1a; }
         .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; }
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
@@ -4240,6 +4284,12 @@ DETAIL_HTML = """\
 <body>
 <div class="container">
     <div class="header">
+        {% if not session.get('user_id') %}
+        <div class="auth-buttons">
+            <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
+            <a href="https://the-bitcoin-strategy.com/register" class="auth-btn auth-btn-signup">Sign Up</a>
+        </div>
+        {% endif %}
         <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
     </div>
