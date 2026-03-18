@@ -1119,7 +1119,7 @@ HTML = """\
         {% if not session.get('user_id') %}
         <div class="auth-buttons">
             <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
-            <a href="https://the-bitcoin-strategy.com/register" class="auth-btn auth-btn-signup">Sign Up</a>
+            <a href="https://the-bitcoin-strategy.com/subscribe" class="auth-btn auth-btn-signup">Sign Up</a>
         </div>
         {% endif %}
         <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
@@ -3825,7 +3825,7 @@ COMMUNITY_HTML = """\
         {% if not session.get('user_id') %}
         <div class="auth-buttons">
             <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
-            <a href="https://the-bitcoin-strategy.com/register" class="auth-btn auth-btn-signup">Sign Up</a>
+            <a href="https://the-bitcoin-strategy.com/subscribe" class="auth-btn auth-btn-signup">Sign Up</a>
         </div>
         {% endif %}
         <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
@@ -4287,7 +4287,7 @@ DETAIL_HTML = """\
         {% if not session.get('user_id') %}
         <div class="auth-buttons">
             <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
-            <a href="https://the-bitcoin-strategy.com/register" class="auth-btn auth-btn-signup">Sign Up</a>
+            <a href="https://the-bitcoin-strategy.com/subscribe" class="auth-btn auth-btn-signup">Sign Up</a>
         </div>
         {% endif %}
         <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
