@@ -4832,7 +4832,7 @@ MY_BACKTESTS_HTML = """\
                     </div>
                 </a>
                 <div class="card-actions">
-                    <a class="action-btn" href="/?{{ bt.query_string }}">Open</a>
+                    <a class="action-btn" href="/backtester?{{ bt.query_string }}">Open</a>
                     <button class="action-btn" onclick="event.stopPropagation();openEditModal('{{ bt.id }}', '{{ bt.title|e }}', '{{ bt.description|e }}')">Edit</button>
                     <button class="action-btn danger" onclick="event.stopPropagation();deleteBacktest('{{ bt.id }}')">Delete</button>
                 </div>
@@ -4882,7 +4882,7 @@ MY_BACKTESTS_HTML = """\
                     </div>
                 </a>
                 <div class="card-actions">
-                    <a class="action-btn" href="/?{{ bt.query_string }}">Open</a>
+                    <a class="action-btn" href="/backtester?{{ bt.query_string }}">Open</a>
                     <button class="action-btn" onclick="event.stopPropagation();openEditModal('{{ bt.id }}', '{{ bt.title|e }}', '{{ (bt.description or '')|e }}')">Edit</button>
                     <button class="action-btn danger" onclick="event.stopPropagation();deleteBacktest('{{ bt.id }}')">Delete</button>
                 </div>
