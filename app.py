@@ -239,7 +239,7 @@ def require_auth(f):
             payload = _validate_token(token)
             if payload:
                 session.permanent = True
-                session['user_id'] = payload.get('user_id')
+                session['user_id'] = str(payload.get('user_id', ''))
                 session['email'] = payload.get('email')
                 session['auth_time'] = time.time()
                 # Redirect to clean URL (strip token from query string)
@@ -264,7 +264,7 @@ def _try_token_auth():
         payload = _validate_token(token)
         if payload:
             session.permanent = True
-            session['user_id'] = payload.get('user_id')
+            session['user_id'] = str(payload.get('user_id', ''))
             session['email'] = payload.get('email')
             session['auth_time'] = time.time()
 
@@ -5410,7 +5410,7 @@ def backtest_detail(bt_id):
         abort(404)
     # Private backtests only visible to owner
     if bt_entry['visibility'] == 'private':
-        if not _is_authenticated() or session.get('user_id') != bt_entry['user_id']:
+        if not _is_authenticated() or str(session.get('user_id', '')) != str(bt_entry['user_id']):
             abort(404)
     comments = db.get_comments(bt_id)
     is_auth = _is_authenticated()

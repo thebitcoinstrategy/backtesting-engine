@@ -214,10 +214,8 @@ def delete_backtest(bt_id, user_id):
         return False
     # Check ownership or admin
     bt = _row_to_dict(row)
-    conn_email = conn.execute("SELECT user_email FROM backtests WHERE id=? AND user_id=?", (bt_id, user_id)).fetchone()
-    # Get the requesting user's email from session (passed as user_id check)
-    if bt['user_id'] != user_id:
-        # Check if user_id belongs to admin — caller must pass admin check separately
+    # Compare as strings to avoid int/str type mismatch (JWT sends int, DB stores text)
+    if str(bt['user_id']) != str(user_id):
         conn.close()
         return False
     conn.execute("DELETE FROM backtests WHERE id=?", (bt_id,))
@@ -269,7 +267,7 @@ def update_backtest(bt_id, user_id, title=None, description=None):
         conn.close()
         return None
     bt = _row_to_dict(row)
-    if bt['user_id'] != user_id:
+    if str(bt['user_id']) != str(user_id):
         conn.close()
         return None
     now = datetime.utcnow().isoformat()
@@ -366,7 +364,7 @@ def delete_comment(comment_id, user_id):
         conn.close()
         return False
     comment = _row_to_dict(row)
-    if comment['user_id'] != user_id:
+    if str(comment['user_id']) != str(user_id):
         conn.close()
         return False
     backtest_id = comment['backtest_id']
