@@ -5224,7 +5224,7 @@ ADMIN_ASSETS_HTML = """\
                     </div>
                 </td>
                 <td>
-                    <select class="cat-select" data-asset="{{ name }}" onchange="changeCategory({{ name|tojson }}, this.value)">
+                    <select class="cat-select" data-asset="{{ name }}" onchange='changeCategory({{ name|tojson }}, this.value)'>
                         <option value="crypto" {{ 'selected' if name in crypto_names }}>Crypto</option>
                         <option value="crypto_agg" {{ 'selected' if name in crypto_agg_names }}>Crypto Aggregate</option>
                         <option value="stock" {{ 'selected' if name in stock_names }}>Stock</option>
@@ -5236,8 +5236,8 @@ ADMIN_ASSETS_HTML = """\
                 <td style="font-family:'JetBrains Mono',monospace;font-size:0.8em;color:var(--text-muted)">{{ asset_starts.get(name, '') }}</td>
                 <td>
                     <div class="actions-cell">
-                        <button class="action-btn-sm" onclick="openRenameModal({{ name|tojson }})">Rename</button>
-                        <button class="action-btn-sm danger" onclick="deleteAsset({{ name|tojson }})">Delete</button>
+                        <button class="action-btn-sm" onclick='openRenameModal({{ name|tojson }})'>Rename</button>
+                        <button class="action-btn-sm danger" onclick='deleteAsset({{ name|tojson }})'>Delete</button>
                     </div>
                 </td>
             </tr>
