@@ -5307,8 +5307,12 @@ function changeCategory(asset, cat) {
     fetch('/api/change-asset-category', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({asset: asset, category: cat})
-    }).then(function(r) { return r.json(); }).then(function(d) {
+    }).then(function(r) {
+        if (!r.ok) throw new Error('Server returned ' + r.status);
+        return r.json();
+    }).then(function(d) {
         if (d.error) _swal.fire({icon:'error', title:'Error', text: d.error});
+        else _swal.fire({icon:'success', title:'Updated', text: asset + ' category changed', timer: 1500, showConfirmButton: false});
     }).catch(function(e) { _swal.fire({icon:'error', title:'Error', text: e.message}); });
 }
 
