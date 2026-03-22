@@ -2088,6 +2088,13 @@ function toggleVsAsset() {
     var row = document.getElementById('vs-asset-row');
     if (checked) {
         row.classList.remove('hidden');
+        if (!document.getElementById('vs_asset').value) {
+            var defaultVs = 'TOTALES';
+            var card = document.querySelector('.vs-asset-card[data-asset="' + defaultVs + '"]');
+            if (card) {
+                selectVsAsset(defaultVs, card);
+            }
+        }
     } else {
         row.classList.add('hidden');
         document.getElementById('vs_asset').value = '';
