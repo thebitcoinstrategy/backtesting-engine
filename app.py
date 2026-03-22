@@ -282,8 +282,8 @@ def _is_admin():
 
 @app.context_processor
 def inject_auth():
-    """Make is_authenticated available in all templates."""
-    return dict(is_authenticated=_is_authenticated())
+    """Make is_authenticated and is_admin available in all templates."""
+    return dict(is_authenticated=_is_authenticated(), is_admin=_is_admin())
 
 
 def _require_auth_api():
@@ -598,92 +598,6 @@ HTML = """\
         .asset-section-label {
             font-size: 0.6em; color: var(--text-dim); text-transform: uppercase;
             letter-spacing: 0.08em; margin: 8px 0 4px; font-weight: 600;
-        }
-
-        /* Upload asset modal */
-        .upload-asset-btn {
-            background: none; border: 1px solid var(--border); border-radius: 8px;
-            color: var(--text-dim); font-size: 0.7em; padding: 4px 10px;
-            cursor: pointer; transition: all 0.15s ease; font-family: 'DM Sans', sans-serif;
-            display: flex; align-items: center; gap: 4px;
-        }
-        .upload-asset-btn:hover { border-color: var(--accent); color: var(--accent); }
-        .upload-modal-overlay {
-            display: none; position: fixed; inset: 0; z-index: 1100;
-            background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
-            align-items: center; justify-content: center;
-        }
-        .upload-modal-overlay.open { display: flex; animation: fadeIn 0.15s ease-out; }
-        .upload-modal {
-            background: var(--bg-base); border: 1px solid var(--border);
-            border-radius: 16px; padding: 24px; width: 90%; max-width: 440px;
-            box-shadow: 0 24px 48px rgba(0,0,0,0.4);
-            animation: fadeUp 0.2s ease-out;
-        }
-        .upload-modal-header {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 20px;
-            font-size: 0.9em; font-weight: 600; color: var(--text);
-        }
-        .upload-dropzone {
-            border: 2px dashed var(--border); border-radius: 12px;
-            padding: 32px 16px; text-align: center; cursor: pointer;
-            transition: all 0.2s ease; margin-bottom: 16px;
-            background: var(--bg-deep);
-        }
-        .upload-dropzone:hover, .upload-dropzone.dragover {
-            border-color: var(--accent); background: rgba(247, 147, 26, 0.04);
-        }
-        .upload-dropzone-icon { font-size: 2em; margin-bottom: 8px; opacity: 0.4; }
-        .upload-dropzone-text { font-size: 0.8em; color: var(--text-dim); }
-        .upload-dropzone-text strong { color: var(--accent); }
-        .upload-dropzone-file {
-            font-size: 0.75em; color: var(--green); margin-top: 8px;
-            font-family: 'JetBrains Mono', monospace;
-        }
-        .upload-form-group {
-            margin-bottom: 14px;
-        }
-        .upload-form-group label {
-            display: block; font-size: 0.7em; font-weight: 600;
-            color: var(--text-dim); text-transform: uppercase;
-            letter-spacing: 0.05em; margin-bottom: 6px;
-        }
-        .upload-form-group input, .upload-form-group select {
-            width: 100%; padding: 10px 12px; border: 1px solid var(--border);
-            border-radius: 8px; background: var(--bg-deep); color: var(--text);
-            font-size: 0.85em; font-family: 'DM Sans', sans-serif;
-            outline: none; transition: border-color 0.15s ease;
-            box-sizing: border-box;
-        }
-        .upload-form-group input:focus, .upload-form-group select:focus {
-            border-color: var(--accent);
-        }
-        .upload-actions {
-            display: flex; gap: 8px; margin-top: 20px;
-        }
-        .upload-actions button {
-            flex: 1; padding: 10px 16px; border: none; border-radius: 10px;
-            font-size: 0.85em; font-weight: 600; cursor: pointer;
-            font-family: 'DM Sans', sans-serif; transition: all 0.15s ease;
-        }
-        .upload-cancel-btn {
-            background: var(--bg-elevated); color: var(--text-dim);
-            border: 1px solid var(--border) !important;
-        }
-        .upload-cancel-btn:hover { border-color: var(--text-dim) !important; color: var(--text); }
-        .upload-confirm-btn {
-            background: linear-gradient(135deg, var(--accent), #e8850f);
-            color: var(--bg-deep);
-        }
-        .upload-confirm-btn:hover { opacity: 0.9; }
-        .upload-confirm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .upload-error {
-            font-size: 0.75em; color: var(--red); margin-top: 8px;
-            font-family: 'JetBrains Mono', monospace;
-        }
-        .upload-success {
-            font-size: 0.75em; color: var(--green); margin-top: 8px;
         }
 
         /* Separator */
@@ -1153,6 +1067,7 @@ HTML = """\
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active|default('')=='my-backtests' }}">My Backtests</a>
         {% endif %}
         <a href="/backtester" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Create Backtest</a>
+        {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active|default('')=='admin-assets' }}">Assets</a>{% endif %}
     </nav>
     <div class="layout">
         <div class="panel">
@@ -1342,15 +1257,7 @@ HTML = """\
                     <div class="asset-modal" onclick="event.stopPropagation()">
                         <div class="asset-modal-header">
                             <span>Select Asset</span>
-                            <div style="display:flex;align-items:center;gap:8px">
-                                {% if session.get('email') == '""" + db.ADMIN_EMAIL + """' %}
-                                <button type="button" class="upload-asset-btn" onclick="openUploadModal()">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                    Add Asset
-                                </button>
-                                {% endif %}
-                                <button type="button" class="asset-modal-close" onclick="closeAssetModal()">&times;</button>
-                            </div>
+                            <button type="button" class="asset-modal-close" onclick="closeAssetModal()">&times;</button>
                         </div>
                         <div class="asset-grid">
                             {% for a in priority_assets %}
@@ -1421,45 +1328,6 @@ HTML = """\
                             {% endfor %}
                         </div>
                         {% endif %}
-                    </div>
-                </div>
-                <!-- Upload Asset Modal -->
-                <div class="upload-modal-overlay" id="upload-modal-overlay" onclick="closeUploadModal()">
-                    <div class="upload-modal" onclick="event.stopPropagation()">
-                        <div class="upload-modal-header">
-                            <span>Add New Asset</span>
-                            <button type="button" class="asset-modal-close" onclick="closeUploadModal()">&times;</button>
-                        </div>
-                        <div class="upload-dropzone" id="upload-dropzone" onclick="document.getElementById('upload-file-input').click()">
-                            <div class="upload-dropzone-icon">
-                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                            </div>
-                            <div class="upload-dropzone-text">
-                                <strong>Click to browse</strong> or drag & drop<br>CSV file with <code>time</code> and <code>close</code> columns
-                            </div>
-                            <div class="upload-dropzone-file" id="upload-file-name"></div>
-                            <input type="file" id="upload-file-input" accept=".csv" style="display:none" onchange="handleUploadFile(this.files[0])">
-                        </div>
-                        <div class="upload-form-group">
-                            <label>Asset Name</label>
-                            <input type="text" id="upload-asset-name" placeholder="e.g. Litecoin, AMD, Natural Gas">
-                        </div>
-                        <div class="upload-form-group">
-                            <label>Asset Type</label>
-                            <select id="upload-asset-type">
-                                <option value="crypto">Crypto</option>
-                                <option value="crypto_agg">Crypto Aggregate</option>
-                                <option value="stock">Stock</option>
-                                <option value="index">Stock Index</option>
-                                <option value="metal">Precious Metal</option>
-                                <option value="commodity">Commodity</option>
-                            </select>
-                        </div>
-                        <div id="upload-message"></div>
-                        <div class="upload-actions">
-                            <button type="button" class="upload-cancel-btn" onclick="closeUploadModal()">Cancel</button>
-                            <button type="button" class="upload-confirm-btn" id="upload-confirm-btn" onclick="submitUploadAsset()" disabled>Upload Asset</button>
-                        </div>
                     </div>
                 </div>
                 <div class="form-section">
@@ -2123,91 +1991,6 @@ function openVsAssetModal() {
 }
 function closeVsAssetModal() {
     document.getElementById('vs-asset-modal-overlay').classList.remove('open');
-}
-
-// Upload asset modal
-var _uploadFile = null;
-function openUploadModal() {
-    closeAssetModal();
-    _uploadFile = null;
-    document.getElementById('upload-file-input').value = '';
-    document.getElementById('upload-file-name').textContent = '';
-    document.getElementById('upload-asset-name').value = '';
-    document.getElementById('upload-asset-type').value = 'crypto';
-    document.getElementById('upload-message').innerHTML = '';
-    document.getElementById('upload-confirm-btn').disabled = true;
-    document.getElementById('upload-modal-overlay').classList.add('open');
-}
-function closeUploadModal() {
-    document.getElementById('upload-modal-overlay').classList.remove('open');
-}
-function handleUploadFile(file) {
-    if (!file) return;
-    if (!file.name.endsWith('.csv')) {
-        document.getElementById('upload-message').innerHTML = '<div class="upload-error">Please select a CSV file</div>';
-        return;
-    }
-    _uploadFile = file;
-    document.getElementById('upload-file-name').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
-    document.getElementById('upload-message').innerHTML = '';
-    _checkUploadReady();
-}
-function _checkUploadReady() {
-    var hasFile = !!_uploadFile;
-    var hasName = document.getElementById('upload-asset-name').value.trim().length > 0;
-    document.getElementById('upload-confirm-btn').disabled = !(hasFile && hasName);
-}
-document.getElementById('upload-asset-name').addEventListener('input', _checkUploadReady);
-
-// Drag and drop
-(function() {
-    var dz = document.getElementById('upload-dropzone');
-    if (!dz) return;
-    ['dragenter','dragover'].forEach(function(ev) {
-        dz.addEventListener(ev, function(e) { e.preventDefault(); e.stopPropagation(); dz.classList.add('dragover'); });
-    });
-    ['dragleave','drop'].forEach(function(ev) {
-        dz.addEventListener(ev, function(e) { e.preventDefault(); e.stopPropagation(); dz.classList.remove('dragover'); });
-    });
-    dz.addEventListener('drop', function(e) {
-        var files = e.dataTransfer.files;
-        if (files.length > 0) handleUploadFile(files[0]);
-    });
-})();
-
-function submitUploadAsset() {
-    var btn = document.getElementById('upload-confirm-btn');
-    var msgEl = document.getElementById('upload-message');
-    var assetName = document.getElementById('upload-asset-name').value.trim();
-    var assetType = document.getElementById('upload-asset-type').value;
-    if (!_uploadFile || !assetName) return;
-
-    btn.disabled = true;
-    btn.textContent = 'Uploading...';
-    msgEl.innerHTML = '';
-
-    var fd = new FormData();
-    fd.append('file', _uploadFile);
-    fd.append('asset_name', assetName);
-    fd.append('asset_type', assetType);
-
-    fetch('/api/upload-asset', { method: 'POST', body: fd })
-        .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
-        .then(function(res) {
-            if (res.ok && res.data.ok) {
-                msgEl.innerHTML = '<div class="upload-success">Asset "' + res.data.asset + '" added successfully! Reloading page...</div>';
-                setTimeout(function() { location.reload(); }, 1500);
-            } else {
-                msgEl.innerHTML = '<div class="upload-error">' + (res.data.error || 'Upload failed') + '</div>';
-                btn.disabled = false;
-                btn.textContent = 'Upload Asset';
-            }
-        })
-        .catch(function(err) {
-            msgEl.innerHTML = '<div class="upload-error">Network error: ' + err.message + '</div>';
-            btn.disabled = false;
-            btn.textContent = 'Upload Asset';
-        });
 }
 
 toggleFields();
@@ -4047,6 +3830,7 @@ COMMUNITY_HTML = """\
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active=='my-backtests' }}">My Backtests</a>
         {% endif %}
         <a href="/backtester" class="nav-link {{ 'active' if nav_active=='backtester' }}">Create Backtest</a>
+        {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active=='admin-assets' }}">Assets</a>{% endif %}
     </nav>
     <div class="panel">
         <h2 class="page-title">{{ page_title }}</h2>
@@ -4509,6 +4293,7 @@ DETAIL_HTML = """\
         <a href="/my-backtests" class="nav-link">My Backtests</a>
         {% endif %}
         <a href="/backtester" class="nav-link">Create Backtest</a>
+        {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
     </nav>
 
     <div class="panel">
@@ -4966,6 +4751,7 @@ MY_BACKTESTS_HTML = """\
         <a href="/community" class="nav-link">Community</a>
         <a href="/my-backtests" class="nav-link active">My Backtests</a>
         <a href="/backtester" class="nav-link">Create Backtest</a>
+        {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
     </nav>
 
     <div class="panel">
@@ -5182,6 +4968,298 @@ function saveEdit() {
         </div>
     </div>
 </div>
+</body>
+</html>
+"""
+
+
+ADMIN_ASSETS_HTML = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Management — Bitcoin Strategy Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        :root {
+            --bg-deep: #0f1118; --bg-base: #161922; --bg-surface: #1b1f2e;
+            --bg-elevated: #252a3a; --border: #2a2f40;
+            --text: #e8e9ed; --text-muted: #8890a4; --text-dim: #5a6178;
+            --accent: #f7931a; --accent-hover: #ffa940;
+            --green: #34d399; --red: #ef4444;
+            --blue: #6495ED;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'DM Sans', sans-serif; background: var(--bg-deep); color: var(--text); min-height: 100vh; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 24px 20px; }
+        .header { text-align: center; margin-bottom: 32px; position: relative; }
+        .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
+        .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; font-weight: 700; }
+        .header h1 .brand-analytics { background: var(--bg-elevated); color: var(--text); padding: 6px 14px; border: 1px solid var(--border); border-left: none; }
+        .nav-bar { display: flex; justify-content: center; gap: 4px; margin-bottom: 24px; flex-wrap: wrap; }
+        .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; border: 1px solid transparent; transition: all 0.2s ease; }
+        .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
+        .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: rgba(247,147,26,0.2); }
+        .panel { background: var(--bg-base); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
+        .page-title { font-size: 1.1em; font-weight: 700; margin-bottom: 20px; }
+
+        /* Upload section */
+        .upload-section { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+        .upload-section h3 { font-size: 0.9em; font-weight: 600; margin-bottom: 16px; }
+        .upload-dropzone {
+            border: 2px dashed var(--border); border-radius: 12px;
+            padding: 24px 16px; text-align: center; cursor: pointer;
+            transition: all 0.2s ease; margin-bottom: 12px; background: var(--bg-deep);
+        }
+        .upload-dropzone:hover, .upload-dropzone.dragover { border-color: var(--accent); background: rgba(247,147,26,0.04); }
+        .upload-dropzone-text { font-size: 0.8em; color: var(--text-dim); }
+        .upload-dropzone-text strong { color: var(--accent); }
+        .upload-dropzone-file { font-size: 0.75em; color: var(--green); margin-top: 8px; font-family: 'JetBrains Mono', monospace; }
+        .upload-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+        .upload-field { flex: 1; min-width: 140px; }
+        .upload-field label { display: block; font-size: 0.7em; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+        .upload-field input, .upload-field select {
+            width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+            background: var(--bg-deep); color: var(--text); font-size: 0.85em;
+            font-family: 'DM Sans', sans-serif; outline: none;
+        }
+        .upload-field input:focus, .upload-field select:focus { border-color: var(--accent); }
+        .btn { padding: 8px 16px; border: none; border-radius: 8px; font-size: 0.85em; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s ease; }
+        .btn-primary { background: linear-gradient(135deg, var(--accent), #e8850f); color: var(--bg-deep); }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+        .upload-msg { font-size: 0.75em; margin-top: 8px; font-family: 'JetBrains Mono', monospace; }
+        .upload-msg.error { color: var(--red); }
+        .upload-msg.success { color: var(--green); }
+
+        /* Asset table */
+        .asset-table { width: 100%; border-collapse: collapse; }
+        .asset-table th {
+            text-align: left; font-size: 0.7em; font-weight: 600; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .asset-table td { padding: 10px; border-bottom: 1px solid var(--border); font-size: 0.85em; vertical-align: middle; }
+        .asset-table tr:hover { background: var(--bg-surface); }
+        .asset-table tr:last-child td { border-bottom: none; }
+        .asset-logo { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+        .asset-placeholder { width: 28px; height: 28px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-size: 0.6em; font-weight: 700; color: var(--text-dim); }
+        .asset-name-cell { display: flex; align-items: center; gap: 10px; }
+        .asset-name-text { font-weight: 600; }
+        .cat-select {
+            padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px;
+            background: var(--bg-deep); color: var(--text); font-size: 0.85em;
+            font-family: 'DM Sans', sans-serif; outline: none; cursor: pointer;
+        }
+        .cat-select:focus { border-color: var(--accent); }
+        .action-btn-sm {
+            padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px;
+            background: none; color: var(--text-muted); font-size: 0.75em; cursor: pointer;
+            font-family: 'DM Sans', sans-serif; transition: all 0.15s ease;
+        }
+        .action-btn-sm:hover { border-color: var(--text-muted); color: var(--text); }
+        .action-btn-sm.danger { color: var(--red); border-color: rgba(239,68,68,0.3); }
+        .action-btn-sm.danger:hover { border-color: var(--red); background: rgba(239,68,68,0.08); }
+        .actions-cell { display: flex; gap: 6px; }
+
+        /* Rename modal */
+        .modal-overlay { display: none; position: fixed; inset: 0; z-index: 1100; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+        .modal-overlay.open { display: flex; }
+        .modal-box { background: var(--bg-base); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 90%; max-width: 400px; }
+        .modal-box h3 { font-size: 0.9em; margin-bottom: 16px; }
+        .modal-box input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-deep); color: var(--text); font-size: 0.85em; font-family: 'DM Sans', sans-serif; outline: none; margin-bottom: 16px; }
+        .modal-box input:focus { border-color: var(--accent); }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
+        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
+    </div>
+    <nav class="nav-bar">
+        <a href="/" class="nav-link">Featured</a>
+        <a href="/community" class="nav-link">Community</a>
+        <a href="/my-backtests" class="nav-link">My Backtests</a>
+        <a href="/backtester" class="nav-link">Create Backtest</a>
+        <a href="/admin/assets" class="nav-link active">Assets</a>
+    </nav>
+
+    <div class="panel">
+        <h2 class="page-title">Asset Management</h2>
+
+        <!-- Upload -->
+        <div class="upload-section">
+            <h3>Add New Asset</h3>
+            <div class="upload-dropzone" id="upload-dropzone" onclick="document.getElementById('upload-file-input').click()">
+                <div class="upload-dropzone-text"><strong>Click to browse</strong> or drag & drop<br>CSV file with <code>time</code> and <code>close</code> columns</div>
+                <div class="upload-dropzone-file" id="upload-file-name"></div>
+                <input type="file" id="upload-file-input" accept=".csv" style="display:none" onchange="handleUploadFile(this.files[0])">
+            </div>
+            <div class="upload-row">
+                <div class="upload-field" style="flex:2"><label>Asset Name</label><input type="text" id="upload-asset-name" placeholder="e.g. Litecoin, AMD, Natural Gas"></div>
+                <div class="upload-field"><label>Category</label>
+                    <select id="upload-asset-type">
+                        <option value="crypto">Crypto</option>
+                        <option value="crypto_agg">Crypto Aggregate</option>
+                        <option value="stock">Stock</option>
+                        <option value="index">Stock Index</option>
+                        <option value="metal">Precious Metal</option>
+                        <option value="commodity">Commodity</option>
+                    </select>
+                </div>
+                <div><button class="btn btn-primary" id="upload-confirm-btn" onclick="submitUpload()" disabled>Upload</button></div>
+            </div>
+            <div class="upload-msg" id="upload-message"></div>
+        </div>
+
+        <!-- Asset List -->
+        <table class="asset-table">
+            <thead><tr><th>Asset</th><th>Category</th><th>Start Date</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for name in asset_names %}
+            <tr id="row-{{ name|replace(' ', '_') }}">
+                <td>
+                    <div class="asset-name-cell">
+                        {% if asset_logos.get(name) %}<img class="asset-logo" src="/static/logos/{{ asset_logos[name] }}" alt="{{ name }}">{% else %}<div class="asset-placeholder">{{ name[:2]|upper }}</div>{% endif %}
+                        <span class="asset-name-text">{{ name }}</span>
+                    </div>
+                </td>
+                <td>
+                    <select class="cat-select" data-asset="{{ name }}" onchange="changeCategory('{{ name }}', this.value)">
+                        <option value="crypto" {{ 'selected' if name in crypto_names }}>Crypto</option>
+                        <option value="crypto_agg" {{ 'selected' if name in crypto_agg_names }}>Crypto Aggregate</option>
+                        <option value="stock" {{ 'selected' if name in stock_names }}>Stock</option>
+                        <option value="index" {{ 'selected' if name in index_names }}>Index</option>
+                        <option value="metal" {{ 'selected' if name in metal_names }}>Precious Metal</option>
+                        <option value="commodity" {{ 'selected' if name in commodity_names }}>Commodity</option>
+                    </select>
+                </td>
+                <td style="font-family:'JetBrains Mono',monospace;font-size:0.8em;color:var(--text-muted)">{{ asset_starts.get(name, '') }}</td>
+                <td>
+                    <div class="actions-cell">
+                        <button class="action-btn-sm" onclick="openRenameModal('{{ name }}')">Rename</button>
+                        <button class="action-btn-sm danger" onclick="deleteAsset('{{ name }}')">Delete</button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Rename Modal -->
+<div class="modal-overlay" id="rename-modal">
+    <div class="modal-box">
+        <h3>Rename Asset</h3>
+        <input type="hidden" id="rename-old-name">
+        <input type="text" id="rename-new-name" placeholder="New name">
+        <div class="modal-actions">
+            <button class="action-btn-sm" onclick="closeRenameModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="submitRename()">Rename</button>
+        </div>
+    </div>
+</div>
+
+<script>
+var _swal = Swal.mixin({
+    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
+    customClass: { popup: 'swal-dark' }
+});
+
+// Upload
+var _uploadFile = null;
+function handleUploadFile(file) {
+    if (!file) return;
+    if (!file.name.endsWith('.csv')) { document.getElementById('upload-message').innerHTML = '<span class="upload-msg error">Please select a CSV file</span>'; return; }
+    _uploadFile = file;
+    document.getElementById('upload-file-name').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+    document.getElementById('upload-message').innerHTML = '';
+    _checkReady();
+}
+function _checkReady() {
+    document.getElementById('upload-confirm-btn').disabled = !(_uploadFile && document.getElementById('upload-asset-name').value.trim());
+}
+document.getElementById('upload-asset-name').addEventListener('input', _checkReady);
+(function() {
+    var dz = document.getElementById('upload-dropzone');
+    ['dragenter','dragover'].forEach(function(ev) { dz.addEventListener(ev, function(e) { e.preventDefault(); dz.classList.add('dragover'); }); });
+    ['dragleave','drop'].forEach(function(ev) { dz.addEventListener(ev, function(e) { e.preventDefault(); dz.classList.remove('dragover'); }); });
+    dz.addEventListener('drop', function(e) { if (e.dataTransfer.files.length) handleUploadFile(e.dataTransfer.files[0]); });
+})();
+function submitUpload() {
+    var btn = document.getElementById('upload-confirm-btn');
+    var msg = document.getElementById('upload-message');
+    var name = document.getElementById('upload-asset-name').value.trim();
+    var type = document.getElementById('upload-asset-type').value;
+    if (!_uploadFile || !name) return;
+    btn.disabled = true; btn.textContent = 'Uploading...'; msg.innerHTML = '';
+    var fd = new FormData(); fd.append('file', _uploadFile); fd.append('asset_name', name); fd.append('asset_type', type);
+    fetch('/api/upload-asset', { method: 'POST', body: fd })
+        .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+        .then(function(res) {
+            if (res.ok && res.data.ok) { msg.innerHTML = '<span class="upload-msg success">Added! Reloading...</span>'; setTimeout(function() { location.reload(); }, 1000); }
+            else { msg.innerHTML = '<span class="upload-msg error">' + (res.data.error || 'Failed') + '</span>'; btn.disabled = false; btn.textContent = 'Upload'; }
+        }).catch(function(e) { msg.innerHTML = '<span class="upload-msg error">' + e.message + '</span>'; btn.disabled = false; btn.textContent = 'Upload'; });
+}
+
+// Category change
+function changeCategory(asset, cat) {
+    fetch('/api/change-asset-category', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({asset: asset, category: cat})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.error) _swal.fire({icon:'error', title:'Error', text: d.error});
+    }).catch(function(e) { _swal.fire({icon:'error', title:'Error', text: e.message}); });
+}
+
+// Rename
+function openRenameModal(name) {
+    document.getElementById('rename-old-name').value = name;
+    document.getElementById('rename-new-name').value = name;
+    document.getElementById('rename-modal').classList.add('open');
+    document.getElementById('rename-new-name').focus();
+    document.getElementById('rename-new-name').select();
+}
+function closeRenameModal() { document.getElementById('rename-modal').classList.remove('open'); }
+function submitRename() {
+    var oldName = document.getElementById('rename-old-name').value;
+    var newName = document.getElementById('rename-new-name').value.trim();
+    if (!newName || newName === oldName) { closeRenameModal(); return; }
+    fetch('/api/rename-asset', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({old_name: oldName, new_name: newName})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) { closeRenameModal(); location.reload(); }
+        else _swal.fire({icon:'error', title:'Error', text: d.error});
+    }).catch(function(e) { _swal.fire({icon:'error', title:'Error', text: e.message}); });
+}
+
+// Delete
+function deleteAsset(name) {
+    _swal.fire({
+        title: 'Delete "' + name + '"?',
+        text: 'This will permanently remove the asset and its CSV file.',
+        icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        fetch('/api/delete-asset', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({asset: name})
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.ok) location.reload();
+            else _swal.fire({icon:'error', title:'Error', text: d.error});
+        }).catch(function(e) { _swal.fire({icon:'error', title:'Error', text: e.message}); });
+    });
+}
+</script>
 </body>
 </html>
 """
@@ -5525,6 +5603,129 @@ def _enrich_backtest_cards(backtests):
                 bt['_apr'] = m_best.group(1)
                 bt['_max_dd'] = m_best.group(2)
     return backtests
+
+
+# --- Admin ---
+
+@app.route('/admin/assets')
+@require_auth
+def admin_assets():
+    """Admin-only asset management page."""
+    if not _is_admin():
+        abort(403)
+    # Build sets for category detection in template
+    crypto_default = set(ASSET_NAMES) - _CRYPTO_AGG_ASSETS - _STOCK_ASSETS - _INDEX_ASSETS - _METAL_ASSETS - _COMMODITY_ASSETS
+    return render_template_string(ADMIN_ASSETS_HTML,
+        nav_active='admin-assets',
+        asset_names=ASSET_NAMES, asset_logos=ASSET_LOGOS, asset_starts=ASSET_STARTS,
+        crypto_names=crypto_default, crypto_agg_names=_CRYPTO_AGG_ASSETS,
+        stock_names=_STOCK_ASSETS, index_names=_INDEX_ASSETS,
+        metal_names=_METAL_ASSETS, commodity_names=_COMMODITY_ASSETS)
+
+
+@app.route('/api/delete-asset', methods=['POST'])
+def api_delete_asset():
+    """Admin-only: delete an asset."""
+    if not _is_admin():
+        abort(403)
+    data = request.get_json()
+    name = data.get('asset', '').strip()
+    if not name or name not in ASSETS:
+        return jsonify(error='Asset not found'), 404
+    if name == 'bitcoin':
+        return jsonify(error='Cannot delete the default asset'), 400
+
+    # Remove CSV file
+    csv_path = os.path.join(DATA_DIR, f"{name}.csv")
+    if os.path.exists(csv_path):
+        os.unlink(csv_path)
+
+    # Remove from in-memory state
+    ASSETS.pop(name, None)
+    ASSET_STARTS.pop(name, None)
+    ASSET_LOGOS.pop(name, None)
+
+    # Remove from all category sets
+    for cat_set in [_CRYPTO_AGG_ASSETS, _STOCK_ASSETS, _INDEX_ASSETS, _METAL_ASSETS, _COMMODITY_ASSETS]:
+        cat_set.discard(name)
+
+    _save_categories_file()
+    _save_logos_file()
+    _rebuild_asset_lists()
+    return jsonify(ok=True)
+
+
+@app.route('/api/rename-asset', methods=['POST'])
+def api_rename_asset():
+    """Admin-only: rename an asset."""
+    if not _is_admin():
+        abort(403)
+    data = request.get_json()
+    old_name = data.get('old_name', '').strip()
+    new_name = data.get('new_name', '').strip()
+    if not old_name or not new_name:
+        return jsonify(error='Both old and new name required'), 400
+    if old_name not in ASSETS:
+        return jsonify(error=f'Asset "{old_name}" not found'), 404
+    if new_name in ASSETS:
+        return jsonify(error=f'Asset "{new_name}" already exists'), 400
+
+    import shutil
+
+    # Rename CSV file
+    old_path = os.path.join(DATA_DIR, f"{old_name}.csv")
+    new_path = os.path.join(DATA_DIR, f"{new_name}.csv")
+    if os.path.exists(old_path):
+        shutil.move(old_path, new_path)
+
+    # Update in-memory state
+    ASSETS[new_name] = ASSETS.pop(old_name)
+    ASSET_STARTS[new_name] = ASSET_STARTS.pop(old_name, '')
+    if old_name in ASSET_LOGOS:
+        ASSET_LOGOS[new_name] = ASSET_LOGOS.pop(old_name)
+
+    # Update category sets
+    for cat_set in [_CRYPTO_AGG_ASSETS, _STOCK_ASSETS, _INDEX_ASSETS, _METAL_ASSETS, _COMMODITY_ASSETS]:
+        if old_name in cat_set:
+            cat_set.discard(old_name)
+            cat_set.add(new_name)
+
+    _save_categories_file()
+    _save_logos_file()
+    _rebuild_asset_lists()
+    return jsonify(ok=True)
+
+
+@app.route('/api/change-asset-category', methods=['POST'])
+def api_change_asset_category():
+    """Admin-only: change an asset's category."""
+    if not _is_admin():
+        abort(403)
+    data = request.get_json()
+    name = data.get('asset', '').strip()
+    category = data.get('category', '').strip()
+    if not name or name not in ASSETS:
+        return jsonify(error='Asset not found'), 404
+
+    # Remove from all category sets
+    for cat_set in [_CRYPTO_AGG_ASSETS, _STOCK_ASSETS, _INDEX_ASSETS, _METAL_ASSETS, _COMMODITY_ASSETS]:
+        cat_set.discard(name)
+
+    # Add to new category (if not plain crypto)
+    category_map = {
+        'crypto_agg': _CRYPTO_AGG_ASSETS,
+        'stock': _STOCK_ASSETS,
+        'index': _INDEX_ASSETS,
+        'metal': _METAL_ASSETS,
+        'commodity': _COMMODITY_ASSETS,
+    }
+    cat_set = category_map.get(category)
+    if cat_set is not None:
+        cat_set.add(name)
+
+    _save_categories_file()
+    _rebuild_asset_lists()
+    return jsonify(ok=True)
 
 
 # --- Page Routes ---
