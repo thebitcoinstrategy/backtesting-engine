@@ -280,6 +280,12 @@ def _is_admin():
     return _is_authenticated() and session.get('email') == db.ADMIN_EMAIL
 
 
+@app.context_processor
+def inject_auth():
+    """Make is_authenticated available in all templates."""
+    return dict(is_authenticated=_is_authenticated())
+
+
 def _require_auth_api():
     """Check auth for API routes. Returns (user_id, email) or aborts with 401."""
     if not _is_authenticated():
@@ -1131,7 +1137,7 @@ HTML = """\
 <body>
 <div class="container">
     <div class="header">
-        {% if not session.get('user_id') %}
+        {% if not is_authenticated %}
         <div class="auth-buttons">
             <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
             <a href="https://the-bitcoin-strategy.com/subscribe" class="auth-btn auth-btn-signup">Sign Up</a>
@@ -1143,7 +1149,7 @@ HTML = """\
     <nav class="nav-bar">
         <a href="/" class="nav-link {{ 'active' if nav_active|default('')=='featured' }}">Featured</a>
         <a href="/community" class="nav-link {{ 'active' if nav_active|default('')=='community' }}">Community</a>
-        {% if session.get('user_id') %}
+        {% if is_authenticated %}
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active|default('')=='my-backtests' }}">My Backtests</a>
         {% endif %}
         <a href="/backtester" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Create Backtest</a>
@@ -1580,7 +1586,7 @@ HTML = """\
                 </div>
                 {% endif %}
                 <input type="hidden" id="equity-thumbnail" value="{{ thumb_b64|default('') }}">
-                {% if session.get('user_id') %}
+                {% if is_authenticated %}
                 <div class="action-buttons" id="backtest-actions">
                     <button class="action-btn" onclick="saveBacktest()" id="save-btn">
                         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v10h10V6l-3-3H3z"/><path d="M5 3v3h4V3"/><path d="M5 9h6v4H5z"/></svg>
@@ -1691,7 +1697,7 @@ HTML = """\
                 };
                 </script>
                 {% endif %}
-                {% if session.get('user_id') %}
+                {% if is_authenticated %}
                 <div class="action-buttons" id="backtest-actions">
                     <button class="action-btn" onclick="saveBacktest()" id="save-btn">
                         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v10h10V6l-3-3H3z"/><path d="M5 3v3h4V3"/><path d="M5 9h6v4H5z"/></svg>
@@ -3837,7 +3843,7 @@ COMMUNITY_HTML = """\
 <body>
 <div class="container">
     <div class="header">
-        {% if not session.get('user_id') %}
+        {% if not is_authenticated %}
         <div class="auth-buttons">
             <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
             <a href="https://the-bitcoin-strategy.com/subscribe" class="auth-btn auth-btn-signup">Sign Up</a>
@@ -3849,7 +3855,7 @@ COMMUNITY_HTML = """\
     <nav class="nav-bar">
         <a href="/" class="nav-link {{ 'active' if nav_active=='featured' }}">Featured</a>
         <a href="/community" class="nav-link {{ 'active' if nav_active=='community' }}">Community</a>
-        {% if session.get('user_id') %}
+        {% if is_authenticated %}
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active=='my-backtests' }}">My Backtests</a>
         {% endif %}
         <a href="/backtester" class="nav-link {{ 'active' if nav_active=='backtester' }}">Create Backtest</a>
@@ -4299,7 +4305,7 @@ DETAIL_HTML = """\
 <body>
 <div class="container">
     <div class="header">
-        {% if not session.get('user_id') %}
+        {% if not is_authenticated %}
         <div class="auth-buttons">
             <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
             <a href="https://the-bitcoin-strategy.com/subscribe" class="auth-btn auth-btn-signup">Sign Up</a>
@@ -4311,7 +4317,7 @@ DETAIL_HTML = """\
     <nav class="nav-bar">
         <a href="/" class="nav-link {{ 'active' if backtest.visibility=='featured' }}">Featured</a>
         <a href="/community" class="nav-link {{ 'active' if backtest.visibility=='community' }}">Community</a>
-        {% if session.get('user_id') %}
+        {% if is_authenticated %}
         <a href="/my-backtests" class="nav-link">My Backtests</a>
         {% endif %}
         <a href="/backtester" class="nav-link">Create Backtest</a>
