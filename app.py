@@ -588,8 +588,8 @@ HTML = """\
         }
         .asset-card-label {
             font-size: 0.65em; font-weight: 600; color: var(--text-dim);
-            letter-spacing: 0.02em; line-height: 1.2; white-space: nowrap;
-            overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+            letter-spacing: 0.02em; line-height: 1.2; text-align: center;
+            word-break: break-word; max-width: 100%;
             transition: color 0.2s ease;
         }
         .asset-card.active .asset-card-label { color: var(--text); }
@@ -1270,13 +1270,13 @@ HTML = """\
                             {% for a in priority_assets %}
                             <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                             {% for a in other_assets %}
                             <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                         </div>
@@ -1286,7 +1286,7 @@ HTML = """\
                             {% for a in crypto_agg_assets %}
                             <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                         </div>
@@ -1297,7 +1297,7 @@ HTML = """\
                             {% for a in stock_assets %}
                             <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                         </div>
@@ -1308,7 +1308,7 @@ HTML = """\
                             {% for a in metal_assets %}
                             <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                         </div>
@@ -1319,7 +1319,7 @@ HTML = """\
                             {% for a in index_assets %}
                             <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                         </div>
@@ -1330,7 +1330,7 @@ HTML = """\
                             {% for a in commodity_assets %}
                             <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                         </div>
@@ -1356,13 +1356,13 @@ HTML = """\
                             {% for a in priority_assets %}
                             <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                             {% for a in other_assets %}
                             <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                         </div>
@@ -1372,7 +1372,7 @@ HTML = """\
                             {% for a in crypto_agg_assets %}
                             <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                         </div>
@@ -1383,7 +1383,7 @@ HTML = """\
                             {% for a in stock_assets %}
                             <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                         </div>
@@ -1394,7 +1394,7 @@ HTML = """\
                             {% for a in metal_assets %}
                             <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                         </div>
@@ -1405,7 +1405,7 @@ HTML = """\
                             {% for a in index_assets %}
                             <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                         </div>
@@ -1416,7 +1416,7 @@ HTML = """\
                             {% for a in commodity_assets %}
                             <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a }}</span>
+                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                         </div>
