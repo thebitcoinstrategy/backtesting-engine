@@ -2840,6 +2840,92 @@ def _save_logos_file():
         json.dump(custom, f, indent=2)
 
 
+# --- Multi-worker asset sync via signal file ---
+_ASSET_SIGNAL_FILE = os.path.join(DATA_DIR, "_asset_signal")
+_last_asset_signal_mtime = [0.0]  # mutable container for before_request closure
+
+
+def _touch_asset_signal():
+    """Write current timestamp to signal file so other workers know to reload."""
+    with open(_ASSET_SIGNAL_FILE, 'w') as f:
+        f.write(str(time.time()))
+    _last_asset_signal_mtime[0] = os.path.getmtime(_ASSET_SIGNAL_FILE)
+
+
+def _reload_assets_from_disk():
+    """Full reload of ASSETS, categories, logos from disk. Called by workers that detect a signal."""
+    global ASSETS, ASSET_STARTS, ASSET_LOGOS, _CRYPTO_AGG_ASSETS, _STOCK_ASSETS, _INDEX_ASSETS, _METAL_ASSETS, _COMMODITY_ASSETS
+
+    ASSETS.clear()
+    ASSET_STARTS.clear()
+    for fname in sorted(os.listdir(DATA_DIR)):
+        if fname.endswith(".csv"):
+            name = fname.replace(".csv", "")
+            try:
+                df = bt.load_data(os.path.join(DATA_DIR, fname))
+                ASSETS[name] = df
+                ASSET_STARTS[name] = str(df.index[0].date())
+            except Exception:
+                pass
+
+    # Reload categories
+    _CRYPTO_AGG_ASSETS.clear()
+    _STOCK_ASSETS.clear()
+    _STOCK_ASSETS.update({"Apple", "Microsoft", "Amazon", "Alphabet", "Tesla", "Nvidia", "Meta", "Netflix", "Coinbase", "Strategy"})
+    _INDEX_ASSETS.clear()
+    _INDEX_ASSETS.update({"Dax", "Dow Jones", "Hang Seng", "Nasdaq100", "SP500"})
+    _METAL_ASSETS.clear()
+    _METAL_ASSETS.update({"Gold", "Silver", "Palladium"})
+    _COMMODITY_ASSETS.clear()
+    _COMMODITY_ASSETS.update({"Oil (Brent)", "Oil (Wti)"})
+    if os.path.exists(_CATEGORIES_FILE):
+        with open(_CATEGORIES_FILE) as f:
+            for asset, cat in json.load(f).items():
+                if cat == 'crypto_agg': _CRYPTO_AGG_ASSETS.add(asset)
+                elif cat == 'stock': _STOCK_ASSETS.add(asset)
+                elif cat == 'index': _INDEX_ASSETS.add(asset)
+                elif cat == 'metal': _METAL_ASSETS.add(asset)
+                elif cat == 'commodity': _COMMODITY_ASSETS.add(asset)
+
+    # Reload logos
+    ASSET_LOGOS.update({
+        "bitcoin": "bitcoin-btc-logo.png", "ethereum": "ethereum-eth-logo.png",
+        "solana": "solana-sol-logo.png", "XRP": "xrp-xrp-logo.png",
+        "BNB": "bnb-bnb-logo.png", "Cardano": "cardano-ada-logo.png",
+        "Chainlink": "chainlink-link-logo.png", "Dogecoin": "dogecoin-doge-logo.png",
+        "Monero": "monero-xmr-logo.png", "Bitcoin Cash": "bitcoin-cash-bch-logo.png",
+        "Hyperliquid": "hyperliquid-logo.png", "Bittensor": "bittensor-tao-logo.png",
+        "Dax": "dax-logo.svg", "Dow Jones": "dowjones-logo.svg",
+        "Hang Seng": "hangseng-logo.svg", "Nasdaq100": "nasdaq-logo.svg",
+        "SP500": "sp500-logo.svg",
+        "Gold": "gold-logo.svg", "Silver": "silver-logo.svg", "Palladium": "palladium-logo.svg",
+        "Oil (Brent)": "oil-brent-logo.svg", "Oil (Wti)": "oil-wti-logo.svg",
+        "Apple": "apple-logo.png", "Microsoft": "microsoft-logo.png", "Amazon": "amazon-logo.png",
+        "Alphabet": "alphabet-logo.png", "Tesla": "tesla-logo.png", "Nvidia": "nvidia-logo.png",
+        "Meta": "meta-logo.png", "Netflix": "netflix-logo.png", "Coinbase": "coinbase-logo.png",
+        "Strategy": "strategy-logo.png",
+    })
+    if os.path.exists(_LOGOS_FILE):
+        with open(_LOGOS_FILE) as f:
+            ASSET_LOGOS.update(json.load(f))
+
+    _rebuild_asset_lists()
+
+
+@app.before_request
+def _check_asset_signal():
+    """Check if another worker has modified assets and reload if needed."""
+    if not os.path.exists(_ASSET_SIGNAL_FILE):
+        return
+    try:
+        mtime = os.path.getmtime(_ASSET_SIGNAL_FILE)
+        if mtime > _last_asset_signal_mtime[0]:
+            _last_asset_signal_mtime[0] = mtime
+            _reload_assets_from_disk()
+    except OSError:
+        pass
+
+
 def _series_to_lw_json(series):
     """Convert pandas Series (datetime index + float values) to Lightweight Charts format."""
     return json.dumps([
@@ -5511,6 +5597,7 @@ def api_upload_asset():
         _save_logos_file()
 
     _rebuild_asset_lists()
+    _touch_asset_signal()
 
     return jsonify(ok=True, asset=asset_name, logo=ASSET_LOGOS.get(asset_name, ''))
 
@@ -5658,6 +5745,7 @@ def api_delete_asset():
     _save_categories_file()
     _save_logos_file()
     _rebuild_asset_lists()
+    _touch_asset_signal()
     return jsonify(ok=True)
 
 
@@ -5699,6 +5787,7 @@ def api_rename_asset():
     _save_categories_file()
     _save_logos_file()
     _rebuild_asset_lists()
+    _touch_asset_signal()
     return jsonify(ok=True)
 
 
@@ -5731,6 +5820,7 @@ def api_change_asset_category():
 
     _save_categories_file()
     _rebuild_asset_lists()
+    _touch_asset_signal()
     return jsonify(ok=True)
 
 
