@@ -1280,6 +1280,17 @@ HTML = """\
                             </div>
                             {% endfor %}
                         </div>
+                        {% if crypto_agg_assets %}
+                        <div class="asset-section-label">Crypto Aggregates</div>
+                        <div class="asset-grid">
+                            {% for a in crypto_agg_assets %}
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                                <span class="asset-card-label">{{ a }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                         {% if stock_assets %}
                         <div class="asset-section-label">Stocks</div>
                         <div class="asset-grid">
@@ -1355,6 +1366,17 @@ HTML = """\
                             </div>
                             {% endfor %}
                         </div>
+                        {% if crypto_agg_assets %}
+                        <div class="asset-section-label">Crypto Aggregates</div>
+                        <div class="asset-grid">
+                            {% for a in crypto_agg_assets %}
+                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
+                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                                <span class="asset-card-label">{{ a }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                         {% if stock_assets %}
                         <div class="asset-section-label">Stocks</div>
                         <div class="asset-grid">
@@ -1426,6 +1448,7 @@ HTML = """\
                             <label>Asset Type</label>
                             <select id="upload-asset-type">
                                 <option value="crypto">Crypto</option>
+                                <option value="crypto_agg">Crypto Aggregate</option>
                                 <option value="stock">Stock</option>
                                 <option value="index">Stock Index</option>
                                 <option value="metal">Precious Metal</option>
@@ -2888,6 +2911,7 @@ for _fname in sorted(os.listdir(DATA_DIR)):
         ASSET_STARTS[_name] = str(_df.index[0].date())
 ASSET_NAMES = sorted(ASSETS.keys())
 _PRIORITY_ORDER = ["bitcoin", "ethereum", "solana"]
+_CRYPTO_AGG_ASSETS = set()
 _STOCK_ASSETS = {"Apple", "Microsoft", "Amazon", "Alphabet", "Tesla", "Nvidia", "Meta", "Netflix", "Coinbase", "Strategy"}
 _INDEX_ASSETS = {"Dax", "Dow Jones", "Hang Seng", "Nasdaq100", "SP500"}
 _METAL_ASSETS = {"Gold", "Silver", "Palladium"}
@@ -2898,13 +2922,15 @@ _CATEGORIES_FILE = os.path.join(DATA_DIR, "_categories.json")
 if os.path.exists(_CATEGORIES_FILE):
     with open(_CATEGORIES_FILE) as _f:
         for _asset, _cat in json.load(_f).items():
-            if _cat == 'stock': _STOCK_ASSETS.add(_asset)
+            if _cat == 'crypto_agg': _CRYPTO_AGG_ASSETS.add(_asset)
+            elif _cat == 'stock': _STOCK_ASSETS.add(_asset)
             elif _cat == 'index': _INDEX_ASSETS.add(_asset)
             elif _cat == 'metal': _METAL_ASSETS.add(_asset)
             elif _cat == 'commodity': _COMMODITY_ASSETS.add(_asset)
 
 PRIORITY_ASSETS = [a for a in _PRIORITY_ORDER if a in ASSETS]
-OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER and a not in _STOCK_ASSETS and a not in _INDEX_ASSETS and a not in _METAL_ASSETS and a not in _COMMODITY_ASSETS]
+OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER and a not in _CRYPTO_AGG_ASSETS and a not in _STOCK_ASSETS and a not in _INDEX_ASSETS and a not in _METAL_ASSETS and a not in _COMMODITY_ASSETS]
+CRYPTO_AGG_ASSETS = [a for a in ASSET_NAMES if a in _CRYPTO_AGG_ASSETS]
 STOCK_ASSETS = [a for a in ASSET_NAMES if a in _STOCK_ASSETS]
 INDEX_ASSETS = [a for a in ASSET_NAMES if a in _INDEX_ASSETS]
 METAL_ASSETS = [a for a in ASSET_NAMES if a in _METAL_ASSETS]
@@ -2938,10 +2964,11 @@ if os.path.exists(_LOGOS_FILE):
 
 def _rebuild_asset_lists():
     """Rebuild all asset name/category lists from current ASSETS dict."""
-    global ASSET_NAMES, PRIORITY_ASSETS, OTHER_ASSETS, STOCK_ASSETS, INDEX_ASSETS, METAL_ASSETS, COMMODITY_ASSETS
+    global ASSET_NAMES, PRIORITY_ASSETS, OTHER_ASSETS, CRYPTO_AGG_ASSETS, STOCK_ASSETS, INDEX_ASSETS, METAL_ASSETS, COMMODITY_ASSETS
     ASSET_NAMES = sorted(ASSETS.keys())
     PRIORITY_ASSETS = [a for a in _PRIORITY_ORDER if a in ASSETS]
-    OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER and a not in _STOCK_ASSETS and a not in _INDEX_ASSETS and a not in _METAL_ASSETS and a not in _COMMODITY_ASSETS]
+    OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER and a not in _CRYPTO_AGG_ASSETS and a not in _STOCK_ASSETS and a not in _INDEX_ASSETS and a not in _METAL_ASSETS and a not in _COMMODITY_ASSETS]
+    CRYPTO_AGG_ASSETS = [a for a in ASSET_NAMES if a in _CRYPTO_AGG_ASSETS]
     STOCK_ASSETS = [a for a in ASSET_NAMES if a in _STOCK_ASSETS]
     INDEX_ASSETS = [a for a in ASSET_NAMES if a in _INDEX_ASSETS]
     METAL_ASSETS = [a for a in ASSET_NAMES if a in _METAL_ASSETS]
@@ -2995,6 +3022,8 @@ def _save_categories_file():
     _ORIG_METAL = {"Gold", "Silver", "Palladium"}
     _ORIG_COMMODITY = {"Oil (Brent)", "Oil (Wti)"}
     custom = {}
+    for a in _CRYPTO_AGG_ASSETS:
+        custom[a] = 'crypto_agg'
     for a in _STOCK_ASSETS - _ORIG_STOCK:
         custom[a] = 'stock'
     for a in _INDEX_ASSETS - _ORIG_INDEX:
@@ -3099,7 +3128,7 @@ def index():
         else:
             p = Params()
         return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       price_json=None, ind1_json='[]', ind2_json='[]', ind1_label='', ind2_label='')
 
     # Check disk cache first
@@ -3149,7 +3178,7 @@ def _run_post_handler(cancel_event):
         common_idx = df_full.index.intersection(df_vs.index)
         if len(common_idx) == 0:
             return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
-                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                           error=f"No overlapping dates between {p.asset} and {p.vs_asset}.",
                                           price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
         df_full = df_full.loc[common_idx]
@@ -3181,7 +3210,7 @@ def _run_post_handler(cancel_event):
     if p.mode == "regression":
         if not is_oscillator:
             return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
-                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                           error="Regression analysis requires an oscillator indicator. Please select one from Indicator 2.",
                                           price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
@@ -3218,7 +3247,7 @@ def _run_post_handler(cancel_event):
         thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
 
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=None, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       regression=reg_result, regression_sweep_chart=sweep_chart_b64, regression_sweep=sweep_result, thumb_b64=thumb_b64,
                                       price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
@@ -3392,7 +3421,7 @@ def _run_post_handler(cancel_event):
         ind1_json = _series_to_lw_json(best["ind1_series"]) if best.get("ind1_name") != "price" else "[]"
         ind2_json = _series_to_lw_json(best["ind2_series"])
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info, thumb_b64=thumb_b64,
                                       price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                       ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
@@ -3553,7 +3582,7 @@ def _run_post_handler(cancel_event):
         ind1_json = _series_to_lw_json(best["ind1_series"]) if best.get("ind1_name") != "price" else "[]"
         ind2_json = _series_to_lw_json(best["ind2_series"])
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       hide_buyhold=(p.exposure == "short-cash"), thumb_b64=thumb_b64,
                                       price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                       ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
@@ -3866,7 +3895,7 @@ def _run_post_handler(cancel_event):
         ind1_json = _series_to_lw_json(best["ind1_series"]) if best and best.get("ind1_name") != "price" else "[]"
         ind2_json = _series_to_lw_json(best["ind2_series"]) if best else "[]"
     return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
-                                  asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                  asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                   hide_buyhold=(p.exposure == "short-cash"),
                                   ls_breakdown=long_short_breakdown,
                                   equity_top=equity_top if best else 0.7, equity_bottom=equity_bottom if best else 1.0,
@@ -5372,6 +5401,7 @@ def api_upload_asset():
 
     # Add to category set
     category_map = {
+        'crypto_agg': _CRYPTO_AGG_ASSETS,
         'stock': _STOCK_ASSETS,
         'index': _INDEX_ASSETS,
         'metal': _METAL_ASSETS,
