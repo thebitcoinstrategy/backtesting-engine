@@ -1571,6 +1571,9 @@ Examples (classic style — still works):
   python backtest.py --initial-cash 50000         # custom starting capital (default: 10000)
   python backtest.py --asset ethereum             # use ethereum data (default: bitcoin)
   python backtest.py --asset ethereum --sma 40   # ethereum with SMA 40
+  python backtest.py --asset ethereum --vs bitcoin --ind2 sma --period2 40  # ETH/BTC ratio with SMA(40)
+  python backtest.py --asset ethereum --vs bitcoin --mode sweep-chart       # sweep on ETH/BTC ratio
+  python backtest.py --asset solana --vs ethereum --mode sweep-dual         # SOL/ETH heatmap
   python backtest.py --start-date 2017-01-01     # filter start date (default: all data)
   python backtest.py --end-date 2023-12-31       # filter end date (default: all data)
   python backtest.py --help                       # show all parameters
@@ -1599,6 +1602,8 @@ def main():
     parser.add_argument("--examples", action="store_true", help="Show usage examples and exit")
     parser.add_argument("--asset", default="bitcoin",
                         help="Asset name — looks for data/{asset}.csv (default: bitcoin)")
+    parser.add_argument("--vs", default=None,
+                        help="Denominator asset for relative price mode (e.g., --asset ethereum --vs bitcoin)")
     parser.add_argument("--data", default=None, help="CSV file path (overrides --asset)")
 
     # New indicator args
@@ -1664,10 +1669,17 @@ def main():
         buy_thr = args.buy_threshold if args.buy_threshold is not None else osc_spec["buy_threshold"]
         sell_thr = args.sell_threshold if args.sell_threshold is not None else osc_spec["sell_threshold"]
 
-        data_path = args.data or os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "data", f"{args.asset}.csv"
-        )
+        data_dir_osc = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+        data_path = args.data or os.path.join(data_dir_osc, f"{args.asset}.csv")
         df = load_data(data_path)
+        if args.vs:
+            df_vs = load_data(os.path.join(data_dir_osc, f"{args.vs}.csv"))
+            common_idx = df.index.intersection(df_vs.index)
+            if len(common_idx) == 0:
+                print(f"Error: No overlapping dates between {args.asset} and {args.vs}.")
+                sys.exit(1)
+            df = df.loc[common_idx]
+            df["close"] = df["close"] / df_vs.loc[common_idx, "close"]
         if args.start_date:
             df = df[df.index >= pd.Timestamp(args.start_date, tz="UTC")]
         if args.end_date:
@@ -1741,7 +1753,7 @@ def main():
     # Auto-generate chart filename
     if args.chart_file is None:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        asset = args.asset
+        asset = f"{args.asset}_vs_{args.vs}" if args.vs else args.asset
         exp = f"_{args.exposure}"
         if mode == "sweep-dual":
             args.chart_file = os.path.join(RESULTS_DIR, f"{ts}_{asset}_heatmap_{ind1_name}-{ind2_name}_{sma_min}-{sma_max}_step{args.sma_step}{exp}.png")
@@ -1753,16 +1765,32 @@ def main():
             args.chart_file = os.path.join(RESULTS_DIR, f"{ts}_{asset}_backtest_{ind1_name}-{ind2_name}_{sma_min}-{sma_max}{exp}.png")
 
     # Load data
+    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
     if args.data is None:
-        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
         args.data = os.path.join(data_dir, f"{args.asset}.csv")
 
+    asset_label = args.asset
     print(f"Loading {args.asset} data from {args.data}...")
     df = load_data(args.data)
+
+    # Relative price mode: divide by denominator asset
+    if args.vs:
+        vs_path = os.path.join(data_dir, f"{args.vs}.csv")
+        print(f"Loading {args.vs} data for relative price (ratio)...")
+        df_vs = load_data(vs_path)
+        common_idx = df.index.intersection(df_vs.index)
+        if len(common_idx) == 0:
+            print(f"Error: No overlapping dates between {args.asset} and {args.vs}.")
+            sys.exit(1)
+        df = df.loc[common_idx]
+        df["close"] = df["close"] / df_vs.loc[common_idx, "close"]
+        asset_label = f"{args.asset}/{args.vs}"
+
     if args.start_date:
         df = df[df.index >= pd.Timestamp(args.start_date, tz="UTC")]
     if args.end_date:
         df = df[df.index <= pd.Timestamp(args.end_date, tz="UTC")]
+    asset_display = f"{args.asset.capitalize()} / {args.vs.capitalize()}" if args.vs else args.asset.capitalize()
     print(f"Loaded {len(df)} daily rows from {df.index[0].date()} to {df.index[-1].date()}")
 
     print(f"Trading fee: {args.fee:.2f}% per transaction | Exposure: {args.exposure}")
@@ -1816,7 +1844,7 @@ def main():
               f"Return: {best['total_return']:.2f}%, "
               f"Sharpe: {best['sharpe']:.2f}, "
               f"Max DD: {best['max_drawdown']:.2f}%")
-        generate_chart(df, best, args.chart_file, args.asset.capitalize())
+        generate_chart(df, best, args.chart_file, asset_display)
 
 
 if __name__ == "__main__":

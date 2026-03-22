@@ -1228,6 +1228,7 @@ HTML = """\
                 <div class="form-section">
                     <div class="section-title">Asset</div>
                     <input type="hidden" name="asset" id="asset" value="{{ p.asset }}">
+                    <input type="hidden" name="vs_asset" id="vs_asset" value="{{ p.vs_asset or '' }}">
                     <div class="asset-selected" id="asset-selected" onclick="openAssetModal()">
                         {% if asset_logos.get(p.asset) %}
                         <img class="asset-selected-logo" src="/static/logos/{{ asset_logos[p.asset] }}" alt="{{ p.asset }}">
@@ -1236,6 +1237,93 @@ HTML = """\
                         {% endif %}
                         <span class="asset-selected-name">{{ p.asset|capitalize if p.asset == p.asset|lower else p.asset }}</span>
                         <svg class="asset-selected-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+                        <label style="font-size:0.8em;color:var(--text-dim);display:flex;align-items:center;gap:6px;cursor:pointer">
+                            <input type="checkbox" id="vs-toggle" onchange="toggleVsAsset()" {{ 'checked' if p.vs_asset }} style="accent-color:var(--accent)">
+                            Relative (ratio)
+                        </label>
+                    </div>
+                    <div id="vs-asset-row" class="{{ '' if p.vs_asset else 'hidden' }}" style="margin-top:8px">
+                        <div style="font-size:0.75em;color:var(--text-dim);margin-bottom:4px">÷ Denominator Asset</div>
+                        <div class="asset-selected" id="vs-asset-selected" onclick="openVsAssetModal()">
+                            {% if p.vs_asset and asset_logos.get(p.vs_asset) %}
+                            <img class="asset-selected-logo" src="/static/logos/{{ asset_logos[p.vs_asset] }}" alt="{{ p.vs_asset }}">
+                            {% elif p.vs_asset %}
+                            <div class="asset-card-placeholder" style="width:36px;height:36px;font-size:0.75em">{{ p.vs_asset[:3]|upper }}</div>
+                            {% else %}
+                            <div class="asset-card-placeholder" style="width:36px;height:36px;font-size:0.75em">---</div>
+                            {% endif %}
+                            <span class="asset-selected-name">{{ (p.vs_asset|capitalize if p.vs_asset == p.vs_asset|lower else p.vs_asset) if p.vs_asset else 'Select asset' }}</span>
+                            <svg class="asset-selected-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                        </div>
+                    </div>
+                </div>
+                <!-- Denominator asset picker modal -->
+                <div class="asset-modal-overlay" id="vs-asset-modal-overlay" onclick="closeVsAssetModal()">
+                    <div class="asset-modal" onclick="event.stopPropagation()">
+                        <div class="asset-modal-header">
+                            <span>Select Denominator Asset</span>
+                            <button type="button" class="asset-modal-close" onclick="closeVsAssetModal()">&times;</button>
+                        </div>
+                        <div class="asset-grid">
+                            {% for a in priority_assets %}
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                                <span class="asset-card-label">{{ a|capitalize }}</span>
+                            </div>
+                            {% endfor %}
+                            {% for a in other_assets %}
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                                <span class="asset-card-label">{{ a|capitalize }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% if stock_assets %}
+                        <div class="asset-section-label">Stocks</div>
+                        <div class="asset-grid">
+                            {% for a in stock_assets %}
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                                <span class="asset-card-label">{{ a }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% if metal_assets %}
+                        <div class="asset-section-label">Precious Metals</div>
+                        <div class="asset-grid">
+                            {% for a in metal_assets %}
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                                <span class="asset-card-label">{{ a }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% if index_assets %}
+                        <div class="asset-section-label">Indices</div>
+                        <div class="asset-grid">
+                            {% for a in index_assets %}
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                                <span class="asset-card-label">{{ a }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% if commodity_assets %}
+                        <div class="asset-section-label">Commodities</div>
+                        <div class="asset-grid">
+                            {% for a in commodity_assets %}
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                                <span class="asset-card-label">{{ a }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 <!-- Asset picker modal -->
@@ -1937,10 +2025,14 @@ function setAllData() {
 }
 function onAssetChange() {
     var asset = document.getElementById('asset').value;
+    var vsAsset = document.getElementById('vs_asset').value;
     var startInput = document.getElementById('start_date');
-    var assetStart = assetStarts[asset];
-    if (assetStart) {
-        startInput.value = assetStart;
+    var start1 = assetStarts[asset] || '';
+    if (vsAsset && assetStarts[vsAsset]) {
+        var start2 = assetStarts[vsAsset];
+        startInput.value = start1 > start2 ? start1 : start2;
+    } else if (start1) {
+        startInput.value = start1;
     }
 }
 var assetLogos = {{ asset_logos|tojson }};
@@ -1967,6 +2059,40 @@ function openAssetModal() {
 }
 function closeAssetModal() {
     document.getElementById('asset-modal-overlay').classList.remove('open');
+}
+function toggleVsAsset() {
+    var checked = document.getElementById('vs-toggle').checked;
+    var row = document.getElementById('vs-asset-row');
+    if (checked) {
+        row.classList.remove('hidden');
+    } else {
+        row.classList.add('hidden');
+        document.getElementById('vs_asset').value = '';
+        onAssetChange();
+    }
+}
+function selectVsAsset(name, el) {
+    document.getElementById('vs_asset').value = name;
+    var cards = document.querySelectorAll('.vs-asset-card');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove('active');
+    el.classList.add('active');
+    var sel = document.getElementById('vs-asset-selected');
+    var logo = assetLogos[name];
+    var displayName = name === name.toLowerCase() ? name.charAt(0).toUpperCase() + name.slice(1) : name;
+    var logoHtml = logo
+        ? '<img class="asset-selected-logo" src="/static/logos/' + logo + '" alt="' + name + '">'
+        : '<div class="asset-card-placeholder" style="width:36px;height:36px;font-size:0.75em">' + name.slice(0,3).toUpperCase() + '</div>';
+    sel.innerHTML = logoHtml +
+        '<span class="asset-selected-name">' + displayName + '</span>' +
+        '<svg class="asset-selected-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+    closeVsAssetModal();
+    onAssetChange();
+}
+function openVsAssetModal() {
+    document.getElementById('vs-asset-modal-overlay').classList.add('open');
+}
+function closeVsAssetModal() {
+    document.getElementById('vs-asset-modal-overlay').classList.remove('open');
 }
 
 // Upload asset modal
@@ -2682,6 +2808,7 @@ class Params:
     def __init__(self, form=None):
         if form:
             self.asset = form.get("asset", DEFAULT_ASSET)
+            self.vs_asset = form.get("vs_asset", "").strip() or None
             self.mode = form.get("mode", "sweep")
             self.signal_type = form.get("signal_type", "crossover")
             self.ind1_name = form.get("ind1_name", "price")
@@ -2717,6 +2844,7 @@ class Params:
             self.forward_days = int(form.get("forward_days", 365))
         else:
             self.asset = DEFAULT_ASSET
+            self.vs_asset = None
             self.mode = "backtest"
             self.signal_type = "crossover"
             self.ind1_name = "price"
@@ -3011,8 +3139,27 @@ def _run_post_handler(cancel_event):
 
     p = Params(request.form)
     is_oscillator = p.signal_type == "oscillator"
+    is_ratio = bool(p.vs_asset and p.vs_asset in ASSETS)
     import pandas as pd_mod
     df_full = ASSETS.get(p.asset, ASSETS[DEFAULT_ASSET]).copy()
+
+    # Relative price mode: divide by denominator asset
+    if is_ratio:
+        df_vs = ASSETS[p.vs_asset].copy()
+        common_idx = df_full.index.intersection(df_vs.index)
+        if len(common_idx) == 0:
+            return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
+                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                          error=f"No overlapping dates between {p.asset} and {p.vs_asset}.",
+                                          price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
+        df_full = df_full.loc[common_idx]
+        df_full["close"] = df_full["close"] / df_vs.loc[common_idx, "close"]
+        _cap = lambda s: s.capitalize() if s == s.lower() else s
+        asset_display = f"{_cap(p.asset)} / {_cap(p.vs_asset)}"
+    else:
+        _cap = lambda s: s.capitalize() if s == s.lower() else s
+        asset_display = _cap(p.asset)
+
     if p.end_date:
         df_full = df_full[df_full.index <= pd_mod.Timestamp(p.end_date, tz="UTC")]
     if not p.start_date:
@@ -3167,7 +3314,7 @@ def _run_post_handler(cancel_event):
         bh_total = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
         bh_ann = bt._annualized_return(bh_total, n_days)
 
-        asset_title = p.asset.capitalize()
+        asset_title = asset_display
         fig, ax = plt.subplots(figsize=(14, 7), dpi=150)
         bt._apply_dark_theme(fig, ax)
         show_long = p.exposure in ("long-cash", "long-short")
@@ -3359,7 +3506,7 @@ def _run_post_handler(cancel_event):
             ax.set_xlabel(f"{ind2_upper} Period")
             ax.set_ylabel(f"{ind1_upper} Period")
 
-        asset_title = p.asset.capitalize()
+        asset_title = asset_display
         ax.set_title(f"{asset_title} {ind1_upper}/{ind2_upper} Crossover \u2014 Annualized Return % (step={p.step})\n"
                      f"Best: {ind1_upper}({best_p1})/{ind2_upper}({best_p2}) = {best_ann:.1f}% | "
                      f"B&H: {bh_ann:.1f}% | {p.exposure}")
@@ -3452,7 +3599,7 @@ def _run_post_handler(cancel_event):
                     label=f"Best: {best_label} ({best_ann:.1f}%)")
         ax.set_xlabel(f"{ind2_upper} Period (days)")
         ax.set_ylabel("Annualized Return (%)")
-        asset_title = p.asset.capitalize()
+        asset_title = asset_display
         title_prefix = f"{ind1_label_str} vs " if p.ind1_name != "price" else ""
         ax.set_title(f"{asset_title} \u2014 Annualized Return by {title_prefix}{ind2_upper} Period ({p.range_min}-{p.range_max}) | {p.exposure}")
         ax.legend(loc="best", fontsize=9, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
@@ -3533,7 +3680,7 @@ def _run_post_handler(cancel_event):
             import matplotlib.dates as mdates
             import numpy as np
 
-            asset_name = p.asset.capitalize()
+            asset_name = asset_display
             show_ratio = p.exposure != "short-cash" and p.sizing != "fixed"
 
             if is_oscillator:
@@ -3564,7 +3711,7 @@ def _run_post_handler(cancel_event):
                     equity_top = 7 / (7 + 3)
                     equity_bottom = 1.0
 
-            ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color="#e8eaf0", linewidth=0.8)
+            ax1.plot(df.index, df["close"], label=f"{asset_name} {'Ratio' if is_ratio else 'Price'}", color="#e8eaf0", linewidth=0.8)
 
             if not is_oscillator:
                 # Plot ind2 (main/slow indicator)
@@ -3576,11 +3723,16 @@ def _run_post_handler(cancel_event):
                              label=best["ind1_label"], color="#f7931a", linewidth=0.8, alpha=0.8)
 
             ax1.set_yscale("log")
-            _fmt_usd = plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}")
-            ax1.yaxis.set_major_formatter(_fmt_usd)
-            ax1.yaxis.set_minor_formatter(_minor_usd_formatter())
+            if is_ratio:
+                _fmt_ratio = plt.FuncFormatter(lambda x, _: f"{x:.4f}" if x < 0.01 else (f"{x:.3f}" if x < 1 else f"{x:,.2f}"))
+                ax1.yaxis.set_major_formatter(_fmt_ratio)
+                ax1.yaxis.set_minor_formatter(_minor_usd_formatter(dollar=False))
+            else:
+                _fmt_usd = plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}")
+                ax1.yaxis.set_major_formatter(_fmt_usd)
+                ax1.yaxis.set_minor_formatter(_minor_usd_formatter())
             ax1.tick_params(axis='y', which='minor', labelsize=6)
-            ax1.set_ylabel(f"{asset_name} Price (log scale)")
+            ax1.set_ylabel(f"{asset_name} Ratio (log scale)" if is_ratio else f"{asset_name} Price (log scale)")
             ax1.set_title(f"{asset_name} Backtest \u2014 {best['label']} "
                           f"({best['total_return']:.1f}% return) | {p.exposure}")
             ax1.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
