@@ -2965,6 +2965,12 @@ def _run_post_handler(cancel_event):
     # Relative price mode: divide by denominator asset
     if is_ratio:
         df_vs = ASSETS[p.vs_asset].copy()
+        # Normalize both indexes to midnight UTC so assets with different intraday timestamps can match
+        df_full.index = df_full.index.normalize()
+        df_vs.index = df_vs.index.normalize()
+        # Drop duplicate dates (keep first) that may arise from normalization
+        df_full = df_full[~df_full.index.duplicated(keep='first')]
+        df_vs = df_vs[~df_vs.index.duplicated(keep='first')]
         common_idx = df_full.index.intersection(df_vs.index)
         if len(common_idx) == 0:
             return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
@@ -5132,7 +5138,7 @@ ADMIN_ASSETS_HTML = """\
                     </div>
                 </td>
                 <td>
-                    <select class="cat-select" data-asset="{{ name }}" onchange="changeCategory('{{ name }}', this.value)">
+                    <select class="cat-select" data-asset="{{ name }}" onchange="changeCategory({{ name|tojson }}, this.value)">
                         <option value="crypto" {{ 'selected' if name in crypto_names }}>Crypto</option>
                         <option value="crypto_agg" {{ 'selected' if name in crypto_agg_names }}>Crypto Aggregate</option>
                         <option value="stock" {{ 'selected' if name in stock_names }}>Stock</option>
@@ -5144,8 +5150,8 @@ ADMIN_ASSETS_HTML = """\
                 <td style="font-family:'JetBrains Mono',monospace;font-size:0.8em;color:var(--text-muted)">{{ asset_starts.get(name, '') }}</td>
                 <td>
                     <div class="actions-cell">
-                        <button class="action-btn-sm" onclick="openRenameModal('{{ name }}')">Rename</button>
-                        <button class="action-btn-sm danger" onclick="deleteAsset('{{ name }}')">Delete</button>
+                        <button class="action-btn-sm" onclick="openRenameModal({{ name|tojson }})">Rename</button>
+                        <button class="action-btn-sm danger" onclick="deleteAsset({{ name|tojson }})">Delete</button>
                     </div>
                 </td>
             </tr>
