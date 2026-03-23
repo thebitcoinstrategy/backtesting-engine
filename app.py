@@ -75,7 +75,7 @@ def _cache_key(form_params):
     cache fragmentation from irrelevant hidden fields.
     """
     # Core params always relevant
-    core = {"mode", "asset", "start_date", "end_date", "initial_cash", "fee", "sizing", "reverse"}
+    core = {"mode", "asset", "vs_asset", "start_date", "end_date", "initial_cash", "fee", "sizing", "reverse"}
     mode = form_params.get("mode", "backtest")
     signal_type = form_params.get("signal_type", "crossover")
 
