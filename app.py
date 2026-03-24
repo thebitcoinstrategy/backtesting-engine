@@ -4137,6 +4137,21 @@ COMMUNITY_HTML = """\
         .cta-banner a { display: inline-block; padding: 10px 24px; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.85em; }
         .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
         .empty-state h3 { font-size: 1.1em; margin-bottom: 8px; color: var(--text); }
+        /* Recent comments */
+        .recent-comments { margin-top: 24px; }
+        .recent-comments-title { font-size: 1em; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+        .rc-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); transition: background 0.15s ease; }
+        .rc-item:last-child { border-bottom: none; }
+        .rc-item:hover { background: var(--bg-elevated); margin: 0 -12px; padding: 12px; border-radius: 8px; border-bottom-color: transparent; }
+        .rc-avatar { flex-shrink: 0; }
+        .rc-avatar img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+        .rc-avatar-initials { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65em; font-weight: 700; color: #fff; }
+        .rc-content { flex: 1; min-width: 0; }
+        .rc-header { font-size: 0.78em; color: var(--text-dim); margin-bottom: 4px; }
+        .rc-header strong { color: var(--text); font-weight: 600; }
+        .rc-body { font-size: 0.82em; color: var(--text-muted); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rc-backtest { font-size: 0.75em; color: var(--text-dim); margin-top: 3px; }
+        .rc-backtest em { color: var(--blue); }
         .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); cursor: pointer; font-size: 0.82em; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; text-decoration: none; }
         .action-btn:hover { border-color: var(--border-hover); color: var(--text); }
         .action-btn.primary { border-color: var(--accent); color: var(--accent); }
@@ -4371,6 +4386,33 @@ COMMUNITY_HTML = """\
         </div>
         {% endif %}
     </div>
+
+    {% if recent_comments|default(none) and recent_comments|length > 0 %}
+    <div class="panel" style="margin-top:16px">
+        <div class="recent-comments">
+            <h3 class="recent-comments-title">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Recent Comments
+            </h3>
+            {% for rc in recent_comments %}
+            <a class="rc-item" href="/backtest/{{ rc.backtest_id }}#comment-{{ rc.id }}">
+                <div class="rc-avatar">
+                    {% if rc._avatar %}
+                    <img src="/static/avatars/{{ rc._avatar }}" alt="">
+                    {% else %}
+                    <div class="rc-avatar-initials" style="background:{{ rc._avatar_color }}">{{ rc._initial }}</div>
+                    {% endif %}
+                </div>
+                <div class="rc-content">
+                    <div class="rc-header"><strong>{{ rc._display_name }}</strong> · {{ rc._time_ago }}</div>
+                    <div class="rc-body">{{ rc.body }}</div>
+                    <div class="rc-backtest">on <em>{{ rc.backtest_title or 'Untitled' }}</em></div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 <script>
 var _swal = Swal.mixin({
@@ -6768,10 +6810,22 @@ def community():
     backtests, total = db.list_backtests(visibility='community', sort=sort, page=page, per_page=20)
     _enrich_backtest_cards(backtests)
     total_pages = max(1, (total + 19) // 20)
+    # Recent comments
+    recent_comments = db.get_recent_comments(limit=8)
+    rc_user_ids = {c['user_id'] for c in recent_comments}
+    rc_profiles = db.get_user_profiles(rc_user_ids)
+    for c in recent_comments:
+        p = rc_profiles.get(c['user_id'], {})
+        c['_display_name'] = p.get('display_name') or c['user_email'].split('@')[0]
+        c['_avatar'] = p.get('avatar')
+        c['_avatar_color'] = _avatar_color(c['user_id'])
+        c['_initial'] = _user_initial(c['_display_name'], c['user_email'])
+        c['_time_ago'] = _time_ago(c['created_at'])
     return render_template_string(COMMUNITY_HTML,
         nav_active='community', page_title='Community Backtests',
         page_subtitle='Strategies shared by the community',
         backtests=backtests, sort=sort, page=page, total_pages=total_pages,
+        recent_comments=recent_comments,
         is_authenticated=_is_authenticated(), time_ago=_time_ago)
 
 
