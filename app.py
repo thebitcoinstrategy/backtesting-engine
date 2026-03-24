@@ -1008,7 +1008,7 @@ HTML = """\
         .comment-author { font-weight: 600; color: var(--text); }
         .comment-time { color: var(--text-dim); }
         .comment-body { font-size: 0.85em; color: var(--text-muted); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-        .comment-body a { color: var(--accent); text-decoration: underline; }
+        .comment-body a { color: #fff; text-decoration: underline; }
         .comment-body a:hover { opacity: 0.8; }
         .comment-actions { margin-top: 6px; display: flex; gap: 12px; }
         .comment-action-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.75em; font-family: 'DM Sans', sans-serif; }
