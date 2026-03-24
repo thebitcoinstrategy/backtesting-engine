@@ -601,8 +601,9 @@ def ensure_welcome_notification(user_id):
     if row and row['welcomed']:
         conn.close()
         return False
-    # Create welcome notification
+    # Create welcome notification (disable FK checks since backtest_id is empty for system notifications)
     now = datetime.utcnow().isoformat()
+    conn.execute("PRAGMA foreign_keys = OFF")
     conn.execute(
         """INSERT INTO notifications (id, user_id, actor_id, actor_email, backtest_id, comment_id, type, message, link, created_at)
            VALUES (?, ?, 'system', 'system', '', '', 'welcome', ?, ?, ?)""",
@@ -610,6 +611,7 @@ def ensure_welcome_notification(user_id):
          'Welcome to Bitcoin Strategy Analytics! We\'d love to hear your feedback.',
          '/feedback', now)
     )
+    conn.execute("PRAGMA foreign_keys = ON")
     # Mark user as welcomed (upsert in case user row doesn't exist yet)
     if row:
         conn.execute("UPDATE users SET welcomed=1 WHERE user_id=?", (user_id,))
@@ -621,6 +623,7 @@ def ensure_welcome_notification(user_id):
 def backfill_welcome_notifications():
     """Create welcome notifications for all existing users who haven't been welcomed."""
     conn = _get_conn()
+    conn.execute("PRAGMA foreign_keys = OFF")
     # Get all unique user_ids from backtests who don't have a welcome notification yet
     rows = conn.execute(
         """SELECT DISTINCT user_id FROM backtests
@@ -637,6 +640,7 @@ def backfill_welcome_notifications():
              '/feedback', now)
         )
     conn.commit()
+    conn.execute("PRAGMA foreign_keys = ON")
     conn.close()
     return len(rows)
 
