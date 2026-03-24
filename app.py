@@ -33,6 +33,34 @@ SMTP_PASS = 'gvcnyztughyyrlzp'
 SMTP_FROM = 'Bitcoin Strategy <thebitcoinstrategy@gmail.com>'
 ADMIN_FEEDBACK_EMAIL = 'kuschnik.gerhard@gmail.com'
 
+# --- Telegram bot config (for moderator notifications) ---
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '')
+SITE_URL = 'https://analytics.the-bitcoin-strategy.com'
+
+
+def _send_telegram_async(message):
+    """Send a Telegram message to the moderator group in a background thread."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    def _send():
+        try:
+            import urllib.request
+            import json as _json
+            url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
+            payload = _json.dumps({
+                'chat_id': TELEGRAM_CHAT_ID,
+                'text': message,
+                'parse_mode': 'HTML',
+                'disable_web_page_preview': True
+            }).encode('utf-8')
+            req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+            urllib.request.urlopen(req, timeout=10)
+        except Exception as e:
+            print(f"[TELEGRAM ERROR] {e}")
+    threading.Thread(target=_send, daemon=True).start()
+
+
 # --- Avatar helpers ---
 AVATAR_COLORS = [
     '#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#1abc9c',
@@ -6341,6 +6369,13 @@ def api_publish():
         title=title, description=description,
         thumbnail=data.get('thumbnail', '')
     )
+    # Telegram notification for moderators
+    _send_telegram_async(
+        f'📊 <b>New backtest published</b>\n'
+        f'By: {display_name}\n'
+        f'Title: {title}\n'
+        f'{SITE_URL}/backtest/{result.get("id", "")}'
+    )
     return jsonify(result)
 
 
@@ -6464,6 +6499,15 @@ def api_comment(bt_id):
         </div>
         """
         _send_email_async(target_email, subject, html)
+    # Telegram notification for moderators
+    parent_label = ' (reply)' if data.get('parent_id') else ''
+    _send_telegram_async(
+        f'💬 <b>New comment{parent_label}</b>\n'
+        f'By: {commenter_name}\n'
+        f'On: {bt_title}\n'
+        f'"{data["body"].strip()[:200]}"\n'
+        f'{comment_url}'
+    )
     # Remove internal field before returning
     comment.pop('_email_targets', None)
     return jsonify(comment)
