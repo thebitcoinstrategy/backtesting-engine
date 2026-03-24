@@ -5569,10 +5569,6 @@ MY_BACKTESTS_HTML = """\
         .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
         .badge-private { background: rgba(136,144,164,0.15); color: var(--text-muted); }
         .card-actions { display: flex; gap: 8px; margin-top: 10px; }
-        .username-section { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding: 14px 18px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 12px; }
-        .username-section label { font-size: 0.8em; color: var(--text-muted); font-weight: 500; white-space: nowrap; margin: 0; }
-        .username-section input { flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-size: 0.85em; font-family: 'DM Sans', sans-serif; }
-        .username-section input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
         .publish-modal-overlay { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
         .publish-modal-overlay.open { display: flex; }
         .publish-modal { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 90%; max-width: 500px; position: relative; }
@@ -5639,15 +5635,6 @@ MY_BACKTESTS_HTML = """\
 
     <div class="panel">
         <h2 class="page-title">My Backtests</h2>
-
-        <div class="username-section">
-            <label>Public Username:</label>
-            <input type="text" id="display-name-input" value="{{ display_name or email_prefix }}" placeholder="Set your public username" maxlength="40" {% if display_name %}readonly style="opacity:0.8"{% endif %}>
-            <button class="action-btn" id="edit-name-btn" onclick="toggleMyUsername()" title="Edit username" style="padding:8px 10px">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z"/></svg>
-            </button>
-            <button class="action-btn hidden" id="save-name-btn" onclick="saveDisplayName()">Save</button>
-        </div>
 
         {% if published %}
         <h3 class="section-header" style="margin-top:16px">Published ({{ published|length }})</h3>
@@ -5856,32 +5843,6 @@ function deleteBacktest(backtestId) {
         if (!result.isConfirmed) return;
         fetch('/api/backtest/' + backtestId, { method: 'DELETE' })
         .then(function() { location.reload(); });
-    });
-}
-function toggleMyUsername() {
-    var input = document.getElementById('display-name-input');
-    input.readOnly = false;
-    input.style.opacity = '1';
-    input.focus();
-    input.select();
-    document.getElementById('edit-name-btn').classList.add('hidden');
-    document.getElementById('save-name-btn').classList.remove('hidden');
-}
-function saveDisplayName() {
-    var input = document.getElementById('display-name-input');
-    var name = input.value.trim();
-    if (!name) { _swal.fire({icon:'warning', title:'Please enter a username'}); return; }
-    fetch('/api/display-name', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({display_name: name})
-    }).then(function(r) { return r.json(); }).then(function(data) {
-        if (data.ok) {
-            input.readOnly = true;
-            input.style.opacity = '0.8';
-            document.getElementById('edit-name-btn').classList.remove('hidden');
-            document.getElementById('save-name-btn').classList.add('hidden');
-            _swal.fire({icon:'success', title:'Username saved!', text:'This applies to all your backtests and comments.', timer:2000, showConfirmButton:false});
-        }
     });
 }
 function openEditModal(backtestId, title, desc) {
