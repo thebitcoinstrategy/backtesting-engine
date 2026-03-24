@@ -4289,6 +4289,7 @@ COMMUNITY_HTML = """\
                         <div class="engagement">
                             <span>♥ {{ bt.likes_count }}</span>
                             <span>💬 {{ bt.comments_count }}</span>
+                            <span>👁 {{ bt.views_count or 0 }}</span>
                         </div>
                     </div>
                 </a>
@@ -4353,6 +4354,7 @@ COMMUNITY_HTML = """\
                     <div class="engagement">
                         <span>♥ {{ bt.likes_count }}</span>
                         <span>💬 {{ bt.comments_count }}</span>
+                        <span>👁 {{ bt.views_count or 0 }}</span>
                     </div>
                 </div>
             </a>
@@ -4855,7 +4857,7 @@ DETAIL_HTML = """\
             <div class="detail-meta">
                 <span>by {{ display_name or backtest.user_email.split('@')[0] }}</span>
                 <span>{{ time_ago(backtest.created_at) }}</span>
-                <span>♥ {{ backtest.likes_count }} · 💬 {{ backtest.comments_count }}</span>
+                <span>♥ {{ backtest.likes_count }} · 💬 {{ backtest.comments_count }} · 👁 {{ backtest.views_count or 0 }}</span>
             </div>
         </div>
         {% if backtest.description %}
@@ -5529,6 +5531,7 @@ MY_BACKTESTS_HTML = """\
                         <div class="engagement">
                             <span>♥ {{ bt.likes_count }}</span>
                             <span>💬 {{ bt.comments_count }}</span>
+                            <span>👁 {{ bt.views_count or 0 }}</span>
                         </div>
                     </div>
                 </a>
@@ -6891,6 +6894,9 @@ def backtest_detail(bt_id):
     if bt_entry['visibility'] == 'private':
         if not _is_authenticated() or str(session.get('user_id', '')) != str(bt_entry['user_id']):
             abort(404)
+    # Increment view count
+    db.increment_views(bt_id)
+    bt_entry['views_count'] = (bt_entry.get('views_count') or 0) + 1
     comments = db.get_comments(bt_id)
     is_auth = _is_authenticated()
     liked = db.has_liked(session.get('user_id', ''), bt_id) if is_auth else False

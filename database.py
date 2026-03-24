@@ -97,6 +97,10 @@ def init_db():
         pass  # column already exists
     # Add avatar and notification prefs to users table
     try:
+        conn.execute("ALTER TABLE backtests ADD COLUMN views_count INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
         conn.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
     except sqlite3.OperationalError:
         pass
@@ -629,6 +633,14 @@ def backfill_welcome_notifications():
     conn.commit()
     conn.close()
     return len(rows)
+
+
+def increment_views(backtest_id):
+    """Increment view count for a backtest."""
+    conn = _get_conn()
+    conn.execute("UPDATE backtests SET views_count = COALESCE(views_count, 0) + 1 WHERE id=?", (backtest_id,))
+    conn.commit()
+    conn.close()
 
 
 def get_recent_comments(limit=10):
