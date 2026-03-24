@@ -992,7 +992,9 @@ HTML = """\
         .notif-mark-read:hover { text-decoration: underline; }
         .notif-list { max-height: 320px; overflow-y: auto; }
         .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
-        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item.notif-unread { background: rgba(100,149,237,0.08); border-left: 3px solid var(--accent); }
+        .notif-item.notif-read { opacity: 0.55; }
+        .notif-item:hover { background: var(--bg-elevated); opacity: 1; }
         .notif-item:last-child { border-bottom: none; }
         .notif-item-text { line-height: 1.4; }
         .notif-item-text strong { color: var(--accent); font-weight: 600; }
@@ -1207,7 +1209,7 @@ HTML = """\
                 </button>
                 <div class="notif-dropdown hidden" id="notif-dropdown">
                     <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
                 </div>
             </div>
             <div class="avatar-wrap">
@@ -1948,10 +1950,11 @@ function fetchNotifications() {
             badge.classList.add('hidden');
         }
         if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
         } else {
             list.innerHTML = data.notifications.map(function(n) {
                 var text, href;
+                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
                 if (n.type === 'welcome') {
                     text = _escHtml(n.message || 'Welcome!');
                     href = n.link || '/feedback';
@@ -1963,7 +1966,7 @@ function fetchNotifications() {
                         : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
                     href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
                 }
-                return '<a class="notif-item" href="' + href + '">'
+                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
                     + '<div class="notif-item-text">' + text + '</div>'
                     + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
             }).join('');
@@ -4079,7 +4082,9 @@ COMMUNITY_HTML = """\
         .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
         .notif-list { max-height: 320px; overflow-y: auto; }
         .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
-        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item.notif-unread { background: rgba(100,149,237,0.08); border-left: 3px solid var(--accent); }
+        .notif-item.notif-read { opacity: 0.55; }
+        .notif-item:hover { background: var(--bg-elevated); opacity: 1; }
         .notif-item:last-child { border-bottom: none; }
         .notif-item-text { line-height: 1.4; }
         .notif-item-text strong { color: var(--accent); font-weight: 600; }
@@ -4224,7 +4229,7 @@ COMMUNITY_HTML = """\
                 </button>
                 <div class="notif-dropdown hidden" id="notif-dropdown">
                     <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
                 </div>
             </div>
             <div class="avatar-wrap">
@@ -4503,10 +4508,11 @@ function fetchNotifications() {
             badge.classList.add('hidden');
         }
         if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
         } else {
             list.innerHTML = data.notifications.map(function(n) {
                 var text, href;
+                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
                 if (n.type === 'welcome') {
                     text = _escHtml(n.message || 'Welcome!');
                     href = n.link || '/feedback';
@@ -4518,7 +4524,7 @@ function fetchNotifications() {
                         : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
                     href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
                 }
-                return '<a class="notif-item" href="' + href + '">'
+                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
                     + '<div class="notif-item-text">' + text + '</div>'
                     + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
             }).join('');
@@ -4649,7 +4655,9 @@ DETAIL_HTML = """\
         .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
         .notif-list { max-height: 320px; overflow-y: auto; }
         .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
-        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item.notif-unread { background: rgba(100,149,237,0.08); border-left: 3px solid var(--accent); }
+        .notif-item.notif-read { opacity: 0.55; }
+        .notif-item:hover { background: var(--bg-elevated); opacity: 1; }
         .notif-item:last-child { border-bottom: none; }
         .notif-item-text { line-height: 1.4; }
         .notif-item-text strong { color: var(--accent); font-weight: 600; }
@@ -4703,9 +4711,9 @@ DETAIL_HTML = """\
         .action-buttons { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
         .open-backtester-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px; border-radius: 10px; border: 1.5px solid #f7931a; background: rgba(247,147,26,0.08); color: #f7931a; font-size: 0.88em; font-weight: 600; font-family: 'DM Sans', sans-serif; text-decoration: none; transition: all 0.2s ease; }
         .open-backtester-btn:hover { background: rgba(247,147,26,0.18); transform: translateY(-1px); }
-        .like-btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 28px; border-radius: 12px; border: 2px solid var(--border); background: var(--bg-surface); color: var(--text-muted); cursor: pointer; font-size: 0.95em; font-weight: 600; font-family: 'DM Sans', sans-serif; transition: all 0.25s ease; }
-        .like-btn:hover { border-color: #ef4444; color: #ef4444; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239,68,68,0.15); }
-        .like-btn.liked { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,0.1); box-shadow: 0 2px 8px rgba(239,68,68,0.1); }
+        .like-btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 28px; border-radius: 12px; border: 2px solid #ef4444; background: transparent; color: #ef4444; cursor: pointer; font-size: 0.95em; font-weight: 600; font-family: 'DM Sans', sans-serif; transition: all 0.25s ease; }
+        .like-btn:hover { background: rgba(239,68,68,0.1); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239,68,68,0.15); }
+        .like-btn.liked { background: #ef4444; color: #fff; box-shadow: 0 2px 8px rgba(239,68,68,0.2); }
         .like-btn.disabled { cursor: default; opacity: 0.5; }
         .like-heart { font-size: 1.2em; display: inline-block; }
         .like-btn.liked .like-heart { animation: heartBounce 0.5s ease; }
@@ -4864,7 +4872,7 @@ DETAIL_HTML = """\
                 </button>
                 <div class="notif-dropdown hidden" id="notif-dropdown">
                     <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
                 </div>
             </div>
             <div class="avatar-wrap">
@@ -5007,7 +5015,7 @@ DETAIL_HTML = """\
     </div>
     {% endif %}
 
-    <div id="like-container" style="display:flex;justify-content:flex-end;margin-bottom:16px">
+    <div id="like-container" style="display:flex;justify-content:center;margin-bottom:16px">
         {% if is_authenticated %}
         <button class="like-btn {{ 'liked' if has_liked }}" onclick="toggleLike('{{ backtest.id }}', this)">
             <span class="like-heart">♥</span> <span class="like-count">{{ backtest.likes_count }}</span> <span class="like-text">{{ 'Liked' if has_liked else 'Like' }}</span>
@@ -5159,10 +5167,11 @@ function fetchNotifications() {
             badge.classList.add('hidden');
         }
         if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
         } else {
             list.innerHTML = data.notifications.map(function(n) {
                 var text, href;
+                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
                 if (n.type === 'welcome') {
                     text = _escHtml(n.message || 'Welcome!');
                     href = n.link || '/feedback';
@@ -5174,7 +5183,7 @@ function fetchNotifications() {
                         : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
                     href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
                 }
-                return '<a class="notif-item" href="' + href + '">'
+                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
                     + '<div class="notif-item-text">' + text + '</div>'
                     + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
             }).join('');
@@ -5453,7 +5462,9 @@ MY_BACKTESTS_HTML = """\
         .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
         .notif-list { max-height: 320px; overflow-y: auto; }
         .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
-        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item.notif-unread { background: rgba(100,149,237,0.08); border-left: 3px solid var(--accent); }
+        .notif-item.notif-read { opacity: 0.55; }
+        .notif-item:hover { background: var(--bg-elevated); opacity: 1; }
         .notif-item:last-child { border-bottom: none; }
         .notif-item-text { line-height: 1.4; }
         .notif-item-text strong { color: var(--accent); font-weight: 600; }
@@ -5554,7 +5565,7 @@ MY_BACKTESTS_HTML = """\
                 </button>
                 <div class="notif-dropdown hidden" id="notif-dropdown">
                     <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
                 </div>
             </div>
             <div class="avatar-wrap">
@@ -5762,10 +5773,11 @@ function fetchNotifications() {
             badge.classList.add('hidden');
         }
         if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
         } else {
             list.innerHTML = data.notifications.map(function(n) {
                 var text, href;
+                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
                 if (n.type === 'welcome') {
                     text = _escHtml(n.message || 'Welcome!');
                     href = n.link || '/feedback';
@@ -5777,7 +5789,7 @@ function fetchNotifications() {
                         : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
                     href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
                 }
-                return '<a class="notif-item" href="' + href + '">'
+                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
                     + '<div class="notif-item-text">' + text + '</div>'
                     + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
             }).join('');
@@ -5913,7 +5925,9 @@ ADMIN_ASSETS_HTML = """\
         .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
         .notif-list { max-height: 320px; overflow-y: auto; }
         .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
-        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item.notif-unread { background: rgba(100,149,237,0.08); border-left: 3px solid var(--accent); }
+        .notif-item.notif-read { opacity: 0.55; }
+        .notif-item:hover { background: var(--bg-elevated); opacity: 1; }
         .notif-item:last-child { border-bottom: none; }
         .notif-item-text { line-height: 1.4; }
         .notif-item-text strong { color: var(--accent); font-weight: 600; }
@@ -6033,7 +6047,7 @@ ADMIN_ASSETS_HTML = """\
                 </button>
                 <div class="notif-dropdown hidden" id="notif-dropdown">
                     <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
                 </div>
             </div>
             <div class="avatar-wrap">
@@ -6187,10 +6201,11 @@ function fetchNotifications() {
             badge.classList.add('hidden');
         }
         if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
         } else {
             list.innerHTML = data.notifications.map(function(n) {
                 var text, href;
+                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
                 if (n.type === 'welcome') {
                     text = _escHtml(n.message || 'Welcome!');
                     href = n.link || '/feedback';
@@ -6202,7 +6217,7 @@ function fetchNotifications() {
                         : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
                     href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
                 }
-                return '<a class="notif-item" href="' + href + '">'
+                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
                     + '<div class="notif-item-text">' + text + '</div>'
                     + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
             }).join('');
@@ -6545,15 +6560,15 @@ def api_edit_comment(comment_id):
 
 @app.route('/api/notifications')
 def api_notifications():
-    """Get unread notifications for the current user."""
+    """Get all notifications for the current user (unread count in badge)."""
     if not _is_authenticated():
         return jsonify({'count': 0, 'notifications': []})
     user_id = session.get('user_id')
     count = db.get_unread_count(user_id)
-    notifications = db.get_unread_notifications(user_id)
+    notifications = db.get_all_notifications(user_id)
     for n in notifications:
         name = db.get_display_name(n['actor_id'])
-        n['actor_name'] = name or n['actor_email'].split('@')[0]
+        n['actor_name'] = name or (n['actor_email'] or 'system').split('@')[0]
         n['time_ago'] = _time_ago(n['created_at'])
     return jsonify({'count': count, 'notifications': notifications})
 
@@ -7100,7 +7115,9 @@ ACCOUNT_HTML = """<!DOCTYPE html>
         .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
         .notif-list { max-height: 320px; overflow-y: auto; }
         .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
-        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item.notif-unread { background: rgba(100,149,237,0.08); border-left: 3px solid var(--accent); }
+        .notif-item.notif-read { opacity: 0.55; }
+        .notif-item:hover { background: var(--bg-elevated); opacity: 1; }
         .notif-item:last-child { border-bottom: none; }
         .notif-item-text { line-height: 1.4; }
         .notif-item-text strong { color: var(--accent); font-weight: 600; }
@@ -7167,7 +7184,7 @@ ACCOUNT_HTML = """<!DOCTYPE html>
                 </button>
                 <div class="notif-dropdown hidden" id="notif-dropdown">
                     <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
                 </div>
             </div>
             <div class="avatar-wrap">
@@ -7302,10 +7319,11 @@ function fetchNotifications() {
             badge.classList.add('hidden');
         }
         if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
         } else {
             list.innerHTML = data.notifications.map(function(n) {
                 var text, href;
+                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
                 if (n.type === 'welcome') {
                     text = _escHtml(n.message || 'Welcome!');
                     href = n.link || '/feedback';
@@ -7317,7 +7335,7 @@ function fetchNotifications() {
                         : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
                     href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
                 }
-                return '<a class="notif-item" href="' + href + '">'
+                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
                     + '<div class="notif-item-text">' + text + '</div>'
                     + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
             }).join('');
@@ -7407,7 +7425,9 @@ FEEDBACK_HTML = """<!DOCTYPE html>
         .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
         .notif-list { max-height: 320px; overflow-y: auto; }
         .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
-        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item.notif-unread { background: rgba(100,149,237,0.08); border-left: 3px solid var(--accent); }
+        .notif-item.notif-read { opacity: 0.55; }
+        .notif-item:hover { background: var(--bg-elevated); opacity: 1; }
         .notif-item:last-child { border-bottom: none; }
         .notif-item-text { line-height: 1.4; }
         .notif-item-text strong { color: var(--accent); font-weight: 600; }
@@ -7455,7 +7475,7 @@ FEEDBACK_HTML = """<!DOCTYPE html>
                 </button>
                 <div class="notif-dropdown hidden" id="notif-dropdown">
                     <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
                 </div>
             </div>
             <div class="avatar-wrap">
@@ -7538,10 +7558,11 @@ function fetchNotifications() {
             badge.classList.add('hidden');
         }
         if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
         } else {
             list.innerHTML = data.notifications.map(function(n) {
                 var text, href;
+                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
                 if (n.type === 'welcome') {
                     text = _escHtml(n.message || 'Welcome!');
                     href = n.link || '/feedback';
@@ -7553,7 +7574,7 @@ function fetchNotifications() {
                         : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
                     href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
                 }
-                return '<a class="notif-item" href="' + href + '">'
+                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
                     + '<div class="notif-item-text">' + text + '</div>'
                     + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
             }).join('');

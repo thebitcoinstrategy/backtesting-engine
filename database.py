@@ -547,6 +547,21 @@ def get_unread_notifications(user_id, limit=20):
     return [_row_to_dict(r) for r in rows]
 
 
+def get_all_notifications(user_id, limit=30):
+    """Get all notifications (read + unread) for a user, with backtest title."""
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT n.*, b.title as backtest_title
+           FROM notifications n
+           LEFT JOIN backtests b ON n.backtest_id = b.id
+           WHERE n.user_id=?
+           ORDER BY n.created_at DESC LIMIT ?""",
+        (user_id, limit)
+    ).fetchall()
+    conn.close()
+    return [_row_to_dict(r) for r in rows]
+
+
 def get_unread_count(user_id):
     """Get count of unread notifications for a user."""
     conn = _get_conn()
