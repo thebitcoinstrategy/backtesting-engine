@@ -69,6 +69,19 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_backtests_short_code ON backtests(short_code);
         CREATE INDEX IF NOT EXISTS idx_comments_backtest ON comments(backtest_id);
         CREATE INDEX IF NOT EXISTS idx_likes_backtest ON likes(backtest_id);
+
+        CREATE TABLE IF NOT EXISTS notifications (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            actor_id TEXT NOT NULL,
+            actor_email TEXT NOT NULL,
+            backtest_id TEXT NOT NULL REFERENCES backtests(id) ON DELETE CASCADE,
+            comment_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+            type TEXT NOT NULL,
+            is_read INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
     """)
     # Add thumbnail column if missing (migration for existing DBs)
     try:
@@ -315,7 +328,7 @@ def has_liked(user_id, backtest_id):
 
 
 def add_comment(backtest_id, user_id, email, body, parent_id=None):
-    """Add a comment. Returns the comment dict."""
+    """Add a comment. Creates notifications for relevant users. Returns the comment dict."""
     conn = _get_conn()
     comment_id = str(uuid.uuid4())
     now = datetime.utcnow().isoformat()
@@ -325,6 +338,30 @@ def add_comment(backtest_id, user_id, email, body, parent_id=None):
         (comment_id, backtest_id, parent_id, user_id, email, body, now)
     )
     conn.execute("UPDATE backtests SET comments_count = comments_count + 1 WHERE id=?", (backtest_id,))
+
+    # --- Create notifications ---
+    notified_user = None
+    # Case 1: Reply to a comment -> notify the parent comment's author
+    if parent_id:
+        parent = conn.execute("SELECT user_id FROM comments WHERE id=?", (parent_id,)).fetchone()
+        if parent and str(parent['user_id']) != str(user_id):
+            notified_user = str(parent['user_id'])
+            conn.execute(
+                """INSERT INTO notifications (id, user_id, actor_id, actor_email, backtest_id, comment_id, type, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, 'reply', ?)""",
+                (str(uuid.uuid4()), notified_user, user_id, email, backtest_id, comment_id, now)
+            )
+    # Case 2: Comment on a backtest -> notify the backtest owner
+    bt = conn.execute("SELECT user_id FROM backtests WHERE id=?", (backtest_id,)).fetchone()
+    if bt and str(bt['user_id']) != str(user_id):
+        bt_owner = str(bt['user_id'])
+        if bt_owner != notified_user:  # avoid double notification
+            conn.execute(
+                """INSERT INTO notifications (id, user_id, actor_id, actor_email, backtest_id, comment_id, type, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, 'backtest_comment', ?)""",
+                (str(uuid.uuid4()), bt_owner, user_id, email, backtest_id, comment_id, now)
+            )
+
     conn.commit()
     row = conn.execute("SELECT * FROM comments WHERE id=?", (comment_id,)).fetchone()
     conn.close()
@@ -402,6 +439,40 @@ def delete_comment_admin(comment_id):
     conn.commit()
     conn.close()
     return True
+
+
+def get_unread_notifications(user_id, limit=20):
+    """Get unread notifications for a user, with backtest title. Returns list of dicts."""
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT n.*, b.title as backtest_title
+           FROM notifications n
+           JOIN backtests b ON n.backtest_id = b.id
+           WHERE n.user_id=? AND n.is_read=0
+           ORDER BY n.created_at DESC LIMIT ?""",
+        (user_id, limit)
+    ).fetchall()
+    conn.close()
+    return [_row_to_dict(r) for r in rows]
+
+
+def get_unread_count(user_id):
+    """Get count of unread notifications for a user."""
+    conn = _get_conn()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0",
+        (user_id,)
+    ).fetchone()[0]
+    conn.close()
+    return count
+
+
+def mark_notifications_read(user_id):
+    """Mark all notifications as read for a user."""
+    conn = _get_conn()
+    conn.execute("UPDATE notifications SET is_read=1 WHERE user_id=? AND is_read=0", (user_id,))
+    conn.commit()
+    conn.close()
 
 
 def get_user_liked_ids(user_id, backtest_ids):

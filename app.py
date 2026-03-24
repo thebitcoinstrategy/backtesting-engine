@@ -881,6 +881,7 @@ HTML = """\
             display: flex; align-items: center; justify-content: center; gap: 4px;
             margin-bottom: 20px;
             animation: fadeDown 0.6s ease-out;
+            position: relative;
         }
         .nav-link {
             padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500;
@@ -889,6 +890,25 @@ HTML = """\
         }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        /* Notification bell */
+        .notif-bell-wrap { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+        .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
+        .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
+        .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
+        .notif-badge.hidden { display: none; }
+        .notif-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 340px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; }
+        .notif-dropdown.hidden { display: none; }
+        .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
+        .notif-mark-read { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 0.8em; font-weight: 500; padding: 0; font-family: 'DM Sans', sans-serif; }
+        .notif-mark-read:hover { text-decoration: underline; }
+        .notif-list { max-height: 320px; overflow-y: auto; }
+        .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
+        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item:last-child { border-bottom: none; }
+        .notif-item-text { line-height: 1.4; }
+        .notif-item-text strong { color: var(--accent); font-weight: 600; }
+        .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
+        .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
 
         /* Save/Publish buttons */
         .action-buttons { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
@@ -1070,6 +1090,18 @@ HTML = """\
         {% endif %}
         <a href="/backtester" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Create Backtest</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active|default('')=='admin-assets' }}">Assets</a>{% endif %}
+        {% if is_authenticated %}
+        <div class="notif-bell-wrap">
+            <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span class="notif-badge hidden" id="notif-badge">0</span>
+            </button>
+            <div class="notif-dropdown hidden" id="notif-dropdown">
+                <div class="notif-dropdown-header"><span>Notifications</span></div>
+                <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+            </div>
+        </div>
+        {% endif %}
     </nav>
     <div class="layout">
         <div class="panel">
@@ -1740,6 +1772,60 @@ HTML = """\
 var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
     customClass: { popup: 'swal-dark' }
+});
+// Notification bell
+function toggleNotifDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('notif-dropdown');
+    if (!dd) return;
+    var wasHidden = dd.classList.contains('hidden');
+    dd.classList.toggle('hidden');
+    if (wasHidden) {
+        // Auto-mark as read when opening
+        fetch('/api/notifications/read', { method: 'POST' });
+        var badge = document.getElementById('notif-badge');
+        if (badge) badge.classList.add('hidden');
+    }
+}
+document.addEventListener('click', function(e) {
+    var dd = document.getElementById('notif-dropdown');
+    if (dd && !dd.classList.contains('hidden')) {
+        var wrap = document.querySelector('.notif-bell-wrap');
+        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    }
+});
+function fetchNotifications() {
+    fetch('/api/notifications').then(function(r) { return r.json(); })
+    .then(function(data) {
+        var badge = document.getElementById('notif-badge');
+        var list = document.getElementById('notif-list');
+        if (!badge || !list) return;
+        if (data.count > 0) {
+            badge.textContent = data.count > 99 ? '99+' : data.count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+        if (data.notifications.length === 0) {
+            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+        } else {
+            list.innerHTML = data.notifications.map(function(n) {
+                var action = n.type === 'reply' ? 'replied to your comment on' : 'commented on your backtest';
+                var title = n.backtest_title || 'Untitled';
+                if (title.length > 40) title = title.substring(0, 37) + '...';
+                var text = n.type === 'reply'
+                    ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
+                    : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
+                return '<a class="notif-item" href="/backtest/' + n.backtest_id + '#comment-' + n.comment_id + '">'
+                    + '<div class="notif-item-text">' + text + '</div>'
+                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
+            }).join('');
+        }
+    }).catch(function() {});
+}
+function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('notif-badge')) fetchNotifications();
 });
 var assetStarts = {{ asset_starts_json|tojson }};
 function selectMode(mode, el) {
@@ -3825,10 +3911,26 @@ COMMUNITY_HTML = """\
         .auth-btn-login:hover { background: #e08a1a; border-color: #e08a1a; }
         .auth-btn-signup { background: var(--accent); color: #fff; border: 2px solid var(--accent); }
         .auth-btn-signup:hover { background: #e08a1a; border-color: #e08a1a; }
-        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; }
+        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; position: relative; }
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        .notif-bell-wrap { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+        .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
+        .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
+        .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
+        .notif-badge.hidden { display: none; }
+        .notif-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 340px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; }
+        .notif-dropdown.hidden { display: none; }
+        .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
+        .notif-list { max-height: 320px; overflow-y: auto; }
+        .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
+        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item:last-child { border-bottom: none; }
+        .notif-item-text { line-height: 1.4; }
+        .notif-item-text strong { color: var(--accent); font-weight: 600; }
+        .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
+        .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
         .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); }
         .page-title { font-size: 1.4em; font-weight: 700; margin-bottom: 6px; }
         .page-subtitle { font-size: 0.85em; color: var(--text-muted); margin-bottom: 20px; }
@@ -3925,6 +4027,18 @@ COMMUNITY_HTML = """\
         {% endif %}
         <a href="/backtester" class="nav-link {{ 'active' if nav_active=='backtester' }}">Create Backtest</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active=='admin-assets' }}">Assets</a>{% endif %}
+        {% if is_authenticated %}
+        <div class="notif-bell-wrap">
+            <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span class="notif-badge hidden" id="notif-badge">0</span>
+            </button>
+            <div class="notif-dropdown hidden" id="notif-dropdown">
+                <div class="notif-dropdown-header"><span>Notifications</span></div>
+                <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+            </div>
+        </div>
+        {% endif %}
     </nav>
     <div class="panel">
         <h2 class="page-title">{{ page_title }}</h2>
@@ -4105,6 +4219,60 @@ var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
     customClass: { popup: 'swal-dark' }
 });
+// Notification bell
+function toggleNotifDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('notif-dropdown');
+    if (!dd) return;
+    var wasHidden = dd.classList.contains('hidden');
+    dd.classList.toggle('hidden');
+    if (wasHidden) {
+        // Auto-mark as read when opening
+        fetch('/api/notifications/read', { method: 'POST' });
+        var badge = document.getElementById('notif-badge');
+        if (badge) badge.classList.add('hidden');
+    }
+}
+document.addEventListener('click', function(e) {
+    var dd = document.getElementById('notif-dropdown');
+    if (dd && !dd.classList.contains('hidden')) {
+        var wrap = document.querySelector('.notif-bell-wrap');
+        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    }
+});
+function fetchNotifications() {
+    fetch('/api/notifications').then(function(r) { return r.json(); })
+    .then(function(data) {
+        var badge = document.getElementById('notif-badge');
+        var list = document.getElementById('notif-list');
+        if (!badge || !list) return;
+        if (data.count > 0) {
+            badge.textContent = data.count > 99 ? '99+' : data.count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+        if (data.notifications.length === 0) {
+            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+        } else {
+            list.innerHTML = data.notifications.map(function(n) {
+                var action = n.type === 'reply' ? 'replied to your comment on' : 'commented on your backtest';
+                var title = n.backtest_title || 'Untitled';
+                if (title.length > 40) title = title.substring(0, 37) + '...';
+                var text = n.type === 'reply'
+                    ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
+                    : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
+                return '<a class="notif-item" href="/backtest/' + n.backtest_id + '#comment-' + n.comment_id + '">'
+                    + '<div class="notif-item-text">' + text + '</div>'
+                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
+            }).join('');
+        }
+    }).catch(function() {});
+}
+function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('notif-badge')) fetchNotifications();
+});
 function deleteBacktest(backtestId) {
     _swal.fire({
         title: 'Delete this backtest?', icon: 'warning',
@@ -4210,10 +4378,26 @@ DETAIL_HTML = """\
         .auth-btn-login:hover { background: #e08a1a; border-color: #e08a1a; }
         .auth-btn-signup { background: var(--accent); color: #fff; border: 2px solid var(--accent); }
         .auth-btn-signup:hover { background: #e08a1a; border-color: #e08a1a; }
-        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; }
+        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; position: relative; }
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        .notif-bell-wrap { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+        .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
+        .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
+        .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
+        .notif-badge.hidden { display: none; }
+        .notif-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 340px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; }
+        .notif-dropdown.hidden { display: none; }
+        .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
+        .notif-list { max-height: 320px; overflow-y: auto; }
+        .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
+        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item:last-child { border-bottom: none; }
+        .notif-item-text { line-height: 1.4; }
+        .notif-item-text strong { color: var(--accent); font-weight: 600; }
+        .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
+        .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
         .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); margin-bottom: 16px; }
         .detail-header { margin-bottom: 20px; }
         .detail-title { font-size: 1.3em; font-weight: 700; margin-bottom: 4px; display: inline; }
@@ -4388,6 +4572,18 @@ DETAIL_HTML = """\
         {% endif %}
         <a href="/backtester" class="nav-link">Create Backtest</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
+        {% if is_authenticated %}
+        <div class="notif-bell-wrap">
+            <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span class="notif-badge hidden" id="notif-badge">0</span>
+            </button>
+            <div class="notif-dropdown hidden" id="notif-dropdown">
+                <div class="notif-dropdown-header"><span>Notifications</span></div>
+                <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+            </div>
+        </div>
+        {% endif %}
     </nav>
 
     <div class="panel">
@@ -4533,7 +4729,7 @@ DETAIL_HTML = """\
             {% endif %}
 
             {% for comment in comments %}
-            <div class="comment">
+            <div class="comment" id="comment-{{ comment.id }}">
                 <div class="comment-header">
                     <span class="comment-author">{{ comment._display_name }}</span>
                     <span class="comment-time">{{ time_ago(comment.created_at) }}</span>
@@ -4554,15 +4750,24 @@ DETAIL_HTML = """\
                 {% if comment.replies %}
                 <div class="comment-replies">
                     {% for reply in comment.replies %}
-                    <div class="comment">
+                    <div class="comment" id="comment-{{ reply.id }}">
                         <div class="comment-header">
                             <span class="comment-author">{{ reply._display_name }}</span>
                             <span class="comment-time">{{ time_ago(reply.created_at) }}</span>
                         </div>
                         <div class="comment-body">{{ reply.body }}</div>
-                        {% if is_authenticated and (reply.user_id == session.get('user_id') or is_admin) %}
                         <div class="comment-actions">
+                            {% if is_authenticated %}
+                            <button class="comment-action-btn" onclick="showReplyForm('{{ reply.id }}')">Reply</button>
+                            {% endif %}
+                            {% if is_authenticated and (reply.user_id == session.get('user_id') or is_admin) %}
                             <button class="comment-action-btn" onclick="deleteComment('{{ reply.id }}')">Delete</button>
+                            {% endif %}
+                        </div>
+                        {% if is_authenticated %}
+                        <div class="reply-form hidden" id="reply-form-{{ reply.id }}">
+                            <textarea id="reply-{{ reply.id }}" placeholder="Write a reply..."></textarea>
+                            <button class="action-btn" onclick="submitComment('{{ backtest.id }}', '{{ comment.id }}')">Reply</button>
                         </div>
                         {% endif %}
                     </div>
@@ -4579,6 +4784,60 @@ DETAIL_HTML = """\
 var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
     customClass: { popup: 'swal-dark' }
+});
+// Notification bell
+function toggleNotifDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('notif-dropdown');
+    if (!dd) return;
+    var wasHidden = dd.classList.contains('hidden');
+    dd.classList.toggle('hidden');
+    if (wasHidden) {
+        // Auto-mark as read when opening
+        fetch('/api/notifications/read', { method: 'POST' });
+        var badge = document.getElementById('notif-badge');
+        if (badge) badge.classList.add('hidden');
+    }
+}
+document.addEventListener('click', function(e) {
+    var dd = document.getElementById('notif-dropdown');
+    if (dd && !dd.classList.contains('hidden')) {
+        var wrap = document.querySelector('.notif-bell-wrap');
+        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    }
+});
+function fetchNotifications() {
+    fetch('/api/notifications').then(function(r) { return r.json(); })
+    .then(function(data) {
+        var badge = document.getElementById('notif-badge');
+        var list = document.getElementById('notif-list');
+        if (!badge || !list) return;
+        if (data.count > 0) {
+            badge.textContent = data.count > 99 ? '99+' : data.count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+        if (data.notifications.length === 0) {
+            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+        } else {
+            list.innerHTML = data.notifications.map(function(n) {
+                var action = n.type === 'reply' ? 'replied to your comment on' : 'commented on your backtest';
+                var title = n.backtest_title || 'Untitled';
+                if (title.length > 40) title = title.substring(0, 37) + '...';
+                var text = n.type === 'reply'
+                    ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
+                    : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
+                return '<a class="notif-item" href="/backtest/' + n.backtest_id + '#comment-' + n.comment_id + '">'
+                    + '<div class="notif-item-text">' + text + '</div>'
+                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
+            }).join('');
+        }
+    }).catch(function() {});
+}
+function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('notif-badge')) fetchNotifications();
 });
 function toggleLike(backtestId, btn) {
     fetch('/api/backtest/' + backtestId + '/like', { method: 'POST' })
@@ -4797,10 +5056,26 @@ MY_BACKTESTS_HTML = """\
         .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
         .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; font-weight: 700; }
         .header h1 .brand-analytics { background: var(--bg-elevated); color: var(--text); padding: 6px 14px; border: 1px solid var(--border); border-left: none; }
-        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; }
+        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; position: relative; }
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        .notif-bell-wrap { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+        .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
+        .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
+        .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
+        .notif-badge.hidden { display: none; }
+        .notif-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 340px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; }
+        .notif-dropdown.hidden { display: none; }
+        .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
+        .notif-list { max-height: 320px; overflow-y: auto; }
+        .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
+        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item:last-child { border-bottom: none; }
+        .notif-item-text { line-height: 1.4; }
+        .notif-item-text strong { color: var(--accent); font-weight: 600; }
+        .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
+        .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
         .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); margin-bottom: 16px; }
         .page-title { font-size: 1.4em; font-weight: 700; margin-bottom: 6px; }
         .section-header { font-size: 1em; font-weight: 600; margin-bottom: 14px; color: var(--text-muted); }
@@ -4868,6 +5143,18 @@ MY_BACKTESTS_HTML = """\
         <a href="/my-backtests" class="nav-link active">My Backtests</a>
         <a href="/backtester" class="nav-link">Create Backtest</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
+        {% if is_authenticated %}
+        <div class="notif-bell-wrap">
+            <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span class="notif-badge hidden" id="notif-badge">0</span>
+            </button>
+            <div class="notif-dropdown hidden" id="notif-dropdown">
+                <div class="notif-dropdown-header"><span>Notifications</span></div>
+                <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+            </div>
+        </div>
+        {% endif %}
     </nav>
 
     <div class="panel">
@@ -5005,6 +5292,60 @@ var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
     customClass: { popup: 'swal-dark' }
 });
+// Notification bell
+function toggleNotifDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('notif-dropdown');
+    if (!dd) return;
+    var wasHidden = dd.classList.contains('hidden');
+    dd.classList.toggle('hidden');
+    if (wasHidden) {
+        // Auto-mark as read when opening
+        fetch('/api/notifications/read', { method: 'POST' });
+        var badge = document.getElementById('notif-badge');
+        if (badge) badge.classList.add('hidden');
+    }
+}
+document.addEventListener('click', function(e) {
+    var dd = document.getElementById('notif-dropdown');
+    if (dd && !dd.classList.contains('hidden')) {
+        var wrap = document.querySelector('.notif-bell-wrap');
+        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    }
+});
+function fetchNotifications() {
+    fetch('/api/notifications').then(function(r) { return r.json(); })
+    .then(function(data) {
+        var badge = document.getElementById('notif-badge');
+        var list = document.getElementById('notif-list');
+        if (!badge || !list) return;
+        if (data.count > 0) {
+            badge.textContent = data.count > 99 ? '99+' : data.count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+        if (data.notifications.length === 0) {
+            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+        } else {
+            list.innerHTML = data.notifications.map(function(n) {
+                var action = n.type === 'reply' ? 'replied to your comment on' : 'commented on your backtest';
+                var title = n.backtest_title || 'Untitled';
+                if (title.length > 40) title = title.substring(0, 37) + '...';
+                var text = n.type === 'reply'
+                    ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
+                    : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
+                return '<a class="notif-item" href="/backtest/' + n.backtest_id + '#comment-' + n.comment_id + '">'
+                    + '<div class="notif-item-text">' + text + '</div>'
+                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
+            }).join('');
+        }
+    }).catch(function() {});
+}
+function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('notif-badge')) fetchNotifications();
+});
 function deleteBacktest(backtestId) {
     _swal.fire({
         title: 'Delete this backtest?', icon: 'warning',
@@ -5115,10 +5456,26 @@ ADMIN_ASSETS_HTML = """\
         .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
         .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; font-weight: 700; }
         .header h1 .brand-analytics { background: var(--bg-elevated); color: var(--text); padding: 6px 14px; border: 1px solid var(--border); border-left: none; }
-        .nav-bar { display: flex; justify-content: center; gap: 4px; margin-bottom: 24px; flex-wrap: wrap; }
+        .nav-bar { display: flex; justify-content: center; gap: 4px; margin-bottom: 24px; flex-wrap: wrap; position: relative; }
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; border: 1px solid transparent; transition: all 0.2s ease; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: rgba(247,147,26,0.2); }
+        .notif-bell-wrap { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+        .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
+        .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
+        .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
+        .notif-badge.hidden { display: none; }
+        .notif-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 340px; background: var(--bg-surface, var(--bg-base)); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; }
+        .notif-dropdown.hidden { display: none; }
+        .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
+        .notif-list { max-height: 320px; overflow-y: auto; }
+        .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
+        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item:last-child { border-bottom: none; }
+        .notif-item-text { line-height: 1.4; }
+        .notif-item-text strong { color: var(--accent); font-weight: 600; }
+        .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
+        .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
         .panel { background: var(--bg-base); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
         .page-title { font-size: 1.1em; font-weight: 700; margin-bottom: 20px; }
 
@@ -5205,6 +5562,18 @@ ADMIN_ASSETS_HTML = """\
         <a href="/my-backtests" class="nav-link">My Backtests</a>
         <a href="/backtester" class="nav-link">Create Backtest</a>
         <a href="/admin/assets" class="nav-link active">Assets</a>
+        {% if is_authenticated %}
+        <div class="notif-bell-wrap">
+            <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span class="notif-badge hidden" id="notif-badge">0</span>
+            </button>
+            <div class="notif-dropdown hidden" id="notif-dropdown">
+                <div class="notif-dropdown-header"><span>Notifications</span></div>
+                <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+            </div>
+        </div>
+        {% endif %}
     </nav>
 
     <div class="panel">
@@ -5288,6 +5657,60 @@ ADMIN_ASSETS_HTML = """\
 var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
     customClass: { popup: 'swal-dark' }
+});
+// Notification bell
+function toggleNotifDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('notif-dropdown');
+    if (!dd) return;
+    var wasHidden = dd.classList.contains('hidden');
+    dd.classList.toggle('hidden');
+    if (wasHidden) {
+        // Auto-mark as read when opening
+        fetch('/api/notifications/read', { method: 'POST' });
+        var badge = document.getElementById('notif-badge');
+        if (badge) badge.classList.add('hidden');
+    }
+}
+document.addEventListener('click', function(e) {
+    var dd = document.getElementById('notif-dropdown');
+    if (dd && !dd.classList.contains('hidden')) {
+        var wrap = document.querySelector('.notif-bell-wrap');
+        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    }
+});
+function fetchNotifications() {
+    fetch('/api/notifications').then(function(r) { return r.json(); })
+    .then(function(data) {
+        var badge = document.getElementById('notif-badge');
+        var list = document.getElementById('notif-list');
+        if (!badge || !list) return;
+        if (data.count > 0) {
+            badge.textContent = data.count > 99 ? '99+' : data.count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+        if (data.notifications.length === 0) {
+            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+        } else {
+            list.innerHTML = data.notifications.map(function(n) {
+                var action = n.type === 'reply' ? 'replied to your comment on' : 'commented on your backtest';
+                var title = n.backtest_title || 'Untitled';
+                if (title.length > 40) title = title.substring(0, 37) + '...';
+                var text = n.type === 'reply'
+                    ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
+                    : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
+                return '<a class="notif-item" href="/backtest/' + n.backtest_id + '#comment-' + n.comment_id + '">'
+                    + '<div class="notif-item-text">' + text + '</div>'
+                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
+            }).join('');
+        }
+    }).catch(function() {});
+}
+function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('notif-badge')) fetchNotifications();
 });
 
 // Upload
@@ -5559,6 +5982,29 @@ def api_delete_comment(comment_id):
     else:
         if not db.delete_comment(comment_id, user_id):
             abort(403)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/notifications')
+def api_notifications():
+    """Get unread notifications for the current user."""
+    if not _is_authenticated():
+        return jsonify({'count': 0, 'notifications': []})
+    user_id = session.get('user_id')
+    count = db.get_unread_count(user_id)
+    notifications = db.get_unread_notifications(user_id)
+    for n in notifications:
+        name = db.get_display_name(n['actor_id'])
+        n['actor_name'] = name or n['actor_email'].split('@')[0]
+        n['time_ago'] = _time_ago(n['created_at'])
+    return jsonify({'count': count, 'notifications': notifications})
+
+
+@app.route('/api/notifications/read', methods=['POST'])
+def api_notifications_read():
+    """Mark all notifications as read for the current user."""
+    user_id, email = _require_auth_api()
+    db.mark_notifications_read(user_id)
     return jsonify({'ok': True})
 
 
