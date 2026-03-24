@@ -2702,7 +2702,13 @@ function toggleLike(backtestId, btn) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
         btn.querySelector('.like-count').textContent = data.likes_count;
-        if (data.liked) { btn.classList.add('liked'); } else { btn.classList.remove('liked'); }
+        if (data.liked) {
+            btn.classList.add('liked');
+            btn.classList.add('just-liked');
+            setTimeout(function() { btn.classList.remove('just-liked'); }, 500);
+        } else {
+            btn.classList.remove('liked');
+        }
     });
 }
 
@@ -4669,13 +4675,15 @@ DETAIL_HTML = """\
         .action-buttons { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
         .open-backtester-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px; border-radius: 10px; border: 1.5px solid #f7931a; background: rgba(247,147,26,0.08); color: #f7931a; font-size: 0.88em; font-weight: 600; font-family: 'DM Sans', sans-serif; text-decoration: none; transition: all 0.2s ease; }
         .open-backtester-btn:hover { background: rgba(247,147,26,0.18); transform: translateY(-1px); }
-        .like-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-muted); cursor: pointer; font-size: 0.9em; font-weight: 600; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; }
-        .like-btn:hover { border-color: #ef4444; color: #ef4444; }
-        .like-btn.liked { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,0.08); }
+        .like-btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 28px; border-radius: 12px; border: 2px solid var(--border); background: var(--bg-surface); color: var(--text-muted); cursor: pointer; font-size: 0.95em; font-weight: 600; font-family: 'DM Sans', sans-serif; transition: all 0.25s ease; }
+        .like-btn:hover { border-color: #ef4444; color: #ef4444; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239,68,68,0.15); }
+        .like-btn.liked { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,0.1); box-shadow: 0 2px 8px rgba(239,68,68,0.1); }
         .like-btn.disabled { cursor: default; opacity: 0.5; }
-        .like-heart { font-size: 1.1em; }
-        .like-btn.liked .like-heart { animation: heartPop 0.3s ease; }
-        @keyframes heartPop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+        .like-heart { font-size: 1.2em; display: inline-block; }
+        .like-btn.liked .like-heart { animation: heartBounce 0.5s ease; }
+        @keyframes heartBounce { 0% { transform: scale(1); } 25% { transform: scale(1.4); } 50% { transform: scale(0.9); } 75% { transform: scale(1.15); } 100% { transform: scale(1); } }
+        .like-btn.just-liked { animation: btnPulse 0.4s ease; }
+        @keyframes btnPulse { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 70% { box-shadow: 0 0 0 12px rgba(239,68,68,0); } 100% { box-shadow: 0 2px 8px rgba(239,68,68,0.1); } }
         .edit-modal-overlay { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
         .edit-modal-overlay.open { display: flex; }
         .edit-modal { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 90%; max-width: 500px; position: relative; }
@@ -4687,8 +4695,10 @@ DETAIL_HTML = """\
         .edit-modal .close-btn { position: absolute; top: 12px; right: 16px; background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2em; }
         .comments-section { margin-top: 24px; }
         .comments-title { font-size: 1em; font-weight: 600; margin-bottom: 14px; }
-        .comment-form textarea { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-size: 0.85em; font-family: 'DM Sans', sans-serif; resize: vertical; min-height: 60px; margin-bottom: 8px; }
+        .comment-form { background: var(--bg-elevated); padding: 16px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); }
+        .comment-form textarea { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-size: 0.88em; font-family: 'DM Sans', sans-serif; resize: vertical; min-height: 80px; margin-bottom: 10px; transition: border-color 0.2s ease; }
         .comment-form textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .comment-form .action-btn.primary { padding: 10px 24px; font-size: 0.88em; font-weight: 600; }
         .comment { padding: 12px 0; border-bottom: 1px solid var(--border); }
         .comment:last-child { border-bottom: none; }
         .comment-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 0.8em; }
@@ -5126,8 +5136,15 @@ function toggleLike(backtestId, btn) {
     .then(function(data) {
         btn.querySelector('.like-count').textContent = data.likes_count;
         var textEl = btn.querySelector('.like-text');
-        if (data.liked) { btn.classList.add('liked'); if (textEl) textEl.textContent = 'Liked'; }
-        else { btn.classList.remove('liked'); if (textEl) textEl.textContent = 'Like'; }
+        if (data.liked) {
+            btn.classList.add('liked');
+            btn.classList.add('just-liked');
+            if (textEl) textEl.textContent = 'Liked';
+            setTimeout(function() { btn.classList.remove('just-liked'); }, 500);
+        } else {
+            btn.classList.remove('liked');
+            if (textEl) textEl.textContent = 'Like';
+        }
     });
 }
 function deleteThisBacktest() {
@@ -5164,12 +5181,20 @@ function saveDetailEdit() {
 }
 function submitComment(backtestId, parentId, textareaSrcId) {
     var textareaId = textareaSrcId ? 'reply-' + textareaSrcId : (parentId ? 'reply-' + parentId : 'comment-body');
-    var body = document.getElementById(textareaId).value.trim();
+    var textarea = document.getElementById(textareaId);
+    var body = textarea.value.trim();
     if (!body) return;
+    var form = textarea.closest('.comment-form') || textarea.closest('.reply-form');
+    var submitBtn = form ? form.querySelector('button[onclick*="submitComment"]') : null;
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = 'Posting&hellip;'; }
     fetch('/api/backtest/' + backtestId + '/comment', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({body: body, parent_id: parentId || null})
-    }).then(function() { location.reload(); });
+    }).then(function(r) { return r.json(); })
+    .then(function() {
+        if (submitBtn) { submitBtn.innerHTML = '&#10003; Posted!'; submitBtn.style.background = '#22c55e'; submitBtn.style.borderColor = '#22c55e'; }
+        setTimeout(function() { location.reload(); }, 500);
+    });
 }
 function deleteComment(commentId) {
     _swal.fire({
