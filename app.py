@@ -4705,6 +4705,9 @@ DETAIL_HTML = """\
         .comment-author { font-weight: 600; color: var(--text); }
         .comment-time { color: var(--text-dim); }
         .comment-body { font-size: 0.85em; color: var(--text-muted); line-height: 1.5; }
+        .comment-body.comment-deleted { color: var(--text-dim); font-style: italic; }
+        .comment-edited { color: var(--text-dim); font-size: 0.85em; font-style: italic; }
+        .comment-edit-form textarea { width: 100%; min-height: 60px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 8px; font-family: 'DM Sans', sans-serif; font-size: 0.85em; resize: vertical; }
         .comment-actions { margin-top: 6px; display: flex; gap: 12px; }
         .comment-action-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.75em; font-family: 'DM Sans', sans-serif; }
         .comment-action-btn:hover { color: var(--text); }
@@ -5003,17 +5006,29 @@ DETAIL_HTML = """\
             <div class="comment" id="comment-{{ comment.id }}">
                 <div class="comment-header">
                     <span class="comment-author">{{ comment._display_name }}</span>
-                    <span class="comment-time">{{ time_ago(comment.created_at) }}</span>
+                    <span class="comment-time">{{ time_ago(comment.created_at) }}{% if comment.edited_at %} <span class="comment-edited">(edited)</span>{% endif %}</span>
                 </div>
-                <div class="comment-body">{{ comment.body }}</div>
-                <div class="comment-actions">
+                {% if comment.is_deleted %}
+                <div class="comment-body comment-deleted">[deleted]</div>
+                {% else %}
+                <div class="comment-body" id="comment-body-{{ comment.id }}">{{ comment.body }}</div>
+                <div class="comment-edit-form hidden" id="edit-form-{{ comment.id }}">
+                    <textarea id="edit-{{ comment.id }}">{{ comment.body }}</textarea>
+                    <div style="display:flex;gap:8px;margin-top:6px;">
+                        <button class="action-btn primary" onclick="saveEdit('{{ comment.id }}')">Save</button>
+                        <button class="action-btn" onclick="cancelEdit('{{ comment.id }}')">Cancel</button>
+                    </div>
+                </div>
+                <div class="comment-actions" id="comment-actions-{{ comment.id }}">
                     {% if is_authenticated %}
                     <button class="comment-action-btn" onclick="showReplyForm('{{ comment.id }}')">Reply</button>
                     {% endif %}
                     {% if is_authenticated and (comment.user_id == session.get('user_id') or is_admin) %}
+                    <button class="comment-action-btn" onclick="startEdit('{{ comment.id }}')">Edit</button>
                     <button class="comment-action-btn" onclick="deleteComment('{{ comment.id }}')">Delete</button>
                     {% endif %}
                 </div>
+                {% endif %}
                 <div class="reply-form hidden" id="reply-form-{{ comment.id }}">
                     <textarea id="reply-{{ comment.id }}" placeholder="Write a reply..."></textarea>
                     <button class="action-btn" onclick="submitComment('{{ backtest.id }}', '{{ comment.id }}')">Reply</button>
@@ -5024,17 +5039,29 @@ DETAIL_HTML = """\
                     <div class="comment" id="comment-{{ reply.id }}">
                         <div class="comment-header">
                             <span class="comment-author">{{ reply._display_name }}</span>
-                            <span class="comment-time">{{ time_ago(reply.created_at) }}</span>
+                            <span class="comment-time">{{ time_ago(reply.created_at) }}{% if reply.edited_at %} <span class="comment-edited">(edited)</span>{% endif %}</span>
                         </div>
-                        <div class="comment-body">{{ reply.body }}</div>
-                        <div class="comment-actions">
+                        {% if reply.is_deleted %}
+                        <div class="comment-body comment-deleted">[deleted]</div>
+                        {% else %}
+                        <div class="comment-body" id="comment-body-{{ reply.id }}">{{ reply.body }}</div>
+                        <div class="comment-edit-form hidden" id="edit-form-{{ reply.id }}">
+                            <textarea id="edit-{{ reply.id }}">{{ reply.body }}</textarea>
+                            <div style="display:flex;gap:8px;margin-top:6px;">
+                                <button class="action-btn primary" onclick="saveEdit('{{ reply.id }}')">Save</button>
+                                <button class="action-btn" onclick="cancelEdit('{{ reply.id }}')">Cancel</button>
+                            </div>
+                        </div>
+                        <div class="comment-actions" id="comment-actions-{{ reply.id }}">
                             {% if is_authenticated %}
                             <button class="comment-action-btn" onclick="showReplyForm('{{ reply.id }}')">Reply</button>
                             {% endif %}
                             {% if is_authenticated and (reply.user_id == session.get('user_id') or is_admin) %}
+                            <button class="comment-action-btn" onclick="startEdit('{{ reply.id }}')">Edit</button>
                             <button class="comment-action-btn" onclick="deleteComment('{{ reply.id }}')">Delete</button>
                             {% endif %}
                         </div>
+                        {% endif %}
                         {% if is_authenticated %}
                         <div class="reply-form hidden" id="reply-form-{{ reply.id }}">
                             <textarea id="reply-{{ reply.id }}" placeholder="Write a reply..."></textarea>
@@ -5208,6 +5235,27 @@ function deleteComment(commentId) {
 function showReplyForm(commentId) {
     var el = document.getElementById('reply-form-' + commentId);
     if (el) el.classList.toggle('hidden');
+}
+function startEdit(commentId) {
+    document.getElementById('comment-body-' + commentId).classList.add('hidden');
+    document.getElementById('comment-actions-' + commentId).classList.add('hidden');
+    document.getElementById('edit-form-' + commentId).classList.remove('hidden');
+}
+function cancelEdit(commentId) {
+    document.getElementById('edit-form-' + commentId).classList.add('hidden');
+    document.getElementById('comment-body-' + commentId).classList.remove('hidden');
+    document.getElementById('comment-actions-' + commentId).classList.remove('hidden');
+}
+function saveEdit(commentId) {
+    var body = document.getElementById('edit-' + commentId).value.trim();
+    if (!body) return;
+    fetch('/api/comment/' + commentId, {
+        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({body: body})
+    }).then(function(r) {
+        if (r.ok) { location.reload(); }
+        else { _swal.fire({icon:'error', title:'Failed to edit'}); }
+    });
 }
 // Linkify URLs in comment bodies
 (function() {
@@ -6430,6 +6478,23 @@ def api_delete_comment(comment_id):
             abort(404)
     else:
         if not db.delete_comment(comment_id, user_id):
+            abort(403)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/comment/<comment_id>', methods=['PUT'])
+def api_edit_comment(comment_id):
+    """Edit a comment."""
+    user_id, email = _require_auth_api()
+    data = request.get_json()
+    new_body = (data.get('body') or '').strip()
+    if not new_body:
+        return jsonify({'error': 'Comment body is required'}), 400
+    if email == db.ADMIN_EMAIL:
+        if not db.edit_comment_admin(comment_id, new_body):
+            abort(404)
+    else:
+        if not db.edit_comment(comment_id, user_id, new_body):
             abort(403)
     return jsonify({'ok': True})
 

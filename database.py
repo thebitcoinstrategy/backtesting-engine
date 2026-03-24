@@ -125,6 +125,15 @@ def init_db():
         conn.execute("ALTER TABLE notifications ADD COLUMN link TEXT")
     except sqlite3.OperationalError:
         pass
+    # Add is_deleted and edited_at columns to comments (soft delete + edit tracking)
+    try:
+        conn.execute("ALTER TABLE comments ADD COLUMN is_deleted INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE comments ADD COLUMN edited_at TIMESTAMP")
+    except sqlite3.OperationalError:
+        pass
     conn.close()
 
 
@@ -437,6 +446,27 @@ def get_comments(backtest_id):
     return top_level
 
 
+def _soft_or_hard_delete(conn, comment_id, backtest_id):
+    """Soft-delete if comment has replies, hard-delete otherwise. Returns True."""
+    reply_count = conn.execute(
+        "SELECT COUNT(*) FROM comments WHERE parent_id=?", (comment_id,)
+    ).fetchone()[0]
+    if reply_count > 0:
+        # Soft delete — keep the row so replies remain visible
+        conn.execute(
+            "UPDATE comments SET is_deleted=1, body='[deleted]' WHERE id=?",
+            (comment_id,)
+        )
+    else:
+        # Hard delete — no replies to orphan
+        conn.execute("DELETE FROM comments WHERE id=?", (comment_id,))
+        conn.execute(
+            "UPDATE backtests SET comments_count = MAX(0, comments_count - 1) WHERE id=?",
+            (backtest_id,)
+        )
+    conn.commit()
+
+
 def delete_comment(comment_id, user_id):
     """Delete a comment. Owner only. Returns True if deleted."""
     conn = _get_conn()
@@ -448,17 +478,7 @@ def delete_comment(comment_id, user_id):
     if str(comment['user_id']) != str(user_id):
         conn.close()
         return False
-    backtest_id = comment['backtest_id']
-    # Count this comment + its replies
-    reply_count = conn.execute(
-        "SELECT COUNT(*) FROM comments WHERE parent_id=?", (comment_id,)
-    ).fetchone()[0]
-    conn.execute("DELETE FROM comments WHERE id=? OR parent_id=?", (comment_id, comment_id))
-    conn.execute(
-        "UPDATE backtests SET comments_count = MAX(0, comments_count - ?) WHERE id=?",
-        (1 + reply_count, backtest_id)
-    )
-    conn.commit()
+    _soft_or_hard_delete(conn, comment_id, comment['backtest_id'])
     conn.close()
     return True
 
@@ -471,14 +491,41 @@ def delete_comment_admin(comment_id):
         conn.close()
         return False
     comment = _row_to_dict(row)
-    backtest_id = comment['backtest_id']
-    reply_count = conn.execute(
-        "SELECT COUNT(*) FROM comments WHERE parent_id=?", (comment_id,)
-    ).fetchone()[0]
-    conn.execute("DELETE FROM comments WHERE id=? OR parent_id=?", (comment_id, comment_id))
+    _soft_or_hard_delete(conn, comment_id, comment['backtest_id'])
+    conn.close()
+    return True
+
+
+def edit_comment(comment_id, user_id, new_body):
+    """Edit a comment. Owner only. Returns True if edited."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM comments WHERE id=? AND is_deleted=0", (comment_id,)).fetchone()
+    if not row:
+        conn.close()
+        return False
+    comment = _row_to_dict(row)
+    if str(comment['user_id']) != str(user_id):
+        conn.close()
+        return False
     conn.execute(
-        "UPDATE backtests SET comments_count = MAX(0, comments_count - ?) WHERE id=?",
-        (1 + reply_count, backtest_id)
+        "UPDATE comments SET body=?, edited_at=? WHERE id=?",
+        (new_body, datetime.utcnow().isoformat(), comment_id)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def edit_comment_admin(comment_id, new_body):
+    """Admin edit a comment — no ownership check. Returns True if edited."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM comments WHERE id=? AND is_deleted=0", (comment_id,)).fetchone()
+    if not row:
+        conn.close()
+        return False
+    conn.execute(
+        "UPDATE comments SET body=?, edited_at=? WHERE id=?",
+        (new_body, datetime.utcnow().isoformat(), comment_id)
     )
     conn.commit()
     conn.close()
