@@ -604,8 +604,8 @@ def ensure_welcome_notification(user_id):
     # Create welcome notification
     now = datetime.utcnow().isoformat()
     conn.execute(
-        """INSERT INTO notifications (id, user_id, actor_id, actor_email, type, message, link, created_at)
-           VALUES (?, ?, 'system', 'system', 'welcome', ?, ?, ?)""",
+        """INSERT INTO notifications (id, user_id, actor_id, actor_email, backtest_id, comment_id, type, message, link, created_at)
+           VALUES (?, ?, 'system', 'system', '', '', 'welcome', ?, ?, ?)""",
         (str(uuid.uuid4()), user_id,
          'Welcome to Bitcoin Strategy Analytics! We\'d love to hear your feedback.',
          '/feedback', now)
