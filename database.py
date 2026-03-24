@@ -73,11 +73,13 @@ def init_db():
         CREATE TABLE IF NOT EXISTS notifications (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
-            actor_id TEXT NOT NULL,
-            actor_email TEXT NOT NULL,
-            backtest_id TEXT NOT NULL REFERENCES backtests(id) ON DELETE CASCADE,
-            comment_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+            actor_id TEXT,
+            actor_email TEXT,
+            backtest_id TEXT REFERENCES backtests(id) ON DELETE CASCADE,
+            comment_id TEXT REFERENCES comments(id) ON DELETE CASCADE,
             type TEXT NOT NULL,
+            message TEXT,
+            link TEXT,
             is_read INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -93,6 +95,26 @@ def init_db():
         conn.execute("ALTER TABLE backtests ADD COLUMN sort_order INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
         pass  # column already exists
+    # Add avatar and notification prefs to users table
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN notify_comments INTEGER DEFAULT 1")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN notify_replies INTEGER DEFAULT 1")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN welcomed INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    # Make notifications.backtest_id and comment_id nullable for system notifications
+    # (welcome notifications have no backtest/comment)
+    # SQLite doesn't enforce NOT NULL on existing rows, and we use LEFT JOIN, so this is fine
     conn.close()
 
 
@@ -339,33 +361,45 @@ def add_comment(backtest_id, user_id, email, body, parent_id=None):
     )
     conn.execute("UPDATE backtests SET comments_count = comments_count + 1 WHERE id=?", (backtest_id,))
 
-    # --- Create notifications ---
+    # --- Create notifications (respecting user prefs) ---
     notified_user = None
+    notify_email_targets = []  # list of (recipient_user_id, recipient_email, notif_type)
     # Case 1: Reply to a comment -> notify the parent comment's author
     if parent_id:
-        parent = conn.execute("SELECT user_id FROM comments WHERE id=?", (parent_id,)).fetchone()
+        parent = conn.execute("SELECT user_id, user_email FROM comments WHERE id=?", (parent_id,)).fetchone()
         if parent and str(parent['user_id']) != str(user_id):
             notified_user = str(parent['user_id'])
-            conn.execute(
-                """INSERT INTO notifications (id, user_id, actor_id, actor_email, backtest_id, comment_id, type, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, 'reply', ?)""",
-                (str(uuid.uuid4()), notified_user, user_id, email, backtest_id, comment_id, now)
-            )
+            # Check reply notification pref
+            pref = conn.execute("SELECT notify_replies FROM users WHERE user_id=?", (notified_user,)).fetchone()
+            should_notify = not pref or pref['notify_replies'] is None or pref['notify_replies'] == 1
+            if should_notify:
+                conn.execute(
+                    """INSERT INTO notifications (id, user_id, actor_id, actor_email, backtest_id, comment_id, type, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, 'reply', ?)""",
+                    (str(uuid.uuid4()), notified_user, user_id, email, backtest_id, comment_id, now)
+                )
+                notify_email_targets.append((notified_user, parent['user_email'], 'reply'))
     # Case 2: Comment on a backtest -> notify the backtest owner
-    bt = conn.execute("SELECT user_id FROM backtests WHERE id=?", (backtest_id,)).fetchone()
+    bt = conn.execute("SELECT user_id, user_email FROM backtests WHERE id=?", (backtest_id,)).fetchone()
     if bt and str(bt['user_id']) != str(user_id):
         bt_owner = str(bt['user_id'])
         if bt_owner != notified_user:  # avoid double notification
-            conn.execute(
-                """INSERT INTO notifications (id, user_id, actor_id, actor_email, backtest_id, comment_id, type, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, 'backtest_comment', ?)""",
-                (str(uuid.uuid4()), bt_owner, user_id, email, backtest_id, comment_id, now)
-            )
+            pref = conn.execute("SELECT notify_comments FROM users WHERE user_id=?", (bt_owner,)).fetchone()
+            should_notify = not pref or pref['notify_comments'] is None or pref['notify_comments'] == 1
+            if should_notify:
+                conn.execute(
+                    """INSERT INTO notifications (id, user_id, actor_id, actor_email, backtest_id, comment_id, type, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, 'backtest_comment', ?)""",
+                    (str(uuid.uuid4()), bt_owner, user_id, email, backtest_id, comment_id, now)
+                )
+                notify_email_targets.append((bt_owner, bt['user_email'], 'backtest_comment'))
 
     conn.commit()
     row = conn.execute("SELECT * FROM comments WHERE id=?", (comment_id,)).fetchone()
     conn.close()
-    return _row_to_dict(row)
+    result = _row_to_dict(row)
+    result['_email_targets'] = notify_email_targets
+    return result
 
 
 def get_comments(backtest_id):
@@ -447,7 +481,7 @@ def get_unread_notifications(user_id, limit=20):
     rows = conn.execute(
         """SELECT n.*, b.title as backtest_title
            FROM notifications n
-           JOIN backtests b ON n.backtest_id = b.id
+           LEFT JOIN backtests b ON n.backtest_id = b.id
            WHERE n.user_id=? AND n.is_read=0
            ORDER BY n.created_at DESC LIMIT ?""",
         (user_id, limit)
@@ -487,3 +521,126 @@ def get_user_liked_ids(user_id, backtest_ids):
     ).fetchall()
     conn.close()
     return {r['backtest_id'] for r in rows}
+
+
+# --- Avatar & profile ---
+
+def get_user_avatar(user_id):
+    """Get user's avatar filename, or None."""
+    conn = _get_conn()
+    row = conn.execute("SELECT avatar FROM users WHERE user_id=?", (user_id,)).fetchone()
+    conn.close()
+    return row['avatar'] if row else None
+
+
+def set_user_avatar(user_id, filename):
+    """Set user's avatar filename."""
+    conn = _get_conn()
+    conn.execute("UPDATE users SET avatar=? WHERE user_id=?", (filename, user_id))
+    conn.commit()
+    conn.close()
+
+
+def remove_user_avatar(user_id):
+    """Remove user's avatar."""
+    conn = _get_conn()
+    conn.execute("UPDATE users SET avatar=NULL WHERE user_id=?", (user_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_user_profiles(user_ids):
+    """Batch fetch display_name and avatar for a set of user IDs.
+    Returns {user_id: {'display_name': ..., 'avatar': ...}}."""
+    if not user_ids:
+        return {}
+    conn = _get_conn()
+    placeholders = ','.join('?' * len(user_ids))
+    rows = conn.execute(
+        f"SELECT user_id, display_name, avatar FROM users WHERE user_id IN ({placeholders})",
+        list(user_ids)
+    ).fetchall()
+    conn.close()
+    return {r['user_id']: {'display_name': r['display_name'], 'avatar': r['avatar']} for r in rows}
+
+
+def get_notification_prefs(user_id):
+    """Get notification preferences. Returns dict with notify_comments and notify_replies (default 1)."""
+    conn = _get_conn()
+    row = conn.execute("SELECT notify_comments, notify_replies FROM users WHERE user_id=?", (user_id,)).fetchone()
+    conn.close()
+    if row:
+        return {'notify_comments': row['notify_comments'] if row['notify_comments'] is not None else 1,
+                'notify_replies': row['notify_replies'] if row['notify_replies'] is not None else 1}
+    return {'notify_comments': 1, 'notify_replies': 1}
+
+
+def set_notification_prefs(user_id, notify_comments, notify_replies):
+    """Set notification preferences."""
+    conn = _get_conn()
+    conn.execute("UPDATE users SET notify_comments=?, notify_replies=? WHERE user_id=?",
+                 (notify_comments, notify_replies, user_id))
+    conn.commit()
+    conn.close()
+
+
+def ensure_welcome_notification(user_id):
+    """Create welcome notification if user hasn't been welcomed yet. Returns True if created."""
+    conn = _get_conn()
+    row = conn.execute("SELECT welcomed FROM users WHERE user_id=?", (user_id,)).fetchone()
+    if row and row['welcomed']:
+        conn.close()
+        return False
+    # Create welcome notification
+    now = datetime.utcnow().isoformat()
+    conn.execute(
+        """INSERT INTO notifications (id, user_id, type, message, link, created_at)
+           VALUES (?, ?, 'welcome', ?, ?, ?)""",
+        (str(uuid.uuid4()), user_id,
+         'Welcome to Bitcoin Strategy Analytics! We\'d love to hear your feedback.',
+         '/feedback', now)
+    )
+    # Mark user as welcomed (upsert in case user row doesn't exist yet)
+    if row:
+        conn.execute("UPDATE users SET welcomed=1 WHERE user_id=?", (user_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def backfill_welcome_notifications():
+    """Create welcome notifications for all existing users who haven't been welcomed."""
+    conn = _get_conn()
+    # Get all unique user_ids from backtests who don't have a welcome notification yet
+    rows = conn.execute(
+        """SELECT DISTINCT user_id FROM backtests
+           WHERE user_id NOT IN (SELECT user_id FROM notifications WHERE type='welcome')"""
+    ).fetchall()
+    now = datetime.utcnow().isoformat()
+    for row in rows:
+        uid = row['user_id']
+        conn.execute(
+            """INSERT INTO notifications (id, user_id, type, message, link, created_at)
+               VALUES (?, ?, 'welcome', ?, ?, ?)""",
+            (str(uuid.uuid4()), uid,
+             'Welcome to Bitcoin Strategy Analytics! We\'d love to hear your feedback.',
+             '/feedback', now)
+        )
+    conn.commit()
+    conn.close()
+    return len(rows)
+
+
+def get_recent_comments(limit=10):
+    """Get the most recent comments across all public backtests. Returns list of dicts with backtest info."""
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT c.*, b.title as backtest_title, b.id as bt_id
+           FROM comments c
+           JOIN backtests b ON c.backtest_id = b.id
+           WHERE b.visibility IN ('featured', 'community')
+           ORDER BY c.created_at DESC LIMIT ?""",
+        (limit,)
+    ).fetchall()
+    conn.close()
+    return [_row_to_dict(r) for r in rows]

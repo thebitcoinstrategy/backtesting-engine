@@ -12,6 +12,9 @@ import functools
 from io import BytesIO
 from datetime import timedelta, datetime
 from flask import Flask, render_template_string, request, session, redirect, jsonify, abort
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import backtest as bt
 import threading
 import uuid
@@ -19,6 +22,51 @@ import database as db
 
 app = Flask(__name__)
 db.init_db()
+# Backfill welcome notifications for all existing users
+db.backfill_welcome_notifications()
+
+# --- SMTP config (same as Laravel app) ---
+SMTP_HOST = 'smtp.gmail.com'
+SMTP_PORT = 587
+SMTP_USER = 'thebitcoinstrategy@gmail.com'
+SMTP_PASS = 'gvcnyztughyyrlzp'
+SMTP_FROM = 'Bitcoin Strategy <thebitcoinstrategy@gmail.com>'
+ADMIN_FEEDBACK_EMAIL = 'kuschnik.gerhard@gmail.com'
+
+# --- Avatar helpers ---
+AVATAR_COLORS = [
+    '#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#1abc9c',
+    '#3498db', '#9b59b6', '#e84393', '#00b894', '#6c5ce7',
+]
+
+
+def _avatar_color(user_id):
+    """Deterministic color from user_id."""
+    return AVATAR_COLORS[hash(str(user_id)) % len(AVATAR_COLORS)]
+
+
+def _user_initial(display_name, email):
+    """First letter of display_name or email."""
+    name = display_name or email or '?'
+    return name[0].upper()
+
+
+def _send_email_async(to_email, subject, html_body):
+    """Send email in a background thread so it doesn't block the request."""
+    def _send():
+        try:
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = subject
+            msg['From'] = SMTP_FROM
+            msg['To'] = to_email
+            msg.attach(MIMEText(html_body, 'html'))
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASS)
+                server.send_message(msg)
+        except Exception as e:
+            print(f"[EMAIL ERROR] Failed to send to {to_email}: {e}")
+    threading.Thread(target=_send, daemon=True).start()
 
 @app.template_filter('duration')
 def duration_filter(days):
@@ -282,8 +330,20 @@ def _is_admin():
 
 @app.context_processor
 def inject_auth():
-    """Make is_authenticated and is_admin available in all templates."""
-    return dict(is_authenticated=_is_authenticated(), is_admin=_is_admin())
+    """Make is_authenticated, is_admin, and user avatar data available in all templates."""
+    is_auth = _is_authenticated()
+    is_adm = _is_admin()
+    d = dict(is_authenticated=is_auth, is_admin=is_adm)
+    if is_auth:
+        uid = session.get('user_id')
+        email = session.get('email', '')
+        dn = db.get_display_name(uid)
+        d['user_avatar'] = db.get_user_avatar(uid)
+        d['user_initial'] = _user_initial(dn, email)
+        d['user_avatar_color'] = _avatar_color(uid)
+        # Ensure welcome notification exists
+        db.ensure_welcome_notification(uid)
+    return d
 
 
 def _require_auth_api():
@@ -891,7 +951,8 @@ HTML = """\
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
         /* Notification bell */
-        .notif-bell-wrap { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+        .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; }
+        .notif-bell-wrap { position: relative; }
         .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
         .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
         .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
@@ -909,6 +970,25 @@ HTML = """\
         .notif-item-text strong { color: var(--accent); font-weight: 600; }
         .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
         .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
+        /* Avatar */
+        .avatar-wrap { position: relative; }
+        .avatar-btn { background: none; border: none; cursor: pointer; padding: 4px; border-radius: 50%; transition: all 0.2s ease; }
+        .avatar-btn:hover { background: var(--bg-elevated); }
+        .avatar-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); display: block; }
+        .avatar-initials { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: 700; color: #fff; font-family: 'DM Sans', sans-serif; text-transform: uppercase; }
+        .avatar-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 220px; background: var(--bg-surface, var(--bg-base)); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; padding: 6px 0; }
+        .avatar-dropdown.hidden { display: none; }
+        .avatar-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--text-muted); text-decoration: none; font-size: 0.82em; font-weight: 500; transition: all 0.15s ease; font-family: 'DM Sans', sans-serif; }
+        .avatar-dropdown-item:hover { background: var(--bg-elevated); color: var(--text); }
+        .avatar-dropdown-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .avatar-dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
+        .avatar-dropdown-logout { color: #e74c3c; }
+        .avatar-dropdown-logout:hover { background: rgba(231,76,60,0.1); color: #e74c3c; }
+        /* Small avatars for cards and comments */
+        .card-avatar-img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 4px; }
+        .card-avatar-initials { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.6em; font-weight: 700; color: #fff; vertical-align: middle; margin-right: 4px; }
+        .comment-avatar-img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+        .comment-avatar-initials { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65em; font-weight: 700; color: #fff; flex-shrink: 0; }
 
         /* Save/Publish buttons */
         .action-buttons { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
@@ -1091,14 +1171,33 @@ HTML = """\
         <a href="/backtester" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Create Backtest</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active|default('')=='admin-assets' }}">Assets</a>{% endif %}
         {% if is_authenticated %}
-        <div class="notif-bell-wrap">
-            <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                <span class="notif-badge hidden" id="notif-badge">0</span>
-            </button>
-            <div class="notif-dropdown hidden" id="notif-dropdown">
-                <div class="notif-dropdown-header"><span>Notifications</span></div>
-                <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+        <div class="nav-right-group">
+            <div class="notif-bell-wrap">
+                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span class="notif-badge hidden" id="notif-badge">0</span>
+                </button>
+                <div class="notif-dropdown hidden" id="notif-dropdown">
+                    <div class="notif-dropdown-header"><span>Notifications</span></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                </div>
+            </div>
+            <div class="avatar-wrap">
+                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
+                    {% if user_avatar %}
+                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
+                    {% else %}
+                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
+                    {% endif %}
+                </button>
+                <div class="avatar-dropdown hidden" id="avatar-dropdown">
+                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
+                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
+                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
+                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
+                    <div class="avatar-dropdown-divider"></div>
+                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
+                </div>
             </div>
         </div>
         {% endif %}
@@ -1780,6 +1879,8 @@ function toggleNotifDropdown(e) {
     if (!dd) return;
     var wasHidden = dd.classList.contains('hidden');
     dd.classList.toggle('hidden');
+    var add = document.getElementById('avatar-dropdown');
+    if (add) add.classList.add('hidden');
     if (wasHidden) {
         // Auto-mark as read when opening
         fetch('/api/notifications/read', { method: 'POST' });
@@ -1787,11 +1888,23 @@ function toggleNotifDropdown(e) {
         if (badge) badge.classList.add('hidden');
     }
 }
+function toggleAvatarDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('avatar-dropdown');
+    if (dd) dd.classList.toggle('hidden');
+    var ndd = document.getElementById('notif-dropdown');
+    if (ndd) ndd.classList.add('hidden');
+}
 document.addEventListener('click', function(e) {
     var dd = document.getElementById('notif-dropdown');
     if (dd && !dd.classList.contains('hidden')) {
         var wrap = document.querySelector('.notif-bell-wrap');
         if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    }
+    var add = document.getElementById('avatar-dropdown');
+    if (add && !add.classList.contains('hidden')) {
+        var awrap = document.querySelector('.avatar-wrap');
+        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
     }
 });
 function fetchNotifications() {
@@ -1810,13 +1923,19 @@ function fetchNotifications() {
             list.innerHTML = '<div class="notif-empty">No new notifications</div>';
         } else {
             list.innerHTML = data.notifications.map(function(n) {
-                var action = n.type === 'reply' ? 'replied to your comment on' : 'commented on your backtest';
-                var title = n.backtest_title || 'Untitled';
-                if (title.length > 40) title = title.substring(0, 37) + '...';
-                var text = n.type === 'reply'
-                    ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
-                    : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
-                return '<a class="notif-item" href="/backtest/' + n.backtest_id + '#comment-' + n.comment_id + '">'
+                var text, href;
+                if (n.type === 'welcome') {
+                    text = _escHtml(n.message || 'Welcome!');
+                    href = n.link || '/feedback';
+                } else {
+                    var title = n.backtest_title || 'Untitled';
+                    if (title.length > 40) title = title.substring(0, 37) + '...';
+                    text = n.type === 'reply'
+                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
+                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
+                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
+                }
+                return '<a class="notif-item" href="' + href + '">'
                     + '<div class="notif-item-text">' + text + '</div>'
                     + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
             }).join('');
@@ -2587,8 +2706,8 @@ function toggleLike(backtestId, btn) {
     });
 }
 
-function submitComment(backtestId, parentId) {
-    var textareaId = parentId ? 'reply-' + parentId : 'comment-body';
+function submitComment(backtestId, parentId, textareaSrcId) {
+    var textareaId = textareaSrcId ? 'reply-' + textareaSrcId : (parentId ? 'reply-' + parentId : 'comment-body');
     var body = document.getElementById(textareaId).value.trim();
     if (!body) return;
     fetch('/api/backtest/' + backtestId + '/comment', {
@@ -3915,7 +4034,8 @@ COMMUNITY_HTML = """\
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
-        .notif-bell-wrap { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+        .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; }
+        .notif-bell-wrap { position: relative; }
         .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
         .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
         .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
@@ -3931,6 +4051,25 @@ COMMUNITY_HTML = """\
         .notif-item-text strong { color: var(--accent); font-weight: 600; }
         .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
         .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
+        /* Avatar */
+        .avatar-wrap { position: relative; }
+        .avatar-btn { background: none; border: none; cursor: pointer; padding: 4px; border-radius: 50%; transition: all 0.2s ease; }
+        .avatar-btn:hover { background: var(--bg-elevated); }
+        .avatar-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); display: block; }
+        .avatar-initials { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: 700; color: #fff; font-family: 'DM Sans', sans-serif; text-transform: uppercase; }
+        .avatar-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 220px; background: var(--bg-surface, var(--bg-base)); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; padding: 6px 0; }
+        .avatar-dropdown.hidden { display: none; }
+        .avatar-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--text-muted); text-decoration: none; font-size: 0.82em; font-weight: 500; transition: all 0.15s ease; font-family: 'DM Sans', sans-serif; }
+        .avatar-dropdown-item:hover { background: var(--bg-elevated); color: var(--text); }
+        .avatar-dropdown-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .avatar-dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
+        .avatar-dropdown-logout { color: #e74c3c; }
+        .avatar-dropdown-logout:hover { background: rgba(231,76,60,0.1); color: #e74c3c; }
+        /* Small avatars for cards and comments */
+        .card-avatar-img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 4px; }
+        .card-avatar-initials { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.6em; font-weight: 700; color: #fff; vertical-align: middle; margin-right: 4px; }
+        .comment-avatar-img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+        .comment-avatar-initials { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65em; font-weight: 700; color: #fff; flex-shrink: 0; }
         .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); }
         .page-title { font-size: 1.4em; font-weight: 700; margin-bottom: 6px; }
         .page-subtitle { font-size: 0.85em; color: var(--text-muted); margin-bottom: 20px; }
@@ -4028,14 +4167,33 @@ COMMUNITY_HTML = """\
         <a href="/backtester" class="nav-link {{ 'active' if nav_active=='backtester' }}">Create Backtest</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active=='admin-assets' }}">Assets</a>{% endif %}
         {% if is_authenticated %}
-        <div class="notif-bell-wrap">
-            <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                <span class="notif-badge hidden" id="notif-badge">0</span>
-            </button>
-            <div class="notif-dropdown hidden" id="notif-dropdown">
-                <div class="notif-dropdown-header"><span>Notifications</span></div>
-                <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+        <div class="nav-right-group">
+            <div class="notif-bell-wrap">
+                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span class="notif-badge hidden" id="notif-badge">0</span>
+                </button>
+                <div class="notif-dropdown hidden" id="notif-dropdown">
+                    <div class="notif-dropdown-header"><span>Notifications</span></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                </div>
+            </div>
+            <div class="avatar-wrap">
+                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
+                    {% if user_avatar %}
+                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
+                    {% else %}
+                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
+                    {% endif %}
+                </button>
+                <div class="avatar-dropdown hidden" id="avatar-dropdown">
+                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
+                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
+                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
+                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
+                    <div class="avatar-dropdown-divider"></div>
+                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
+                </div>
             </div>
         </div>
         {% endif %}
@@ -4226,6 +4384,8 @@ function toggleNotifDropdown(e) {
     if (!dd) return;
     var wasHidden = dd.classList.contains('hidden');
     dd.classList.toggle('hidden');
+    var add = document.getElementById('avatar-dropdown');
+    if (add) add.classList.add('hidden');
     if (wasHidden) {
         // Auto-mark as read when opening
         fetch('/api/notifications/read', { method: 'POST' });
@@ -4233,11 +4393,23 @@ function toggleNotifDropdown(e) {
         if (badge) badge.classList.add('hidden');
     }
 }
+function toggleAvatarDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('avatar-dropdown');
+    if (dd) dd.classList.toggle('hidden');
+    var ndd = document.getElementById('notif-dropdown');
+    if (ndd) ndd.classList.add('hidden');
+}
 document.addEventListener('click', function(e) {
     var dd = document.getElementById('notif-dropdown');
     if (dd && !dd.classList.contains('hidden')) {
         var wrap = document.querySelector('.notif-bell-wrap');
         if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    }
+    var add = document.getElementById('avatar-dropdown');
+    if (add && !add.classList.contains('hidden')) {
+        var awrap = document.querySelector('.avatar-wrap');
+        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
     }
 });
 function fetchNotifications() {
@@ -4256,13 +4428,19 @@ function fetchNotifications() {
             list.innerHTML = '<div class="notif-empty">No new notifications</div>';
         } else {
             list.innerHTML = data.notifications.map(function(n) {
-                var action = n.type === 'reply' ? 'replied to your comment on' : 'commented on your backtest';
-                var title = n.backtest_title || 'Untitled';
-                if (title.length > 40) title = title.substring(0, 37) + '...';
-                var text = n.type === 'reply'
-                    ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
-                    : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
-                return '<a class="notif-item" href="/backtest/' + n.backtest_id + '#comment-' + n.comment_id + '">'
+                var text, href;
+                if (n.type === 'welcome') {
+                    text = _escHtml(n.message || 'Welcome!');
+                    href = n.link || '/feedback';
+                } else {
+                    var title = n.backtest_title || 'Untitled';
+                    if (title.length > 40) title = title.substring(0, 37) + '...';
+                    text = n.type === 'reply'
+                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
+                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
+                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
+                }
+                return '<a class="notif-item" href="' + href + '">'
                     + '<div class="notif-item-text">' + text + '</div>'
                     + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
             }).join('');
@@ -4382,7 +4560,8 @@ DETAIL_HTML = """\
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
-        .notif-bell-wrap { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+        .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; }
+        .notif-bell-wrap { position: relative; }
         .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
         .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
         .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
@@ -4398,6 +4577,25 @@ DETAIL_HTML = """\
         .notif-item-text strong { color: var(--accent); font-weight: 600; }
         .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
         .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
+        /* Avatar */
+        .avatar-wrap { position: relative; }
+        .avatar-btn { background: none; border: none; cursor: pointer; padding: 4px; border-radius: 50%; transition: all 0.2s ease; }
+        .avatar-btn:hover { background: var(--bg-elevated); }
+        .avatar-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); display: block; }
+        .avatar-initials { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: 700; color: #fff; font-family: 'DM Sans', sans-serif; text-transform: uppercase; }
+        .avatar-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 220px; background: var(--bg-surface, var(--bg-base)); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; padding: 6px 0; }
+        .avatar-dropdown.hidden { display: none; }
+        .avatar-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--text-muted); text-decoration: none; font-size: 0.82em; font-weight: 500; transition: all 0.15s ease; font-family: 'DM Sans', sans-serif; }
+        .avatar-dropdown-item:hover { background: var(--bg-elevated); color: var(--text); }
+        .avatar-dropdown-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .avatar-dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
+        .avatar-dropdown-logout { color: #e74c3c; }
+        .avatar-dropdown-logout:hover { background: rgba(231,76,60,0.1); color: #e74c3c; }
+        /* Small avatars for cards and comments */
+        .card-avatar-img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 4px; }
+        .card-avatar-initials { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.6em; font-weight: 700; color: #fff; vertical-align: middle; margin-right: 4px; }
+        .comment-avatar-img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+        .comment-avatar-initials { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65em; font-weight: 700; color: #fff; flex-shrink: 0; }
         .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); margin-bottom: 16px; }
         .detail-header { margin-bottom: 20px; }
         .detail-title { font-size: 1.3em; font-weight: 700; margin-bottom: 4px; display: inline; }
@@ -4573,14 +4771,33 @@ DETAIL_HTML = """\
         <a href="/backtester" class="nav-link">Create Backtest</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         {% if is_authenticated %}
-        <div class="notif-bell-wrap">
-            <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                <span class="notif-badge hidden" id="notif-badge">0</span>
-            </button>
-            <div class="notif-dropdown hidden" id="notif-dropdown">
-                <div class="notif-dropdown-header"><span>Notifications</span></div>
-                <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+        <div class="nav-right-group">
+            <div class="notif-bell-wrap">
+                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span class="notif-badge hidden" id="notif-badge">0</span>
+                </button>
+                <div class="notif-dropdown hidden" id="notif-dropdown">
+                    <div class="notif-dropdown-header"><span>Notifications</span></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                </div>
+            </div>
+            <div class="avatar-wrap">
+                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
+                    {% if user_avatar %}
+                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
+                    {% else %}
+                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
+                    {% endif %}
+                </button>
+                <div class="avatar-dropdown hidden" id="avatar-dropdown">
+                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
+                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
+                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
+                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
+                    <div class="avatar-dropdown-divider"></div>
+                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
+                </div>
             </div>
         </div>
         {% endif %}
@@ -4767,7 +4984,7 @@ DETAIL_HTML = """\
                         {% if is_authenticated %}
                         <div class="reply-form hidden" id="reply-form-{{ reply.id }}">
                             <textarea id="reply-{{ reply.id }}" placeholder="Write a reply..."></textarea>
-                            <button class="action-btn" onclick="submitComment('{{ backtest.id }}', '{{ comment.id }}')">Reply</button>
+                            <button class="action-btn" onclick="submitComment('{{ backtest.id }}', '{{ comment.id }}', '{{ reply.id }}')">Reply</button>
                         </div>
                         {% endif %}
                     </div>
@@ -4792,6 +5009,8 @@ function toggleNotifDropdown(e) {
     if (!dd) return;
     var wasHidden = dd.classList.contains('hidden');
     dd.classList.toggle('hidden');
+    var add = document.getElementById('avatar-dropdown');
+    if (add) add.classList.add('hidden');
     if (wasHidden) {
         // Auto-mark as read when opening
         fetch('/api/notifications/read', { method: 'POST' });
@@ -4799,11 +5018,23 @@ function toggleNotifDropdown(e) {
         if (badge) badge.classList.add('hidden');
     }
 }
+function toggleAvatarDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('avatar-dropdown');
+    if (dd) dd.classList.toggle('hidden');
+    var ndd = document.getElementById('notif-dropdown');
+    if (ndd) ndd.classList.add('hidden');
+}
 document.addEventListener('click', function(e) {
     var dd = document.getElementById('notif-dropdown');
     if (dd && !dd.classList.contains('hidden')) {
         var wrap = document.querySelector('.notif-bell-wrap');
         if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    }
+    var add = document.getElementById('avatar-dropdown');
+    if (add && !add.classList.contains('hidden')) {
+        var awrap = document.querySelector('.avatar-wrap');
+        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
     }
 });
 function fetchNotifications() {
@@ -4822,13 +5053,19 @@ function fetchNotifications() {
             list.innerHTML = '<div class="notif-empty">No new notifications</div>';
         } else {
             list.innerHTML = data.notifications.map(function(n) {
-                var action = n.type === 'reply' ? 'replied to your comment on' : 'commented on your backtest';
-                var title = n.backtest_title || 'Untitled';
-                if (title.length > 40) title = title.substring(0, 37) + '...';
-                var text = n.type === 'reply'
-                    ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
-                    : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
-                return '<a class="notif-item" href="/backtest/' + n.backtest_id + '#comment-' + n.comment_id + '">'
+                var text, href;
+                if (n.type === 'welcome') {
+                    text = _escHtml(n.message || 'Welcome!');
+                    href = n.link || '/feedback';
+                } else {
+                    var title = n.backtest_title || 'Untitled';
+                    if (title.length > 40) title = title.substring(0, 37) + '...';
+                    text = n.type === 'reply'
+                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
+                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
+                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
+                }
+                return '<a class="notif-item" href="' + href + '">'
                     + '<div class="notif-item-text">' + text + '</div>'
                     + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
             }).join('');
@@ -4881,8 +5118,8 @@ function saveDetailEdit() {
         location.reload();
     }).catch(function(e) { _swal.fire({icon:'error', title:'Failed to save', text:e.message}); });
 }
-function submitComment(backtestId, parentId) {
-    var textareaId = parentId ? 'reply-' + parentId : 'comment-body';
+function submitComment(backtestId, parentId, textareaSrcId) {
+    var textareaId = textareaSrcId ? 'reply-' + textareaSrcId : (parentId ? 'reply-' + parentId : 'comment-body');
     var body = document.getElementById(textareaId).value.trim();
     if (!body) return;
     fetch('/api/backtest/' + backtestId + '/comment', {
@@ -5060,7 +5297,8 @@ MY_BACKTESTS_HTML = """\
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
-        .notif-bell-wrap { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+        .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; }
+        .notif-bell-wrap { position: relative; }
         .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
         .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
         .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
@@ -5076,6 +5314,25 @@ MY_BACKTESTS_HTML = """\
         .notif-item-text strong { color: var(--accent); font-weight: 600; }
         .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
         .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
+        /* Avatar */
+        .avatar-wrap { position: relative; }
+        .avatar-btn { background: none; border: none; cursor: pointer; padding: 4px; border-radius: 50%; transition: all 0.2s ease; }
+        .avatar-btn:hover { background: var(--bg-elevated); }
+        .avatar-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); display: block; }
+        .avatar-initials { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: 700; color: #fff; font-family: 'DM Sans', sans-serif; text-transform: uppercase; }
+        .avatar-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 220px; background: var(--bg-surface, var(--bg-base)); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; padding: 6px 0; }
+        .avatar-dropdown.hidden { display: none; }
+        .avatar-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--text-muted); text-decoration: none; font-size: 0.82em; font-weight: 500; transition: all 0.15s ease; font-family: 'DM Sans', sans-serif; }
+        .avatar-dropdown-item:hover { background: var(--bg-elevated); color: var(--text); }
+        .avatar-dropdown-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .avatar-dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
+        .avatar-dropdown-logout { color: #e74c3c; }
+        .avatar-dropdown-logout:hover { background: rgba(231,76,60,0.1); color: #e74c3c; }
+        /* Small avatars for cards and comments */
+        .card-avatar-img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 4px; }
+        .card-avatar-initials { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.6em; font-weight: 700; color: #fff; vertical-align: middle; margin-right: 4px; }
+        .comment-avatar-img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+        .comment-avatar-initials { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65em; font-weight: 700; color: #fff; flex-shrink: 0; }
         .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); margin-bottom: 16px; }
         .page-title { font-size: 1.4em; font-weight: 700; margin-bottom: 6px; }
         .section-header { font-size: 1em; font-weight: 600; margin-bottom: 14px; color: var(--text-muted); }
@@ -5144,14 +5401,33 @@ MY_BACKTESTS_HTML = """\
         <a href="/backtester" class="nav-link">Create Backtest</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         {% if is_authenticated %}
-        <div class="notif-bell-wrap">
-            <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                <span class="notif-badge hidden" id="notif-badge">0</span>
-            </button>
-            <div class="notif-dropdown hidden" id="notif-dropdown">
-                <div class="notif-dropdown-header"><span>Notifications</span></div>
-                <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+        <div class="nav-right-group">
+            <div class="notif-bell-wrap">
+                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span class="notif-badge hidden" id="notif-badge">0</span>
+                </button>
+                <div class="notif-dropdown hidden" id="notif-dropdown">
+                    <div class="notif-dropdown-header"><span>Notifications</span></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                </div>
+            </div>
+            <div class="avatar-wrap">
+                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
+                    {% if user_avatar %}
+                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
+                    {% else %}
+                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
+                    {% endif %}
+                </button>
+                <div class="avatar-dropdown hidden" id="avatar-dropdown">
+                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
+                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
+                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
+                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
+                    <div class="avatar-dropdown-divider"></div>
+                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
+                </div>
             </div>
         </div>
         {% endif %}
@@ -5299,6 +5575,8 @@ function toggleNotifDropdown(e) {
     if (!dd) return;
     var wasHidden = dd.classList.contains('hidden');
     dd.classList.toggle('hidden');
+    var add = document.getElementById('avatar-dropdown');
+    if (add) add.classList.add('hidden');
     if (wasHidden) {
         // Auto-mark as read when opening
         fetch('/api/notifications/read', { method: 'POST' });
@@ -5306,11 +5584,23 @@ function toggleNotifDropdown(e) {
         if (badge) badge.classList.add('hidden');
     }
 }
+function toggleAvatarDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('avatar-dropdown');
+    if (dd) dd.classList.toggle('hidden');
+    var ndd = document.getElementById('notif-dropdown');
+    if (ndd) ndd.classList.add('hidden');
+}
 document.addEventListener('click', function(e) {
     var dd = document.getElementById('notif-dropdown');
     if (dd && !dd.classList.contains('hidden')) {
         var wrap = document.querySelector('.notif-bell-wrap');
         if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    }
+    var add = document.getElementById('avatar-dropdown');
+    if (add && !add.classList.contains('hidden')) {
+        var awrap = document.querySelector('.avatar-wrap');
+        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
     }
 });
 function fetchNotifications() {
@@ -5329,13 +5619,19 @@ function fetchNotifications() {
             list.innerHTML = '<div class="notif-empty">No new notifications</div>';
         } else {
             list.innerHTML = data.notifications.map(function(n) {
-                var action = n.type === 'reply' ? 'replied to your comment on' : 'commented on your backtest';
-                var title = n.backtest_title || 'Untitled';
-                if (title.length > 40) title = title.substring(0, 37) + '...';
-                var text = n.type === 'reply'
-                    ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
-                    : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
-                return '<a class="notif-item" href="/backtest/' + n.backtest_id + '#comment-' + n.comment_id + '">'
+                var text, href;
+                if (n.type === 'welcome') {
+                    text = _escHtml(n.message || 'Welcome!');
+                    href = n.link || '/feedback';
+                } else {
+                    var title = n.backtest_title || 'Untitled';
+                    if (title.length > 40) title = title.substring(0, 37) + '...';
+                    text = n.type === 'reply'
+                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
+                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
+                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
+                }
+                return '<a class="notif-item" href="' + href + '">'
                     + '<div class="notif-item-text">' + text + '</div>'
                     + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
             }).join('');
@@ -5460,7 +5756,8 @@ ADMIN_ASSETS_HTML = """\
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; border: 1px solid transparent; transition: all 0.2s ease; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: rgba(247,147,26,0.2); }
-        .notif-bell-wrap { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+        .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; }
+        .notif-bell-wrap { position: relative; }
         .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
         .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
         .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
@@ -5476,6 +5773,25 @@ ADMIN_ASSETS_HTML = """\
         .notif-item-text strong { color: var(--accent); font-weight: 600; }
         .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
         .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
+        /* Avatar */
+        .avatar-wrap { position: relative; }
+        .avatar-btn { background: none; border: none; cursor: pointer; padding: 4px; border-radius: 50%; transition: all 0.2s ease; }
+        .avatar-btn:hover { background: var(--bg-elevated); }
+        .avatar-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); display: block; }
+        .avatar-initials { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: 700; color: #fff; font-family: 'DM Sans', sans-serif; text-transform: uppercase; }
+        .avatar-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 220px; background: var(--bg-surface, var(--bg-base)); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; padding: 6px 0; }
+        .avatar-dropdown.hidden { display: none; }
+        .avatar-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--text-muted); text-decoration: none; font-size: 0.82em; font-weight: 500; transition: all 0.15s ease; font-family: 'DM Sans', sans-serif; }
+        .avatar-dropdown-item:hover { background: var(--bg-elevated); color: var(--text); }
+        .avatar-dropdown-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .avatar-dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
+        .avatar-dropdown-logout { color: #e74c3c; }
+        .avatar-dropdown-logout:hover { background: rgba(231,76,60,0.1); color: #e74c3c; }
+        /* Small avatars for cards and comments */
+        .card-avatar-img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 4px; }
+        .card-avatar-initials { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.6em; font-weight: 700; color: #fff; vertical-align: middle; margin-right: 4px; }
+        .comment-avatar-img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+        .comment-avatar-initials { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65em; font-weight: 700; color: #fff; flex-shrink: 0; }
         .panel { background: var(--bg-base); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
         .page-title { font-size: 1.1em; font-weight: 700; margin-bottom: 20px; }
 
@@ -5563,14 +5879,33 @@ ADMIN_ASSETS_HTML = """\
         <a href="/backtester" class="nav-link">Create Backtest</a>
         <a href="/admin/assets" class="nav-link active">Assets</a>
         {% if is_authenticated %}
-        <div class="notif-bell-wrap">
-            <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                <span class="notif-badge hidden" id="notif-badge">0</span>
-            </button>
-            <div class="notif-dropdown hidden" id="notif-dropdown">
-                <div class="notif-dropdown-header"><span>Notifications</span></div>
-                <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+        <div class="nav-right-group">
+            <div class="notif-bell-wrap">
+                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span class="notif-badge hidden" id="notif-badge">0</span>
+                </button>
+                <div class="notif-dropdown hidden" id="notif-dropdown">
+                    <div class="notif-dropdown-header"><span>Notifications</span></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                </div>
+            </div>
+            <div class="avatar-wrap">
+                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
+                    {% if user_avatar %}
+                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
+                    {% else %}
+                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
+                    {% endif %}
+                </button>
+                <div class="avatar-dropdown hidden" id="avatar-dropdown">
+                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
+                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
+                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
+                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
+                    <div class="avatar-dropdown-divider"></div>
+                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
+                </div>
             </div>
         </div>
         {% endif %}
@@ -5665,6 +6000,8 @@ function toggleNotifDropdown(e) {
     if (!dd) return;
     var wasHidden = dd.classList.contains('hidden');
     dd.classList.toggle('hidden');
+    var add = document.getElementById('avatar-dropdown');
+    if (add) add.classList.add('hidden');
     if (wasHidden) {
         // Auto-mark as read when opening
         fetch('/api/notifications/read', { method: 'POST' });
@@ -5672,11 +6009,23 @@ function toggleNotifDropdown(e) {
         if (badge) badge.classList.add('hidden');
     }
 }
+function toggleAvatarDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('avatar-dropdown');
+    if (dd) dd.classList.toggle('hidden');
+    var ndd = document.getElementById('notif-dropdown');
+    if (ndd) ndd.classList.add('hidden');
+}
 document.addEventListener('click', function(e) {
     var dd = document.getElementById('notif-dropdown');
     if (dd && !dd.classList.contains('hidden')) {
         var wrap = document.querySelector('.notif-bell-wrap');
         if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    }
+    var add = document.getElementById('avatar-dropdown');
+    if (add && !add.classList.contains('hidden')) {
+        var awrap = document.querySelector('.avatar-wrap');
+        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
     }
 });
 function fetchNotifications() {
@@ -5695,13 +6044,19 @@ function fetchNotifications() {
             list.innerHTML = '<div class="notif-empty">No new notifications</div>';
         } else {
             list.innerHTML = data.notifications.map(function(n) {
-                var action = n.type === 'reply' ? 'replied to your comment on' : 'commented on your backtest';
-                var title = n.backtest_title || 'Untitled';
-                if (title.length > 40) title = title.substring(0, 37) + '...';
-                var text = n.type === 'reply'
-                    ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
-                    : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
-                return '<a class="notif-item" href="/backtest/' + n.backtest_id + '#comment-' + n.comment_id + '">'
+                var text, href;
+                if (n.type === 'welcome') {
+                    text = _escHtml(n.message || 'Welcome!');
+                    href = n.link || '/feedback';
+                } else {
+                    var title = n.backtest_title || 'Untitled';
+                    if (title.length > 40) title = title.substring(0, 37) + '...';
+                    text = n.type === 'reply'
+                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
+                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
+                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
+                }
+                return '<a class="notif-item" href="' + href + '">'
                     + '<div class="notif-item-text">' + text + '</div>'
                     + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
             }).join('');
@@ -5963,12 +6318,36 @@ def api_like(bt_id):
 
 @app.route('/api/backtest/<bt_id>/comment', methods=['POST'])
 def api_comment(bt_id):
-    """Add a comment."""
+    """Add a comment. Sends email notifications if enabled."""
     user_id, email = _require_auth_api()
     data = request.get_json()
     if not data or not data.get('body', '').strip():
         abort(400)
     comment = db.add_comment(bt_id, user_id, email, data['body'].strip(), data.get('parent_id'))
+    # Send email notifications
+    commenter_name = db.get_display_name(user_id) or email.split('@')[0]
+    bt_entry = db.get_backtest(bt_id)
+    bt_title = bt_entry['title'] or 'Untitled' if bt_entry else 'Untitled'
+    comment_url = f"https://analytics.the-bitcoin-strategy.com/backtest/{bt_id}#comment-{comment['id']}"
+    for target_uid, target_email, notif_type in comment.get('_email_targets', []):
+        if notif_type == 'reply':
+            subject = f'{commenter_name} replied to your comment'
+            action = 'replied to your comment on'
+        else:
+            subject = f'{commenter_name} commented on your backtest'
+            action = 'commented on your backtest'
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
+            <h2 style="color:#333">{subject}</h2>
+            <p><strong>{commenter_name}</strong> {action} <em>{bt_title}</em>:</p>
+            <div style="background:#f5f5f5;padding:12px 16px;border-radius:8px;border-left:3px solid #6495ED;margin:16px 0;white-space:pre-wrap">{data['body'].strip()}</div>
+            <a href="{comment_url}" style="display:inline-block;padding:10px 24px;background:#6495ED;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">View Comment</a>
+            <p style="color:#999;font-size:0.85em;margin-top:24px">You can manage email notifications in your <a href="https://analytics.the-bitcoin-strategy.com/account">account settings</a>.</p>
+        </div>
+        """
+        _send_email_async(target_email, subject, html)
+    # Remove internal field before returning
+    comment.pop('_email_targets', None)
     return jsonify(comment)
 
 
@@ -6006,6 +6385,86 @@ def api_notifications_read():
     user_id, email = _require_auth_api()
     db.mark_notifications_read(user_id)
     return jsonify({'ok': True})
+
+
+@app.route('/api/avatar', methods=['POST'])
+def api_upload_avatar():
+    """Upload user avatar image."""
+    user_id, email = _require_auth_api()
+    if 'avatar' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    f = request.files['avatar']
+    if not f.filename:
+        return jsonify({'error': 'No file selected'}), 400
+    ext = f.filename.rsplit('.', 1)[-1].lower()
+    if ext not in ('jpg', 'jpeg', 'png', 'webp'):
+        return jsonify({'error': 'Invalid file type'}), 400
+    f.seek(0, 2)
+    size = f.tell()
+    f.seek(0)
+    if size > 2 * 1024 * 1024:
+        return jsonify({'error': 'File too large (2MB max)'}), 400
+    filename = f'{user_id}.{ext}'
+    avatars_dir = os.path.join(os.path.dirname(__file__), 'static', 'avatars')
+    os.makedirs(avatars_dir, exist_ok=True)
+    old = db.get_user_avatar(user_id)
+    if old and old != filename:
+        old_path = os.path.join(avatars_dir, old)
+        if os.path.exists(old_path):
+            os.remove(old_path)
+    f.save(os.path.join(avatars_dir, filename))
+    db.set_user_avatar(user_id, filename)
+    return jsonify({'ok': True, 'avatar': filename})
+
+
+@app.route('/api/avatar', methods=['DELETE'])
+def api_delete_avatar():
+    """Remove user avatar."""
+    user_id, email = _require_auth_api()
+    old = db.get_user_avatar(user_id)
+    if old:
+        path = os.path.join(os.path.dirname(__file__), 'static', 'avatars', old)
+        if os.path.exists(path):
+            os.remove(path)
+    db.remove_user_avatar(user_id)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/notification-pref', methods=['POST'])
+def api_notification_pref():
+    """Update notification preferences."""
+    user_id, email = _require_auth_api()
+    data = request.get_json()
+    nc = 1 if data.get('notify_comments', True) else 0
+    nr = 1 if data.get('notify_replies', True) else 0
+    db.set_notification_prefs(user_id, nc, nr)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/feedback', methods=['POST'])
+def api_feedback():
+    """Submit feedback — sends email to admin."""
+    user_id, email = _require_auth_api()
+    data = request.get_json()
+    body = (data or {}).get('body', '').strip()
+    if not body:
+        abort(400)
+    dn = db.get_display_name(user_id) or email.split('@')[0]
+    html = f"""
+    <h2>New Feedback from {dn}</h2>
+    <p><strong>User:</strong> {dn} ({email})</p>
+    <p><strong>Message:</strong></p>
+    <p style="white-space:pre-wrap;background:#f5f5f5;padding:12px;border-radius:8px">{body}</p>
+    """
+    _send_email_async(ADMIN_FEEDBACK_EMAIL, f'Feedback from {dn}', html)
+    return jsonify({'ok': True})
+
+
+@app.route('/logout')
+def logout():
+    """Clear session and redirect to Laravel logout."""
+    session.clear()
+    return redirect('https://the-bitcoin-strategy.com/logout')
 
 
 @app.route('/api/upload-asset', methods=['POST'])
@@ -6414,6 +6873,547 @@ def backtest_detail(bt_id):
         is_authenticated=is_auth, is_admin=_is_admin(),
         has_liked=liked, time_ago=_time_ago,
         display_name=author_display_name)
+
+
+ACCOUNT_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Settings - Bitcoin Strategy Analytics</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        :root { --bg-deep: #0d0f1a; --bg-base: #131525; --bg-surface: #1a1d2e; --bg-elevated: #242842; --border: #2a2e45; --border-hover: #3d4266; --text: #e8e9ed; --text-muted: #b0b3c5; --text-dim: #6b7094; --accent: #F7931A; --accent-glow: rgba(247,147,26,0.15); --blue: #6495ED; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: var(--bg-deep); color: var(--text); font-family: 'DM Sans', sans-serif; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 32px; position: relative; }
+        .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
+        .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; font-weight: 700; }
+        .header h1 .brand-analytics { background: var(--bg-elevated); color: var(--text); padding: 6px 14px; border: 1px solid var(--border); border-left: none; }
+        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; position: relative; }
+        .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
+        .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
+        .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; }
+        .notif-bell-wrap { position: relative; }
+        .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
+        .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
+        .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
+        .notif-badge.hidden { display: none; }
+        .notif-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 340px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; }
+        .notif-dropdown.hidden { display: none; }
+        .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
+        .notif-list { max-height: 320px; overflow-y: auto; }
+        .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
+        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item:last-child { border-bottom: none; }
+        .notif-item-text { line-height: 1.4; }
+        .notif-item-text strong { color: var(--accent); font-weight: 600; }
+        .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
+        .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
+        .avatar-wrap { position: relative; }
+        .avatar-btn { background: none; border: none; cursor: pointer; padding: 4px; border-radius: 50%; transition: all 0.2s ease; }
+        .avatar-btn:hover { background: var(--bg-elevated); }
+        .avatar-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); display: block; }
+        .avatar-initials { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: 700; color: #fff; font-family: 'DM Sans', sans-serif; text-transform: uppercase; }
+        .avatar-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 220px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; padding: 6px 0; }
+        .avatar-dropdown.hidden { display: none; }
+        .avatar-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--text-muted); text-decoration: none; font-size: 0.82em; font-weight: 500; transition: all 0.15s ease; font-family: 'DM Sans', sans-serif; }
+        .avatar-dropdown-item:hover { background: var(--bg-elevated); color: var(--text); }
+        .avatar-dropdown-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .avatar-dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
+        .avatar-dropdown-logout { color: #e74c3c; }
+        .avatar-dropdown-logout:hover { background: rgba(231,76,60,0.1); color: #e74c3c; }
+        .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); margin-bottom: 16px; }
+        .page-title { font-size: 1.4em; font-weight: 700; margin-bottom: 20px; }
+        .setting-group { margin-bottom: 24px; }
+        .setting-label { font-size: 0.8em; color: var(--text-muted); font-weight: 500; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .setting-input { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-size: 0.85em; font-family: 'DM Sans', sans-serif; }
+        .setting-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .setting-input[readonly] { opacity: 0.6; cursor: not-allowed; }
+        .setting-btn { padding: 8px 20px; border-radius: 8px; border: none; font-weight: 600; font-size: 0.82em; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; }
+        .setting-btn-primary { background: var(--accent); color: #fff; }
+        .setting-btn-primary:hover { background: #e08a1a; }
+        .setting-btn-danger { background: transparent; color: #e74c3c; border: 1px solid #e74c3c; }
+        .setting-btn-danger:hover { background: rgba(231,76,60,0.1); }
+        .avatar-preview { width: 96px; height: 96px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2em; font-weight: 700; color: #fff; margin-bottom: 12px; overflow: hidden; }
+        .avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar-actions { display: flex; gap: 10px; align-items: center; }
+        .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-elevated); border: 1px solid var(--border); transition: 0.3s; border-radius: 24px; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background: var(--text-dim); transition: 0.3s; border-radius: 50%; }
+        input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
+        input:checked + .toggle-slider:before { transform: translateX(20px); background: #fff; }
+        .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
+        .toggle-row:last-child { border-bottom: none; }
+        .toggle-info { }
+        .toggle-title { font-size: 0.85em; font-weight: 600; }
+        .toggle-desc { font-size: 0.75em; color: var(--text-dim); margin-top: 2px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
+    </div>
+    <nav class="nav-bar">
+        <a href="/" class="nav-link">Featured</a>
+        <a href="/community" class="nav-link">Community</a>
+        {% if is_authenticated %}<a href="/my-backtests" class="nav-link">My Backtests</a>{% endif %}
+        <a href="/backtester" class="nav-link">Create Backtest</a>
+        {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
+        {% if is_authenticated %}
+        <div class="nav-right-group">
+            <div class="notif-bell-wrap">
+                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span class="notif-badge hidden" id="notif-badge">0</span>
+                </button>
+                <div class="notif-dropdown hidden" id="notif-dropdown">
+                    <div class="notif-dropdown-header"><span>Notifications</span></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                </div>
+            </div>
+            <div class="avatar-wrap">
+                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
+                    {% if user_avatar %}
+                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
+                    {% else %}
+                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
+                    {% endif %}
+                </button>
+                <div class="avatar-dropdown hidden" id="avatar-dropdown">
+                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
+                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
+                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
+                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
+                    <div class="avatar-dropdown-divider"></div>
+                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </nav>
+
+    <div class="panel">
+        <h2 class="page-title">Account Settings</h2>
+
+        <div class="setting-group">
+            <div class="setting-label">Profile Picture</div>
+            <div class="avatar-preview" id="avatar-preview" style="background:{{ avatar_color }}">
+                {% if avatar %}
+                <img src="/static/avatars/{{ avatar }}" alt="Avatar">
+                {% else %}
+                {{ initial }}
+                {% endif %}
+            </div>
+            <div class="avatar-actions">
+                <button class="setting-btn setting-btn-primary" onclick="document.getElementById('avatar-file').click()">Upload Photo</button>
+                <input type="file" id="avatar-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="uploadAvatar(this.files[0])">
+                {% if avatar %}
+                <button class="setting-btn setting-btn-danger" onclick="removeAvatar()">Remove</button>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="setting-group">
+            <div class="setting-label">Username</div>
+            <div style="display:flex;gap:10px;align-items:center">
+                <input type="text" class="setting-input" id="username-input" value="{{ display_name or email_prefix }}" maxlength="40" style="flex:1">
+                <button class="setting-btn setting-btn-primary" onclick="saveUsername()">Save</button>
+            </div>
+        </div>
+
+        <div class="setting-group">
+            <div class="setting-label">Email</div>
+            <input type="text" class="setting-input" value="{{ email }}" readonly>
+        </div>
+
+        <div class="setting-group">
+            <div class="setting-label">Email Notifications</div>
+            <div class="toggle-row">
+                <div class="toggle-info">
+                    <div class="toggle-title">New comments on my backtests</div>
+                    <div class="toggle-desc">Get emailed when someone comments on a backtest you published</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="notify-comments" {{ 'checked' if notify_comments }} onchange="saveNotifPref()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="toggle-row">
+                <div class="toggle-info">
+                    <div class="toggle-title">Replies to my comments</div>
+                    <div class="toggle-desc">Get emailed when someone replies to a comment you wrote</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="notify-replies" {{ 'checked' if notify_replies }} onchange="saveNotifPref()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+var _swal = Swal.mixin({
+    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
+    customClass: { popup: 'swal-dark' }
+});
+// Notification bell
+function toggleNotifDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('notif-dropdown');
+    if (!dd) return;
+    var wasHidden = dd.classList.contains('hidden');
+    dd.classList.toggle('hidden');
+    var add = document.getElementById('avatar-dropdown');
+    if (add) add.classList.add('hidden');
+    if (wasHidden) {
+        fetch('/api/notifications/read', { method: 'POST' });
+        var badge = document.getElementById('notif-badge');
+        if (badge) badge.classList.add('hidden');
+    }
+}
+function toggleAvatarDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('avatar-dropdown');
+    if (dd) dd.classList.toggle('hidden');
+    var ndd = document.getElementById('notif-dropdown');
+    if (ndd) ndd.classList.add('hidden');
+}
+document.addEventListener('click', function(e) {
+    var dd = document.getElementById('notif-dropdown');
+    if (dd && !dd.classList.contains('hidden')) {
+        var wrap = document.querySelector('.notif-bell-wrap');
+        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    }
+    var add = document.getElementById('avatar-dropdown');
+    if (add && !add.classList.contains('hidden')) {
+        var awrap = document.querySelector('.avatar-wrap');
+        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
+    }
+});
+function fetchNotifications() {
+    fetch('/api/notifications').then(function(r) { return r.json(); })
+    .then(function(data) {
+        var badge = document.getElementById('notif-badge');
+        var list = document.getElementById('notif-list');
+        if (!badge || !list) return;
+        if (data.count > 0) {
+            badge.textContent = data.count > 99 ? '99+' : data.count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+        if (data.notifications.length === 0) {
+            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+        } else {
+            list.innerHTML = data.notifications.map(function(n) {
+                var text, href;
+                if (n.type === 'welcome') {
+                    text = _escHtml(n.message || 'Welcome!');
+                    href = n.link || '/feedback';
+                } else {
+                    var title = n.backtest_title || 'Untitled';
+                    if (title.length > 40) title = title.substring(0, 37) + '...';
+                    text = n.type === 'reply'
+                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
+                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
+                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
+                }
+                return '<a class="notif-item" href="' + href + '">'
+                    + '<div class="notif-item-text">' + text + '</div>'
+                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
+            }).join('');
+        }
+    }).catch(function() {});
+}
+function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('notif-badge')) fetchNotifications();
+});
+// Account settings functions
+function uploadAvatar(file) {
+    if (!file) return;
+    var fd = new FormData();
+    fd.append('avatar', file);
+    fetch('/api/avatar', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            _swal.fire({icon:'success', title:'Avatar updated!', timer:1500, showConfirmButton:false});
+            setTimeout(function() { location.reload(); }, 1600);
+        } else {
+            _swal.fire({icon:'error', title:'Upload failed', text: data.error});
+        }
+    }).catch(function(e) { _swal.fire({icon:'error', title:'Upload failed', text:e.message}); });
+}
+function removeAvatar() {
+    fetch('/api/avatar', { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) location.reload();
+    });
+}
+function saveUsername() {
+    var name = document.getElementById('username-input').value.trim();
+    if (!name) { _swal.fire({icon:'warning', title:'Please enter a username'}); return; }
+    fetch('/api/display-name', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({display_name: name})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.ok) _swal.fire({icon:'success', title:'Username saved!', timer:1500, showConfirmButton:false});
+    }).catch(function(e) { _swal.fire({icon:'error', title:'Save failed', text:e.message}); });
+}
+function saveNotifPref() {
+    fetch('/api/notification-pref', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            notify_comments: document.getElementById('notify-comments').checked,
+            notify_replies: document.getElementById('notify-replies').checked
+        })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.ok) _swal.fire({icon:'success', title:'Preferences saved!', timer:1200, showConfirmButton:false});
+    });
+}
+</script>
+</body></html>
+"""
+
+FEEDBACK_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Send Feedback - Bitcoin Strategy Analytics</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        :root { --bg-deep: #0d0f1a; --bg-base: #131525; --bg-surface: #1a1d2e; --bg-elevated: #242842; --border: #2a2e45; --border-hover: #3d4266; --text: #e8e9ed; --text-muted: #b0b3c5; --text-dim: #6b7094; --accent: #F7931A; --accent-glow: rgba(247,147,26,0.15); --blue: #6495ED; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: var(--bg-deep); color: var(--text); font-family: 'DM Sans', sans-serif; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 32px; position: relative; }
+        .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
+        .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; font-weight: 700; }
+        .header h1 .brand-analytics { background: var(--bg-elevated); color: var(--text); padding: 6px 14px; border: 1px solid var(--border); border-left: none; }
+        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; position: relative; }
+        .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
+        .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
+        .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; }
+        .notif-bell-wrap { position: relative; }
+        .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
+        .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
+        .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
+        .notif-badge.hidden { display: none; }
+        .notif-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 340px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; }
+        .notif-dropdown.hidden { display: none; }
+        .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
+        .notif-list { max-height: 320px; overflow-y: auto; }
+        .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
+        .notif-item:hover { background: var(--bg-elevated); }
+        .notif-item:last-child { border-bottom: none; }
+        .notif-item-text { line-height: 1.4; }
+        .notif-item-text strong { color: var(--accent); font-weight: 600; }
+        .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
+        .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
+        .avatar-wrap { position: relative; }
+        .avatar-btn { background: none; border: none; cursor: pointer; padding: 4px; border-radius: 50%; transition: all 0.2s ease; }
+        .avatar-btn:hover { background: var(--bg-elevated); }
+        .avatar-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); display: block; }
+        .avatar-initials { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: 700; color: #fff; font-family: 'DM Sans', sans-serif; text-transform: uppercase; }
+        .avatar-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 220px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; padding: 6px 0; }
+        .avatar-dropdown.hidden { display: none; }
+        .avatar-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--text-muted); text-decoration: none; font-size: 0.82em; font-weight: 500; transition: all 0.15s ease; font-family: 'DM Sans', sans-serif; }
+        .avatar-dropdown-item:hover { background: var(--bg-elevated); color: var(--text); }
+        .avatar-dropdown-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .avatar-dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
+        .avatar-dropdown-logout { color: #e74c3c; }
+        .avatar-dropdown-logout:hover { background: rgba(231,76,60,0.1); color: #e74c3c; }
+        .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); }
+        .page-title { font-size: 1.4em; font-weight: 700; margin-bottom: 6px; }
+        .page-subtitle { font-size: 0.85em; color: var(--text-muted); margin-bottom: 20px; }
+        .feedback-textarea { width: 100%; min-height: 160px; padding: 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-size: 0.9em; font-family: 'DM Sans', sans-serif; resize: vertical; margin-bottom: 12px; }
+        .feedback-textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .feedback-btn { padding: 10px 28px; border-radius: 8px; border: none; background: var(--accent); color: #fff; font-weight: 600; font-size: 0.9em; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; }
+        .feedback-btn:hover { background: #e08a1a; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
+    </div>
+    <nav class="nav-bar">
+        <a href="/" class="nav-link">Featured</a>
+        <a href="/community" class="nav-link">Community</a>
+        {% if is_authenticated %}<a href="/my-backtests" class="nav-link">My Backtests</a>{% endif %}
+        <a href="/backtester" class="nav-link">Create Backtest</a>
+        {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
+        {% if is_authenticated %}
+        <div class="nav-right-group">
+            <div class="notif-bell-wrap">
+                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span class="notif-badge hidden" id="notif-badge">0</span>
+                </button>
+                <div class="notif-dropdown hidden" id="notif-dropdown">
+                    <div class="notif-dropdown-header"><span>Notifications</span></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications</div></div>
+                </div>
+            </div>
+            <div class="avatar-wrap">
+                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
+                    {% if user_avatar %}
+                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
+                    {% else %}
+                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
+                    {% endif %}
+                </button>
+                <div class="avatar-dropdown hidden" id="avatar-dropdown">
+                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
+                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
+                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
+                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
+                    <div class="avatar-dropdown-divider"></div>
+                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </nav>
+
+    <div class="panel">
+        <h2 class="page-title">Send Feedback</h2>
+        <p class="page-subtitle">We'd love to hear your thoughts, suggestions, or bug reports. Your feedback helps us improve!</p>
+        <textarea class="feedback-textarea" id="feedback-body" placeholder="What's on your mind?"></textarea>
+        <button class="feedback-btn" onclick="submitFeedback()">Send Feedback</button>
+    </div>
+</div>
+<script>
+var _swal = Swal.mixin({
+    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
+    customClass: { popup: 'swal-dark' }
+});
+// Notification bell
+function toggleNotifDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('notif-dropdown');
+    if (!dd) return;
+    var wasHidden = dd.classList.contains('hidden');
+    dd.classList.toggle('hidden');
+    var add = document.getElementById('avatar-dropdown');
+    if (add) add.classList.add('hidden');
+    if (wasHidden) {
+        fetch('/api/notifications/read', { method: 'POST' });
+        var badge = document.getElementById('notif-badge');
+        if (badge) badge.classList.add('hidden');
+    }
+}
+function toggleAvatarDropdown(e) {
+    e.stopPropagation();
+    var dd = document.getElementById('avatar-dropdown');
+    if (dd) dd.classList.toggle('hidden');
+    var ndd = document.getElementById('notif-dropdown');
+    if (ndd) ndd.classList.add('hidden');
+}
+document.addEventListener('click', function(e) {
+    var dd = document.getElementById('notif-dropdown');
+    if (dd && !dd.classList.contains('hidden')) {
+        var wrap = document.querySelector('.notif-bell-wrap');
+        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    }
+    var add = document.getElementById('avatar-dropdown');
+    if (add && !add.classList.contains('hidden')) {
+        var awrap = document.querySelector('.avatar-wrap');
+        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
+    }
+});
+function fetchNotifications() {
+    fetch('/api/notifications').then(function(r) { return r.json(); })
+    .then(function(data) {
+        var badge = document.getElementById('notif-badge');
+        var list = document.getElementById('notif-list');
+        if (!badge || !list) return;
+        if (data.count > 0) {
+            badge.textContent = data.count > 99 ? '99+' : data.count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+        if (data.notifications.length === 0) {
+            list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+        } else {
+            list.innerHTML = data.notifications.map(function(n) {
+                var text, href;
+                if (n.type === 'welcome') {
+                    text = _escHtml(n.message || 'Welcome!');
+                    href = n.link || '/feedback';
+                } else {
+                    var title = n.backtest_title || 'Untitled';
+                    if (title.length > 40) title = title.substring(0, 37) + '...';
+                    text = n.type === 'reply'
+                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
+                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
+                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
+                }
+                return '<a class="notif-item" href="' + href + '">'
+                    + '<div class="notif-item-text">' + text + '</div>'
+                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
+            }).join('');
+        }
+    }).catch(function() {});
+}
+function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('notif-badge')) fetchNotifications();
+});
+// Feedback
+function submitFeedback() {
+    var body = document.getElementById('feedback-body').value.trim();
+    if (!body) { _swal.fire({icon:'warning', title:'Please write some feedback'}); return; }
+    fetch('/api/feedback', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({body: body})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.ok) {
+            document.getElementById('feedback-body').value = '';
+            _swal.fire({icon:'success', title:'Thank you!', text:'Your feedback has been sent.', timer:2000, showConfirmButton:false});
+        }
+    }).catch(function(e) { _swal.fire({icon:'error', title:'Failed to send', text:e.message}); });
+}
+</script>
+</body></html>
+"""
+
+
+@app.route('/account')
+@require_auth
+def account_page():
+    """Account settings page."""
+    user_id = session.get('user_id')
+    email = session.get('email', '')
+    display_name = db.get_display_name(user_id)
+    avatar = db.get_user_avatar(user_id)
+    prefs = db.get_notification_prefs(user_id)
+    return render_template_string(ACCOUNT_HTML,
+        display_name=display_name,
+        email=email,
+        email_prefix=email.split('@')[0] if email else '',
+        avatar=avatar,
+        avatar_color=_avatar_color(user_id),
+        initial=_user_initial(display_name, email),
+        notify_comments=prefs['notify_comments'],
+        notify_replies=prefs['notify_replies'])
+
+
+@app.route('/feedback')
+@require_auth
+def feedback_page():
+    """Feedback page."""
+    return render_template_string(FEEDBACK_HTML)
 
 
 if __name__ == "__main__":
