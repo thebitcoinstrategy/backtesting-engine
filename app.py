@@ -987,7 +987,9 @@ HTML = """\
         .comment-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 0.8em; }
         .comment-author { font-weight: 600; color: var(--text); }
         .comment-time { color: var(--text-dim); }
-        .comment-body { font-size: 0.85em; color: var(--text-muted); line-height: 1.5; }
+        .comment-body { font-size: 0.85em; color: var(--text-muted); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+        .comment-body a { color: var(--accent); text-decoration: underline; }
+        .comment-body a:hover { opacity: 0.8; }
         .comment-actions { margin-top: 6px; display: flex; gap: 12px; }
         .comment-action-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.75em; font-family: 'DM Sans', sans-serif; }
         .comment-action-btn:hover { color: var(--text); }
@@ -4642,6 +4644,28 @@ function showReplyForm(commentId) {
     var el = document.getElementById('reply-form-' + commentId);
     if (el) el.classList.toggle('hidden');
 }
+// Linkify URLs in comment bodies
+(function() {
+    var urlPattern = /(https?:\/\/[^\s<]+)/g;
+    function escapeHtml(s) {
+        var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+    }
+    document.querySelectorAll('.comment-body').forEach(function(el) {
+        var text = el.textContent;
+        if (urlPattern.test(text)) {
+            var parts = text.split(urlPattern);
+            var html = '';
+            for (var i = 0; i < parts.length; i++) {
+                if (urlPattern.test(parts[i])) {
+                    html += '<a href="' + escapeHtml(parts[i]) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(parts[i]) + '</a>';
+                } else {
+                    html += escapeHtml(parts[i]);
+                }
+            }
+            el.innerHTML = html;
+        }
+    });
+})();
 function featureBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' }).then(function() { location.reload(); });
 }
