@@ -116,9 +116,15 @@ def init_db():
         conn.execute("ALTER TABLE users ADD COLUMN welcomed INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
         pass
-    # Make notifications.backtest_id and comment_id nullable for system notifications
-    # (welcome notifications have no backtest/comment)
-    # SQLite doesn't enforce NOT NULL on existing rows, and we use LEFT JOIN, so this is fine
+    # Add message and link columns to notifications (for welcome notifications)
+    try:
+        conn.execute("ALTER TABLE notifications ADD COLUMN message TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE notifications ADD COLUMN link TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.close()
 
 
