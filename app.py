@@ -1088,6 +1088,12 @@ HTML = """\
         .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
         .backtest-card-footer .engagement { display: flex; gap: 12px; }
         .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
+        .card-author { display: flex; align-items: center; gap: 6px; }
+        .card-author-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+        .card-author-initials { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.7em; font-weight: 700; flex-shrink: 0; }
+        .card-author-name { font-weight: 600; color: var(--text-muted); }
+        .card-author-sep { color: var(--text-dim); }
+        .card-author-time { color: var(--text-dim); }
         .backtest-card-badge {
             display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600;
             text-transform: uppercase; letter-spacing: 0.05em;
@@ -4162,6 +4168,12 @@ COMMUNITY_HTML = """\
         .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
         .backtest-card-footer .engagement { display: flex; gap: 12px; }
         .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
+        .card-author { display: flex; align-items: center; gap: 6px; }
+        .card-author-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+        .card-author-initials { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.7em; font-weight: 700; flex-shrink: 0; }
+        .card-author-name { font-weight: 600; color: var(--text-muted); }
+        .card-author-sep { color: var(--text-dim); }
+        .card-author-time { color: var(--text-dim); }
         .backtest-card-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
         .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
         .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
@@ -4324,7 +4336,16 @@ COMMUNITY_HTML = """\
                     </div>
                     {% endif %}
                     <div class="backtest-card-footer">
-                        <span>{{ bt._display_name }} · {{ time_ago(bt.created_at) }}</span>
+                        <div class="card-author">
+                            {% if bt._avatar %}
+                            <img src="/static/avatars/{{ bt._avatar }}" class="card-author-avatar" alt="">
+                            {% else %}
+                            <span class="card-author-initials" style="background:{{ bt._avatar_color }}">{{ bt._initial }}</span>
+                            {% endif %}
+                            <span class="card-author-name">{{ bt._display_name }}</span>
+                            <span class="card-author-sep">·</span>
+                            <span class="card-author-time">{{ time_ago(bt.created_at) }}</span>
+                        </div>
                         <div class="engagement">
                             <span>♥ {{ bt.likes_count }}</span>
                             <span>💬 {{ bt.comments_count }}</span>
@@ -4389,7 +4410,16 @@ COMMUNITY_HTML = """\
                 </div>
                 {% endif %}
                 <div class="backtest-card-footer">
-                    <span>{{ bt._display_name }} · {{ time_ago(bt.created_at) }}</span>
+                    <div class="card-author">
+                        {% if bt._avatar %}
+                        <img src="/static/avatars/{{ bt._avatar }}" class="card-author-avatar" alt="">
+                        {% else %}
+                        <span class="card-author-initials" style="background:{{ bt._avatar_color }}">{{ bt._initial }}</span>
+                        {% endif %}
+                        <span class="card-author-name">{{ bt._display_name }}</span>
+                        <span class="card-author-sep">·</span>
+                        <span class="card-author-time">{{ time_ago(bt.created_at) }}</span>
+                    </div>
                     <div class="engagement">
                         <span>♥ {{ bt.likes_count }}</span>
                         <span>💬 {{ bt.comments_count }}</span>
@@ -4690,6 +4720,12 @@ DETAIL_HTML = """\
         .copy-link-icon:hover { color: var(--accent); transform: scale(1.1); }
         .copy-link-icon.copied { color: #22c55e; }
         .detail-meta { font-size: 0.8em; color: var(--text-muted); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+        .detail-author-row { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+        .detail-author-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+        .detail-author-initials { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.9em; font-weight: 700; flex-shrink: 0; }
+        .detail-author-info { display: flex; flex-direction: column; gap: 2px; }
+        .detail-author-name { font-weight: 600; color: var(--text); font-size: 0.9em; }
+        .detail-author-meta { font-size: 0.78em; color: var(--text-dim); }
         .detail-description { font-size: 0.9em; color: var(--text-muted); line-height: 1.6; margin-bottom: 20px; white-space: pre-wrap; }
         .detail-params { margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         @media (max-width: 600px) { .detail-params { grid-template-columns: 1fr; } }
@@ -4903,10 +4939,16 @@ DETAIL_HTML = """\
                 <h2 class="detail-title">{{ backtest.title|title if backtest.title else 'Backtest' }}</h2>
                 <svg class="copy-link-icon" onclick="copyLink(this)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" title="Copy link"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             </div>
-            <div class="detail-meta">
-                <span>by {{ display_name or backtest.user_email.split('@')[0] }}</span>
-                <span>{{ time_ago(backtest.created_at) }}</span>
-                <span>♥ {{ backtest.likes_count }} · 💬 {{ backtest.comments_count }} · 👁 {{ backtest.views_count or 0 }}</span>
+            <div class="detail-author-row">
+                {% if author_avatar %}
+                <img src="/static/avatars/{{ author_avatar }}" class="detail-author-avatar" alt="">
+                {% else %}
+                <span class="detail-author-initials" style="background:{{ author_avatar_color }}">{{ author_initial }}</span>
+                {% endif %}
+                <div class="detail-author-info">
+                    <span class="detail-author-name">{{ display_name or backtest.user_email.split('@')[0] }}</span>
+                    <span class="detail-author-meta">{{ time_ago(backtest.created_at) }} · ♥ {{ backtest.likes_count }} · 💬 {{ backtest.comments_count }} · 👁 {{ backtest.views_count or 0 }}</span>
+                </div>
             </div>
         </div>
         {% if backtest.description %}
@@ -5500,6 +5542,12 @@ MY_BACKTESTS_HTML = """\
         .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
         .backtest-card-footer .engagement { display: flex; gap: 12px; }
         .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
+        .card-author { display: flex; align-items: center; gap: 6px; }
+        .card-author-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+        .card-author-initials { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.7em; font-weight: 700; flex-shrink: 0; }
+        .card-author-name { font-weight: 600; color: var(--text-muted); }
+        .card-author-sep { color: var(--text-dim); }
+        .card-author-time { color: var(--text-dim); }
         .backtest-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
         .backtest-card-asset-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); flex-shrink: 0; }
         .backtest-card-asset-fallback { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8em; color: var(--text-muted); flex-shrink: 0; }
@@ -6748,16 +6796,16 @@ MODE_LABELS = {
 
 def _enrich_backtest_cards(backtests):
     """Parse params JSON and add display-ready fields to each backtest dict."""
-    # Batch-resolve display names
+    # Batch-resolve display names and avatars
     user_ids = {bt.get('user_id') for bt in backtests if bt.get('user_id')}
-    display_names = {}
-    for uid in user_ids:
-        name = db.get_display_name(uid)
-        if name:
-            display_names[uid] = name
+    profiles = db.get_user_profiles(user_ids)
     for bt in backtests:
         uid = bt.get('user_id', '')
-        bt['_display_name'] = display_names.get(uid, bt.get('user_email', '').split('@')[0])
+        profile = profiles.get(uid, {})
+        bt['_display_name'] = profile.get('display_name') or bt.get('user_email', '').split('@')[0]
+        bt['_avatar'] = profile.get('avatar')
+        bt['_avatar_color'] = _avatar_color(uid)
+        bt['_initial'] = _user_initial(bt['_display_name'], bt.get('user_email', ''))
         try:
             p = json.loads(bt.get('params', '{}'))
         except (json.JSONDecodeError, TypeError):
@@ -7050,6 +7098,10 @@ def backtest_detail(bt_id):
     is_auth = _is_authenticated()
     liked = db.has_liked(session.get('user_id', ''), bt_id) if is_auth else False
     author_display_name = db.get_display_name(bt_entry['user_id'])
+    author_avatar = db.get_user_avatar(bt_entry['user_id'])
+    author_uid = bt_entry['user_id']
+    author_initial = _user_initial(author_display_name, bt_entry.get('user_email', ''))
+    author_avatar_color = _avatar_color(author_uid)
     # Resolve display names for comment authors
     commenter_ids = set()
     for c in comments:
@@ -7081,7 +7133,9 @@ def backtest_detail(bt_id):
         backtest=bt_entry, comments=comments, bt_params=bt_params,
         is_authenticated=is_auth, is_admin=_is_admin(),
         has_liked=liked, time_ago=_time_ago,
-        display_name=author_display_name)
+        display_name=author_display_name,
+        author_avatar=author_avatar, author_initial=author_initial,
+        author_avatar_color=author_avatar_color)
 
 
 ACCOUNT_HTML = """<!DOCTYPE html>
