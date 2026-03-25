@@ -4265,18 +4265,17 @@ COMMUNITY_HTML = """\
         {% endif %}
     </nav>
     <div class="panel">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
-            <div>
-                <h2 class="page-title">{{ page_title }}</h2>
-                <p class="page-subtitle">{{ page_subtitle }}</p>
-            </div>
-            {% if nav_active == 'featured' %}
+        {% if nav_active != 'featured' %}
+        <h2 class="page-title">{{ page_title }}</h2>
+        <p class="page-subtitle">{{ page_subtitle }}</p>
+        {% else %}
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
             <a href="/backtester" class="action-btn" style="background:linear-gradient(135deg,var(--blue),#4a7dd6);color:#fff;border-color:transparent;padding:10px 20px;font-size:0.85em;white-space:nowrap">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Create Backtest
             </a>
-            {% endif %}
         </div>
+        {% endif %}
 
         {% if show_sort|default(true) and not asset_sections|default(none) %}
         <div class="sort-tabs">
