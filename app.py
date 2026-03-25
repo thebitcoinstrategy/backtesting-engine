@@ -1199,12 +1199,12 @@ HTML = """\
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px;font-family:'DM Sans',sans-serif">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a> at the-bitcoin-strategy.com</div>
     </div>
     <nav class="nav-bar">
-        <a href="/" class="nav-link {{ 'active' if nav_active|default('')=='featured' }}">Featured</a>
+        <a href="/" class="nav-link {{ 'active' if nav_active|default('')=='featured' }}">Home</a>
         <a href="/community" class="nav-link {{ 'active' if nav_active|default('')=='community' }}">Community</a>
+        <a href="/backtester" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Create Backtest</a>
         {% if is_authenticated %}
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active|default('')=='my-backtests' }}">My Backtests</a>
         {% endif %}
-        <a href="/backtester" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Create Backtest</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active|default('')=='admin-assets' }}">Assets</a>{% endif %}
         {% if is_authenticated %}
         <div class="nav-right-group">
@@ -4225,12 +4225,12 @@ COMMUNITY_HTML = """\
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
     </div>
     <nav class="nav-bar">
-        <a href="/" class="nav-link {{ 'active' if nav_active=='featured' }}">Featured</a>
+        <a href="/" class="nav-link {{ 'active' if nav_active=='featured' }}">Home</a>
         <a href="/community" class="nav-link {{ 'active' if nav_active=='community' }}">Community</a>
+        <a href="/backtester" class="nav-link {{ 'active' if nav_active=='backtester' }}">Create Backtest</a>
         {% if is_authenticated %}
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active=='my-backtests' }}">My Backtests</a>
         {% endif %}
-        <a href="/backtester" class="nav-link {{ 'active' if nav_active=='backtester' }}">Create Backtest</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active=='admin-assets' }}">Assets</a>{% endif %}
         {% if is_authenticated %}
         <div class="nav-right-group">
@@ -4265,8 +4265,18 @@ COMMUNITY_HTML = """\
         {% endif %}
     </nav>
     <div class="panel">
-        <h2 class="page-title">{{ page_title }}</h2>
-        <p class="page-subtitle">{{ page_subtitle }}</p>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+            <div>
+                <h2 class="page-title">{{ page_title }}</h2>
+                <p class="page-subtitle">{{ page_subtitle }}</p>
+            </div>
+            {% if nav_active == 'featured' %}
+            <a href="/backtester" class="action-btn" style="background:linear-gradient(135deg,var(--blue),#4a7dd6);color:#fff;border-color:transparent;padding:10px 20px;font-size:0.85em;white-space:nowrap">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Create Backtest
+            </a>
+            {% endif %}
+        </div>
 
         {% if show_sort|default(true) and not asset_sections|default(none) %}
         <div class="sort-tabs">
@@ -4892,12 +4902,12 @@ DETAIL_HTML = """\
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
     </div>
     <nav class="nav-bar">
-        <a href="/" class="nav-link {{ 'active' if backtest.visibility=='featured' }}">Featured</a>
+        <a href="/" class="nav-link {{ 'active' if backtest.visibility=='featured' }}">Home</a>
         <a href="/community" class="nav-link {{ 'active' if backtest.visibility=='community' }}">Community</a>
+        <a href="/backtester" class="nav-link">Create Backtest</a>
         {% if is_authenticated %}
         <a href="/my-backtests" class="nav-link">My Backtests</a>
         {% endif %}
-        <a href="/backtester" class="nav-link">Create Backtest</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         {% if is_authenticated %}
         <div class="nav-right-group">
@@ -5595,10 +5605,10 @@ MY_BACKTESTS_HTML = """\
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
     </div>
     <nav class="nav-bar">
-        <a href="/" class="nav-link">Featured</a>
+        <a href="/" class="nav-link">Home</a>
         <a href="/community" class="nav-link">Community</a>
-        <a href="/my-backtests" class="nav-link active">My Backtests</a>
         <a href="/backtester" class="nav-link">Create Backtest</a>
+        <a href="/my-backtests" class="nav-link active">My Backtests</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         {% if is_authenticated %}
         <div class="nav-right-group">
@@ -6042,10 +6052,10 @@ ADMIN_ASSETS_HTML = """\
         <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
     </div>
     <nav class="nav-bar">
-        <a href="/" class="nav-link">Featured</a>
+        <a href="/" class="nav-link">Home</a>
         <a href="/community" class="nav-link">Community</a>
-        <a href="/my-backtests" class="nav-link">My Backtests</a>
         <a href="/backtester" class="nav-link">Create Backtest</a>
+        <a href="/my-backtests" class="nav-link">My Backtests</a>
         <a href="/admin/assets" class="nav-link active">Assets</a>
         {% if is_authenticated %}
         <div class="nav-right-group">
@@ -7016,7 +7026,7 @@ def featured():
             'backtests': bts,
         })
     return render_template_string(COMMUNITY_HTML,
-        nav_active='featured', page_title='Featured Backtests',
+        nav_active='featured', page_title='Home',
         page_subtitle='Curated strategies hand-picked by our team',
         backtests=backtests, asset_sections=asset_sections,
         sort=sort, page=1, total_pages=1,
@@ -7185,10 +7195,10 @@ ACCOUNT_HTML = """<!DOCTYPE html>
         <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
     </div>
     <nav class="nav-bar">
-        <a href="/" class="nav-link">Featured</a>
+        <a href="/" class="nav-link">Home</a>
         <a href="/community" class="nav-link">Community</a>
-        {% if is_authenticated %}<a href="/my-backtests" class="nav-link">My Backtests</a>{% endif %}
         <a href="/backtester" class="nav-link">Create Backtest</a>
+        {% if is_authenticated %}<a href="/my-backtests" class="nav-link">My Backtests</a>{% endif %}
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         {% if is_authenticated %}
         <div class="nav-right-group">
@@ -7476,10 +7486,10 @@ FEEDBACK_HTML = """<!DOCTYPE html>
         <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
     </div>
     <nav class="nav-bar">
-        <a href="/" class="nav-link">Featured</a>
+        <a href="/" class="nav-link">Home</a>
         <a href="/community" class="nav-link">Community</a>
-        {% if is_authenticated %}<a href="/my-backtests" class="nav-link">My Backtests</a>{% endif %}
         <a href="/backtester" class="nav-link">Create Backtest</a>
+        {% if is_authenticated %}<a href="/my-backtests" class="nav-link">My Backtests</a>{% endif %}
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         {% if is_authenticated %}
         <div class="nav-right-group">
