@@ -143,9 +143,9 @@ def init_db():
             emoji TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(comment_id, user_id, emoji)
-        );
-        CREATE INDEX IF NOT EXISTS idx_comment_reactions_comment ON comment_reactions(comment_id);
+        )
     """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_reactions_comment ON comment_reactions(comment_id)")
     conn.close()
 
 
