@@ -7646,6 +7646,152 @@ def feedback_page():
     return render_template_string(FEEDBACK_HTML)
 
 
+# ---------------------------------------------------------------------------
+# Error pages
+# ---------------------------------------------------------------------------
+
+_ERROR_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{{ code }} — Strategy Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #080a10; --bg-base: #0f1117; --bg-surface: #161922;
+            --bg-elevated: #1c2030; --border: #252a3a; --text: #e8eaf0;
+            --text-muted: #8890a4; --accent: #f7931a; --accent-hover: #ffa940;
+            --blue: #6495ED; --green: #34d399;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'DM Sans', sans-serif; background: var(--bg-deep);
+            color: var(--text); min-height: 100vh; display: flex;
+            align-items: center; justify-content: center; overflow: hidden;
+        }
+        body::before {
+            content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(247,147,26,0.06), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100,149,237,0.04), transparent);
+            pointer-events: none;
+        }
+        .error-container {
+            text-align: center; position: relative; z-index: 1;
+            animation: fadeUp 0.6s ease-out;
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .error-code {
+            font-size: 8rem; font-weight: 700; letter-spacing: -0.04em;
+            line-height: 1; margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--blue), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .error-title {
+            font-size: 1.5rem; font-weight: 600; margin-bottom: 12px;
+            color: var(--text);
+        }
+        .error-message {
+            font-size: 0.95rem; color: var(--text-muted); max-width: 420px;
+            margin: 0 auto 32px; line-height: 1.6;
+        }
+        .error-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .error-btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 10px 24px; border-radius: 10px; font-size: 0.85rem;
+            font-weight: 500; font-family: 'DM Sans', sans-serif;
+            text-decoration: none; transition: all 0.2s ease; cursor: pointer;
+            border: 1px solid var(--border);
+        }
+        .error-btn-primary {
+            background: linear-gradient(135deg, var(--blue), #4a7dd6);
+            color: #fff; border-color: transparent;
+        }
+        .error-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(100,149,237,0.3); }
+        .error-btn-ghost { background: var(--bg-elevated); color: var(--text-muted); }
+        .error-btn-ghost:hover { border-color: var(--border-hover, #3a4060); color: var(--text); }
+        .logo {
+            margin-bottom: 32px; display: inline-flex; font-size: 1rem;
+            font-weight: 700; letter-spacing: -0.02em;
+        }
+        .logo .brand-btc {
+            background: linear-gradient(135deg, var(--blue), #4a7dd6);
+            color: #fff; padding: 6px 14px;
+        }
+        .logo .brand-analytics {
+            background: var(--bg-elevated); color: var(--text);
+            padding: 6px 14px; border: 1px solid var(--border); border-left: none;
+        }
+        .particle {
+            position: fixed; border-radius: 50%; pointer-events: none;
+            opacity: 0; animation: drift linear infinite;
+        }
+        @keyframes drift {
+            0%   { opacity: 0; transform: translateY(0) scale(0); }
+            15%  { opacity: 0.6; }
+            100% { opacity: 0; transform: translateY(-100vh) scale(1); }
+        }
+    </style>
+</head>
+<body>
+    {% for i in range(12) %}
+    <div class="particle" style="
+        left: {{ range(5,95)|random }}%;
+        bottom: -10px;
+        width: {{ range(2,6)|random }}px;
+        height: {{ range(2,6)|random }}px;
+        background: {{ ['var(--accent)','var(--blue)','var(--green)'][range(0,2)|random] }};
+        animation-duration: {{ range(6,14)|random }}s;
+        animation-delay: {{ range(0,8)|random }}s;
+    "></div>
+    {% endfor %}
+
+    <div class="error-container">
+        <div class="logo">
+            <span class="brand-btc">Strategy</span><span class="brand-analytics">Analytics</span>
+        </div>
+        <div class="error-code">{{ code }}</div>
+        <div class="error-title">{{ title }}</div>
+        <div class="error-message">{{ message }}</div>
+        <div class="error-actions">
+            <a href="/" class="error-btn error-btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                Go Home
+            </a>
+            <a href="javascript:history.back()" class="error-btn error-btn-ghost">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                Go Back
+            </a>
+        </div>
+    </div>
+</body>
+</html>"""
+
+_ERROR_MAP = {
+    400: ("Bad Request", "The request didn't quite make sense. Double-check the URL or form data and try again."),
+    401: ("Not Authenticated", "You need to be logged in to view this page. Sign in and try again."),
+    403: ("Access Denied", "You don't have permission to view this page. If you think this is a mistake, reach out to us."),
+    404: ("Page Not Found", "This backtest may have been deleted, or the link might be broken. It happens to the best of us."),
+    500: ("Server Error", "Something went wrong on our end. We're on it — please try again in a moment."),
+}
+
+@app.errorhandler(400)
+@app.errorhandler(401)
+@app.errorhandler(403)
+@app.errorhandler(404)
+@app.errorhandler(500)
+def handle_error(e):
+    code = e.code if hasattr(e, 'code') else 500
+    title, message = _ERROR_MAP.get(code, ("Error", "Something unexpected happened."))
+    return render_template_string(_ERROR_HTML, code=code, title=title, message=message), code
+
+
 if __name__ == "__main__":
     print(f"Starting Strategy Analytics at http://localhost:5000 (assets: {', '.join(ASSET_NAMES)})")
     app.run(debug=False, port=5000)
