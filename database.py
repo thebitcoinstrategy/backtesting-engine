@@ -134,6 +134,18 @@ def init_db():
         conn.execute("ALTER TABLE comments ADD COLUMN edited_at TIMESTAMP")
     except sqlite3.OperationalError:
         pass
+    # Comment reactions table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comment_reactions (
+            id TEXT PRIMARY KEY,
+            comment_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL,
+            emoji TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(comment_id, user_id, emoji)
+        );
+        CREATE INDEX IF NOT EXISTS idx_comment_reactions_comment ON comment_reactions(comment_id);
+    """)
     conn.close()
 
 
@@ -728,3 +740,79 @@ def get_recent_comments(limit=10):
     ).fetchall()
     conn.close()
     return [_row_to_dict(r) for r in rows]
+
+
+ALLOWED_REACTIONS = {'👍', '❤️', '😂', '🎯', '🚀', '👎'}
+
+
+def toggle_reaction(comment_id, user_id, emoji):
+    """Toggle a reaction on a comment. Returns (reactions_summary, user_reacted)."""
+    if emoji not in ALLOWED_REACTIONS:
+        return None, False
+    conn = _get_conn()
+    existing = conn.execute(
+        "SELECT id FROM comment_reactions WHERE comment_id=? AND user_id=? AND emoji=?",
+        (comment_id, user_id, emoji)
+    ).fetchone()
+    if existing:
+        conn.execute("DELETE FROM comment_reactions WHERE id=?", (existing['id'],))
+        user_reacted = False
+    else:
+        conn.execute(
+            "INSERT INTO comment_reactions (id, comment_id, user_id, emoji) VALUES (?, ?, ?, ?)",
+            (str(uuid.uuid4()), comment_id, user_id, emoji)
+        )
+        user_reacted = True
+    conn.commit()
+    summary = _get_reactions_summary(conn, comment_id, user_id)
+    conn.close()
+    return summary, user_reacted
+
+
+def _get_reactions_summary(conn, comment_id, user_id=None):
+    """Get reaction counts and whether current user reacted, for a single comment."""
+    rows = conn.execute(
+        "SELECT emoji, COUNT(*) as cnt FROM comment_reactions WHERE comment_id=? GROUP BY emoji",
+        (comment_id,)
+    ).fetchall()
+    summary = {}
+    for r in rows:
+        summary[r['emoji']] = {'count': r['cnt'], 'reacted': False}
+    if user_id:
+        user_rows = conn.execute(
+            "SELECT emoji FROM comment_reactions WHERE comment_id=? AND user_id=?",
+            (comment_id, user_id)
+        ).fetchall()
+        for ur in user_rows:
+            if ur['emoji'] in summary:
+                summary[ur['emoji']]['reacted'] = True
+    return summary
+
+
+def get_reactions_for_comments(comment_ids, user_id=None):
+    """Get reactions for multiple comments. Returns {comment_id: {emoji: {count, reacted}}}."""
+    if not comment_ids:
+        return {}
+    conn = _get_conn()
+    placeholders = ','.join('?' * len(comment_ids))
+    rows = conn.execute(
+        f"SELECT comment_id, emoji, COUNT(*) as cnt FROM comment_reactions WHERE comment_id IN ({placeholders}) GROUP BY comment_id, emoji",
+        list(comment_ids)
+    ).fetchall()
+    result = {}
+    for r in rows:
+        cid = r['comment_id']
+        if cid not in result:
+            result[cid] = {}
+        result[cid][r['emoji']] = {'count': r['cnt'], 'reacted': False}
+    if user_id:
+        user_rows = conn.execute(
+            f"SELECT comment_id, emoji FROM comment_reactions WHERE comment_id IN ({placeholders}) AND user_id=?",
+            list(comment_ids) + [user_id]
+        ).fetchall()
+        for ur in user_rows:
+            cid = ur['comment_id']
+            if cid in result and ur['emoji'] in result[cid]:
+                result[cid][ur['emoji']]['reacted'] = True
+    conn.close()
+    return result

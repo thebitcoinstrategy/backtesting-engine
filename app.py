@@ -4793,6 +4793,20 @@ DETAIL_HTML = """\
         .comment-action-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.75em; font-family: 'DM Sans', sans-serif; }
         .comment-action-btn:hover { color: var(--text); }
         .comment-replies { margin-left: 24px; border-left: 2px solid var(--border); padding-left: 14px; }
+        .reactions-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+        .reaction-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-elevated); cursor: pointer; font-size: 0.78em; transition: all 0.15s ease; user-select: none; }
+        .reaction-pill:hover { border-color: var(--border-hover, #3a4060); background: var(--bg-surface); }
+        .reaction-pill.reacted { border-color: var(--blue); background: rgba(100,149,237,0.12); }
+        .reaction-pill .r-count { color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 0.85em; }
+        .reaction-pill.reacted .r-count { color: var(--blue); }
+        .reaction-add { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 12px; border: 1px dashed var(--border); background: none; cursor: pointer; font-size: 0.85em; color: var(--text-dim); transition: all 0.15s ease; position: relative; }
+        .reaction-add:hover { border-color: var(--text-muted); color: var(--text-muted); }
+        .emoji-picker { display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 6px; gap: 2px; z-index: 50; white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+        .emoji-picker.open { display: flex; }
+        .emoji-pick { padding: 4px 6px; border-radius: 6px; cursor: pointer; font-size: 1.1em; transition: background 0.1s; border: none; background: none; }
+        .emoji-pick:hover { background: var(--bg-surface); }
+        @keyframes reactionPop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+        .reaction-pill.just-reacted { animation: reactionPop 0.3s ease; }
         .reply-form { margin-top: 8px; }
         .reply-form textarea { min-height: 40px; font-size: 0.8em; width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-family: 'DM Sans', sans-serif; resize: vertical; margin-bottom: 6px; }
         .reply-form textarea:focus { outline: none; border-color: var(--accent); }
@@ -5115,6 +5129,18 @@ DETAIL_HTML = """\
                     <button class="comment-action-btn" onclick="deleteComment('{{ comment.id }}')">Delete</button>
                     {% endif %}
                 </div>
+                <div class="reactions-row" id="reactions-{{ comment.id }}">
+                    {% for emoji, info in comment._reactions.items() %}
+                    <button class="reaction-pill{{ ' reacted' if info.reacted }}" onclick="toggleReaction('{{ comment.id }}', '{{ emoji }}', this)">
+                        <span class="r-emoji">{{ emoji }}</span><span class="r-count">{{ info.count }}</span>
+                    </button>
+                    {% endfor %}
+                    {% if is_authenticated %}
+                    <button class="reaction-add" onclick="togglePicker(this)">+<div class="emoji-picker" onclick="event.stopPropagation()">
+                        {% for e in ['👍','❤️','😂','🎯','🚀','👎'] %}<button class="emoji-pick" onclick="toggleReaction('{{ comment.id }}', '{{ e }}', null, this)">{{ e }}</button>{% endfor %}
+                    </div></button>
+                    {% endif %}
+                </div>
                 {% endif %}
                 <div class="reply-form hidden" id="reply-form-{{ comment.id }}">
                     <textarea id="reply-{{ comment.id }}" placeholder="Write a reply..."></textarea>
@@ -5146,6 +5172,18 @@ DETAIL_HTML = """\
                             {% if is_authenticated and (reply.user_id == session.get('user_id') or is_admin) %}
                             <button class="comment-action-btn" onclick="startEdit('{{ reply.id }}')">Edit</button>
                             <button class="comment-action-btn" onclick="deleteComment('{{ reply.id }}')">Delete</button>
+                            {% endif %}
+                        </div>
+                        <div class="reactions-row" id="reactions-{{ reply.id }}">
+                            {% for emoji, info in reply._reactions.items() %}
+                            <button class="reaction-pill{{ ' reacted' if info.reacted }}" onclick="toggleReaction('{{ reply.id }}', '{{ emoji }}', this)">
+                                <span class="r-emoji">{{ emoji }}</span><span class="r-count">{{ info.count }}</span>
+                            </button>
+                            {% endfor %}
+                            {% if is_authenticated %}
+                            <button class="reaction-add" onclick="togglePicker(this)">+<div class="emoji-picker" onclick="event.stopPropagation()">
+                                {% for e in ['👍','❤️','😂','🎯','🚀','👎'] %}<button class="emoji-pick" onclick="toggleReaction('{{ reply.id }}', '{{ e }}', null, this)">{{ e }}</button>{% endfor %}
+                            </div></button>
                             {% endif %}
                         </div>
                         {% endif %}
@@ -5345,6 +5383,43 @@ function saveEdit(commentId) {
         else { _swal.fire({icon:'error', title:'Failed to edit'}); }
     });
 }
+function toggleReaction(commentId, emoji, pillBtn, pickBtn) {
+    fetch('/api/comment/' + commentId + '/reaction', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({emoji: emoji})
+    }).then(function(r) { return r.json(); })
+    .then(function(data) {
+        var row = document.getElementById('reactions-' + commentId);
+        if (!row) return;
+        // Close any open picker
+        row.querySelectorAll('.emoji-picker').forEach(function(p) { p.classList.remove('open'); });
+        // Rebuild pills
+        var addBtn = row.querySelector('.reaction-add');
+        row.querySelectorAll('.reaction-pill').forEach(function(p) { p.remove(); });
+        var emojis = data.reactions || {};
+        var orderedEmojis = ['👍','❤️','😂','🎯','🚀','👎'];
+        orderedEmojis.forEach(function(e) {
+            if (!emojis[e]) return;
+            var pill = document.createElement('button');
+            pill.className = 'reaction-pill' + (emojis[e].reacted ? ' reacted' : '');
+            pill.innerHTML = '<span class="r-emoji">' + e + '</span><span class="r-count">' + emojis[e].count + '</span>';
+            pill.onclick = function() { toggleReaction(commentId, e, pill, null); };
+            if (e === emoji) { pill.classList.add('just-reacted'); setTimeout(function() { pill.classList.remove('just-reacted'); }, 300); }
+            row.insertBefore(pill, addBtn);
+        });
+    });
+}
+function togglePicker(btn) {
+    var picker = btn.querySelector('.emoji-picker');
+    var wasOpen = picker.classList.contains('open');
+    document.querySelectorAll('.emoji-picker.open').forEach(function(p) { p.classList.remove('open'); });
+    if (!wasOpen) picker.classList.add('open');
+}
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.reaction-add')) {
+        document.querySelectorAll('.emoji-picker.open').forEach(function(p) { p.classList.remove('open'); });
+    }
+});
 // Linkify URLs in comment bodies
 (function() {
     var urlPattern = /(https?:\/\/[^\s<]+)/g;
@@ -6576,6 +6651,20 @@ def api_edit_comment(comment_id):
     return jsonify({'ok': True})
 
 
+@app.route('/api/comment/<comment_id>/reaction', methods=['POST'])
+def api_toggle_reaction(comment_id):
+    """Toggle an emoji reaction on a comment."""
+    user_id, email = _require_auth_api()
+    data = request.get_json()
+    emoji = data.get('emoji', '') if data else ''
+    if not emoji:
+        abort(400)
+    summary, reacted = db.toggle_reaction(comment_id, user_id, emoji)
+    if summary is None:
+        abort(400)
+    return jsonify({'reactions': summary, 'reacted': reacted})
+
+
 @app.route('/api/notifications')
 def api_notifications():
     """Get all notifications for the current user (unread count in badge)."""
@@ -7083,10 +7172,19 @@ def backtest_detail(bt_id):
         name = db.get_display_name(uid)
         if name:
             commenter_names[uid] = name
+    # Collect all comment IDs for reactions
+    all_comment_ids = []
+    for c in comments:
+        all_comment_ids.append(c['id'])
+        for r in c.get('replies', []):
+            all_comment_ids.append(r['id'])
+    reactions_map = db.get_reactions_for_comments(all_comment_ids, session.get('user_id') if is_auth else None)
     for c in comments:
         c['_display_name'] = commenter_names.get(c['user_id'], c['user_email'].split('@')[0])
+        c['_reactions'] = reactions_map.get(c['id'], {})
         for r in c.get('replies', []):
             r['_display_name'] = commenter_names.get(r['user_id'], r['user_email'].split('@')[0])
+            r['_reactions'] = reactions_map.get(r['id'], {})
     # Strip save/publish action buttons from cached HTML
     cached = bt_entry.get('cached_html', '') or ''
     cached = re.sub(r'<div class="action-buttons"[^>]*id="backtest-actions"[^>]*>.*?</div>', '', cached, flags=re.DOTALL)
