@@ -4063,6 +4063,12 @@ COMMUNITY_HTML = """\
             pointer-events: none; z-index: 0;
         }
         .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
+        .community-layout { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
+        .community-layout .panel-main { min-width: 0; }
+        .community-layout .panel-sidebar { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; }
+        .community-layout .panel-sidebar::-webkit-scrollbar { width: 4px; }
+        .community-layout .panel-sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        @media (max-width: 960px) { .community-layout { grid-template-columns: 1fr; } .community-layout .panel-sidebar { position: static; max-height: none; } }
         .header { text-align: center; margin-bottom: 32px; position: relative; }
         .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
         .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; border-radius: 0; font-weight: 700; }
@@ -4264,7 +4270,10 @@ COMMUNITY_HTML = """\
         </div>
         {% endif %}
     </nav>
-    <div class="panel">
+    {% if nav_active == 'community' and recent_comments|default(none) and recent_comments|length > 0 %}
+    <div class="community-layout">
+    {% endif %}
+    <div class="panel{% if nav_active == 'community' and recent_comments|default(none) and recent_comments|length > 0 %} panel-main{% endif %}">
         {% if nav_active != 'featured' %}
         <h2 class="page-title">{{ page_title }}</h2>
         <p class="page-subtitle">{{ page_subtitle }}</p>
@@ -4467,8 +4476,8 @@ COMMUNITY_HTML = """\
         {% endif %}
     </div>
 
-    {% if recent_comments|default(none) and recent_comments|length > 0 %}
-    <div class="panel" style="margin-top:16px">
+    {% if nav_active == 'community' and recent_comments|default(none) and recent_comments|length > 0 %}
+    <div class="panel panel-sidebar">
         <div class="recent-comments">
             <h3 class="recent-comments-title">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -4492,6 +4501,7 @@ COMMUNITY_HTML = """\
             {% endfor %}
         </div>
     </div>
+    </div>{# close community-layout #}
     {% endif %}
 </div>
 <script>
@@ -5360,7 +5370,13 @@ function deleteComment(commentId) {
 }
 function showReplyForm(commentId) {
     var el = document.getElementById('reply-form-' + commentId);
-    if (el) el.classList.toggle('hidden');
+    if (el) {
+        el.classList.toggle('hidden');
+        if (!el.classList.contains('hidden')) {
+            var ta = el.querySelector('textarea');
+            if (ta) ta.focus();
+        }
+    }
 }
 function startEdit(commentId) {
     document.getElementById('comment-body-' + commentId).classList.add('hidden');
