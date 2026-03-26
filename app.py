@@ -4206,6 +4206,9 @@ COMMUNITY_HTML = """\
         .coll-thumb-grid.thumbs-3 img { height: 68px; }
         .coll-thumb-grid.thumbs-3 img:first-child { height: 100%; }
         .coll-thumb-grid.thumbs-4 img { height: 68px; }
+        .coll-asset-logos { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+        .coll-asset-logo { width: 22px; height: 22px; border-radius: 50%; object-fit: contain; background: var(--bg-deep); border: 1px solid var(--border); }
+        .coll-asset-fallback { width: 22px; height: 22px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.55em; color: var(--text-muted); border: 1px solid var(--border); }
         .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 24px; }
         .pagination a { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); color: var(--text-muted); text-decoration: none; font-size: 0.82em; transition: all 0.2s ease; }
         .pagination a:hover { border-color: var(--border-hover); color: var(--text); }
@@ -4320,7 +4323,7 @@ COMMUNITY_HTML = """\
         <div class="asset-section">
             <div class="asset-section-header">
                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="background:var(--bg-deep);border-radius:50%;padding:6px"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
-                <h3 class="asset-section-title">Collections</h3>
+                <h3 class="asset-section-title">Strategies</h3>
             </div>
             <div class="backtest-grid">
                 {% for coll in collections %}
@@ -4329,7 +4332,7 @@ COMMUNITY_HTML = """\
                     <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
                     {% endif %}
                     <a class="collection-card" href="/collection/{{ coll.id }}">
-                        <span class="backtest-card-badge badge-collection">Collection</span>
+                        <span class="backtest-card-badge badge-collection">Strategy</span>
                         <div class="backtest-card-head">
                             <div class="backtest-card-head-text">
                                 <div class="backtest-card-title">{{ coll.title }}</div>
@@ -4339,6 +4342,13 @@ COMMUNITY_HTML = """\
                         <div class="coll-thumb-grid thumbs-{{ coll._thumbnails|length }}">
                             {% for thumb in coll._thumbnails %}
                             <img src="{{ thumb }}" alt="Preview">
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% if coll._assets %}
+                        <div class="coll-asset-logos">
+                            {% for asset_name, asset_logo in coll._assets %}
+                            {% if asset_logo %}<img class="coll-asset-logo" src="/static/logos/{{ asset_logo }}" alt="{{ asset_name }}" title="{{ asset_name|capitalize }}">{% else %}<span class="coll-asset-fallback" title="{{ asset_name|capitalize }}">{{ asset_name[:1]|upper }}</span>{% endif %}
                             {% endfor %}
                         </div>
                         {% endif %}
@@ -4461,7 +4471,7 @@ COMMUNITY_HTML = """\
                 <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
                 {% endif %}
                 <a class="collection-card" href="/collection/{{ coll.id }}">
-                    <span class="backtest-card-badge badge-collection">Collection</span>
+                    <span class="backtest-card-badge badge-collection">Strategy</span>
                     <div class="backtest-card-head">
                         <div class="backtest-card-head-text">
                             <div class="backtest-card-title">{{ coll.title }}</div>
@@ -4471,6 +4481,13 @@ COMMUNITY_HTML = """\
                     <div class="coll-thumb-grid thumbs-{{ coll._thumbnails|length }}">
                         {% for thumb in coll._thumbnails %}
                         <img src="{{ thumb }}" alt="Preview">
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if coll._assets %}
+                    <div class="coll-asset-logos">
+                        {% for asset_name, asset_logo in coll._assets %}
+                        {% if asset_logo %}<img class="coll-asset-logo" src="/static/logos/{{ asset_logo }}" alt="{{ asset_name }}" title="{{ asset_name|capitalize }}">{% else %}<span class="coll-asset-fallback" title="{{ asset_name|capitalize }}">{{ asset_name[:1]|upper }}</span>{% endif %}
                         {% endfor %}
                     </div>
                     {% endif %}
@@ -7139,6 +7156,7 @@ def _enrich_collection_cards(collections):
         coll['_initial'] = _user_initial(coll['_display_name'], coll.get('user_email', ''))
         coll['_first_thumbnail'] = db.get_collection_first_thumbnail(coll['id'])
         coll['_thumbnails'] = db.get_collection_thumbnails(coll['id'], limit=4)
+        coll['_assets'] = [(a, ASSET_LOGOS.get(a, '')) for a in db.get_collection_assets(coll['id'])]
     return collections
 
 

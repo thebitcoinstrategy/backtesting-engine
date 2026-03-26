@@ -1132,6 +1132,29 @@ def get_collection_thumbnails(collection_id, limit=4):
     return [r['thumbnail'] for r in rows]
 
 
+def get_collection_assets(collection_id):
+    """Get distinct asset names from backtests in a collection (parsed from params JSON)."""
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT DISTINCT b.params FROM backtests b
+           JOIN collection_backtests cb ON b.id = cb.backtest_id
+           WHERE cb.collection_id=?""",
+        (collection_id,)
+    ).fetchall()
+    conn.close()
+    import json
+    assets = set()
+    for r in rows:
+        try:
+            p = json.loads(r['params'] or '{}')
+            asset = p.get('asset', '')
+            if asset:
+                assets.add(asset)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return sorted(assets)
+
+
 def get_backtests_in_published_collections(visibility):
     """Get set of backtest IDs that belong to collections with given visibility."""
     conn = _get_conn()
