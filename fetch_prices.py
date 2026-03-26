@@ -116,37 +116,40 @@ def main():
     updated = 0
     errors = 0
 
-    for asset in assets:
-        name = asset["name"]
-        source = asset["source"]
-        source_id = asset["source_id"]
+    # Group assets by source to maintain proper rate limiting
+    coingecko_assets = [a for a in assets if a["source"] == "coingecko" and a["source_id"]]
+    yfinance_assets = [a for a in assets if a["source"] == "yfinance" and a["source_id"]]
 
-        if not source or not source_id or source == "csv":
-            log.debug("Skipping %s (source=%s)", name, source)
-            continue
-
+    # Fetch yfinance first (no strict rate limit)
+    log.info("Fetching %d yfinance assets...", len(yfinance_assets))
+    for asset in yfinance_assets:
         try:
-            if source == "coingecko":
-                df = fetch_coingecko(source_id)
-                time.sleep(2.5)  # respect 30 calls/min rate limit
-            elif source == "yfinance":
-                df = fetch_yfinance(source_id)
-            else:
-                log.warning("Unknown source '%s' for %s, skipping", source, name)
-                continue
-
+            df = fetch_yfinance(asset["source_id"])
             if df.empty:
-                log.warning("No data returned for %s (%s:%s)", name, source, source_id)
+                log.warning("No data returned for %s (yfinance:%s)", asset["name"], asset["source_id"])
                 continue
-
-            count = price_db.upsert_prices(asset["id"], df)
-            last_date = df.index[-1].date()
-            log.info("Updated %s: %d rows, latest=%s", name, len(df), last_date)
+            price_db.upsert_prices(asset["id"], df)
+            log.info("Updated %s: %d rows, latest=%s", asset["name"], len(df), df.index[-1].date())
             updated += 1
-
         except Exception:
-            log.exception("Failed to fetch %s (%s:%s)", name, source, source_id)
+            log.exception("Failed to fetch %s (yfinance:%s)", asset["name"], asset["source_id"])
             errors += 1
+
+    # Fetch CoinGecko with proper rate limiting (2.5s between each call)
+    log.info("Fetching %d CoinGecko assets...", len(coingecko_assets))
+    for asset in coingecko_assets:
+        try:
+            df = fetch_coingecko(asset["source_id"])
+            if df.empty:
+                log.warning("No data returned for %s (coingecko:%s)", asset["name"], asset["source_id"])
+                continue
+            price_db.upsert_prices(asset["id"], df)
+            log.info("Updated %s: %d rows, latest=%s", asset["name"], len(df), df.index[-1].date())
+            updated += 1
+        except Exception:
+            log.exception("Failed to fetch %s (coingecko:%s)", asset["name"], asset["source_id"])
+            errors += 1
+        time.sleep(2.5)  # respect 30 calls/min rate limit
 
     # Signal Flask workers to reload ASSETS
     try:
