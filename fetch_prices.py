@@ -47,13 +47,13 @@ COINGECKO_API_KEY = os.environ.get("COINGECKO_API_KEY", "")
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 
 
-def fetch_coingecko(coin_id):
-    """Fetch last 2 days of daily close prices from CoinGecko.
+def fetch_coingecko(coin_id, days=2):
+    """Fetch daily close prices from CoinGecko.
 
     Returns DataFrame with DatetimeIndex(UTC) + 'close' column, or empty DataFrame on failure.
     """
     url = f"{COINGECKO_BASE}/coins/{coin_id}/market_chart"
-    params = {"vs_currency": "usd", "days": 2, "interval": "daily"}
+    params = {"vs_currency": "usd", "days": days, "interval": "daily"}
     headers = {}
     if COINGECKO_API_KEY:
         headers["x-cg-demo-api-key"] = COINGECKO_API_KEY
@@ -78,20 +78,23 @@ def fetch_coingecko(coin_id):
     df["date"] = pd.to_datetime(df["time_ms"], unit="ms", utc=True).dt.normalize()
     df = df.drop_duplicates(subset="date", keep="last")
     df = df.set_index("date")[["close"]].sort_index()
+    # Exclude today — the day hasn't closed yet
+    today = pd.Timestamp.now(tz="UTC").normalize()
+    df = df[df.index < today]
     return df
 
 
 # ---------------------------------------------------------------------------
 # yfinance
 # ---------------------------------------------------------------------------
-def fetch_yfinance(ticker):
-    """Fetch last 5 trading days from Yahoo Finance.
+def fetch_yfinance(ticker, period="5d"):
+    """Fetch daily close prices from Yahoo Finance.
 
     Returns DataFrame with DatetimeIndex(UTC) + 'close' column, or empty DataFrame on failure.
     """
     import yfinance as yf
 
-    data = yf.download(ticker, period="5d", auto_adjust=True, progress=False)
+    data = yf.download(ticker, period=period, auto_adjust=True, progress=False)
     if data.empty:
         return pd.DataFrame(columns=["close"])
 
@@ -106,6 +109,9 @@ def fetch_yfinance(ticker):
         df.index = df.index.tz_convert("UTC")
     df.index = df.index.normalize()
     df.index.name = "date"
+    # Exclude today — the day hasn't closed yet
+    today = pd.Timestamp.now(tz="UTC").normalize()
+    df = df[df.index < today]
     return df
 
 
@@ -116,7 +122,17 @@ SIGNAL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "
 
 
 def main():
-    log.info("Starting daily price fetch...")
+    import argparse
+    parser = argparse.ArgumentParser(description="Fetch latest daily prices")
+    parser.add_argument("--backfill", type=int, default=0,
+                        help="Backfill N days of history (e.g., --backfill 30)")
+    args = parser.parse_args()
+
+    cg_days = max(args.backfill, 2)
+    yf_period = f"{max(args.backfill, 5)}d" if args.backfill > 5 else "5d"
+    mode = f"backfill ({args.backfill} days)" if args.backfill else "daily"
+
+    log.info("Starting price fetch (mode=%s)...", mode)
 
     price_db.init_db()
     assets = price_db.get_all_asset_metadata()
@@ -130,10 +146,10 @@ def main():
     yfinance_assets = [a for a in assets if a["source"] == "yfinance" and a["source_id"]]
 
     # Fetch yfinance first (no strict rate limit)
-    log.info("Fetching %d yfinance assets...", len(yfinance_assets))
+    log.info("Fetching %d yfinance assets (period=%s)...", len(yfinance_assets), yf_period)
     for asset in yfinance_assets:
         try:
-            df = fetch_yfinance(asset["source_id"])
+            df = fetch_yfinance(asset["source_id"], period=yf_period)
             if df.empty:
                 log.warning("No data returned for %s (yfinance:%s)", asset["name"], asset["source_id"])
                 continue
@@ -144,11 +160,11 @@ def main():
             log.exception("Failed to fetch %s (yfinance:%s)", asset["name"], asset["source_id"])
             errors += 1
 
-    # Fetch CoinGecko with proper rate limiting (2.5s between each call)
-    log.info("Fetching %d CoinGecko assets...", len(coingecko_assets))
+    # Fetch CoinGecko with proper rate limiting
+    log.info("Fetching %d CoinGecko assets (days=%d)...", len(coingecko_assets), cg_days)
     for asset in coingecko_assets:
         try:
-            df = fetch_coingecko(asset["source_id"])
+            df = fetch_coingecko(asset["source_id"], days=cg_days)
             if df.empty:
                 log.warning("No data returned for %s (coingecko:%s)", asset["name"], asset["source_id"])
                 continue

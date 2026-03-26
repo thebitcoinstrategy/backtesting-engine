@@ -276,3 +276,19 @@ def get_price_count(name):
             return cur.fetchone()[0]
     finally:
         conn.close()
+
+
+def delete_prices_on_or_after(date):
+    """Delete all price rows on or after the given date (for all assets).
+
+    Useful for removing incomplete (today's) data.
+    """
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM prices WHERE date >= %s", (date,))
+            count = cur.rowcount
+        conn.commit()
+        return count
+    finally:
+        conn.close()
