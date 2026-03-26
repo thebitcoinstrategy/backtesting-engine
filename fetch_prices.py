@@ -58,8 +58,17 @@ def fetch_coingecko(coin_id):
     if COINGECKO_API_KEY:
         headers["x-cg-demo-api-key"] = COINGECKO_API_KEY
 
-    resp = requests.get(url, params=params, headers=headers, timeout=30)
-    resp.raise_for_status()
+    for attempt in range(3):
+        resp = requests.get(url, params=params, headers=headers, timeout=30)
+        if resp.status_code == 429:
+            wait = 10 * (attempt + 1)
+            log.warning("CoinGecko 429 for %s, retrying in %ds...", coin_id, wait)
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        break
+    else:
+        resp.raise_for_status()  # raise after all retries exhausted
 
     prices = resp.json().get("prices", [])
     if not prices:
@@ -149,7 +158,7 @@ def main():
         except Exception:
             log.exception("Failed to fetch %s (coingecko:%s)", asset["name"], asset["source_id"])
             errors += 1
-        time.sleep(2.5)  # respect 30 calls/min rate limit
+        time.sleep(5)  # conservative rate limit (safe without API key too)
 
     # Signal Flask workers to reload ASSETS
     try:
