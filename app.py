@@ -4194,6 +4194,18 @@ COMMUNITY_HTML = """\
         .collection-card-count svg { width: 12px; height: 12px; }
         .collection-yt-indicator { position: absolute; top: 12px; right: 12px; width: 24px; height: 24px; background: rgba(255,0,0,0.85); border-radius: 4px; display: flex; align-items: center; justify-content: center; z-index: 2; }
         .collection-yt-indicator svg { width: 12px; height: 12px; color: #fff; }
+        .coll-thumb-grid { display: grid; gap: 4px; border-radius: 8px; overflow: hidden; margin-bottom: 10px; border: 1px solid var(--border); }
+        .coll-thumb-grid.thumbs-1 { grid-template-columns: 1fr; }
+        .coll-thumb-grid.thumbs-2 { grid-template-columns: 1fr 1fr; }
+        .coll-thumb-grid.thumbs-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .coll-thumb-grid.thumbs-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .coll-thumb-grid.thumbs-3 img:first-child { grid-row: 1 / 3; }
+        .coll-thumb-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .coll-thumb-grid.thumbs-1 img { height: 140px; }
+        .coll-thumb-grid.thumbs-2 img { height: 100px; }
+        .coll-thumb-grid.thumbs-3 img { height: 68px; }
+        .coll-thumb-grid.thumbs-3 img:first-child { height: 100%; }
+        .coll-thumb-grid.thumbs-4 img { height: 68px; }
         .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 24px; }
         .pagination a { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); color: var(--text-muted); text-decoration: none; font-size: 0.82em; transition: all 0.2s ease; }
         .pagination a:hover { border-color: var(--border-hover); color: var(--text); }
@@ -4323,7 +4335,13 @@ COMMUNITY_HTML = """\
                                 <div class="backtest-card-title">{{ coll.title }}</div>
                             </div>
                         </div>
-                        {% if coll._first_thumbnail %}<img class="backtest-card-thumb" src="{{ coll._first_thumbnail }}" alt="Preview">{% endif %}
+                        {% if coll._thumbnails %}
+                        <div class="coll-thumb-grid thumbs-{{ coll._thumbnails|length }}">
+                            {% for thumb in coll._thumbnails %}
+                            <img src="{{ thumb }}" alt="Preview">
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                         {% if coll.description %}<div class="backtest-card-desc">{{ coll.description[:250] }}</div>{% endif %}
                         <div class="backtest-card-params">
                             <span class="collection-card-count"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> {{ coll._backtest_count }} backtest{{ 's' if coll._backtest_count != 1 }}</span>
@@ -4340,7 +4358,7 @@ COMMUNITY_HTML = """\
                                 <span class="card-author-time">{{ time_ago(coll.created_at) }}</span>
                             </div>
                             <div class="engagement">
-                                <span>👁 {{ coll.views_count or 0 }}</span>
+                                <span>{{ coll.views_count or 0 }} views</span>
                             </div>
                         </div>
                     </a>
@@ -4449,7 +4467,13 @@ COMMUNITY_HTML = """\
                             <div class="backtest-card-title">{{ coll.title }}</div>
                         </div>
                     </div>
-                    {% if coll._first_thumbnail %}<img class="backtest-card-thumb" src="{{ coll._first_thumbnail }}" alt="Preview">{% endif %}
+                    {% if coll._thumbnails %}
+                    <div class="coll-thumb-grid thumbs-{{ coll._thumbnails|length }}">
+                        {% for thumb in coll._thumbnails %}
+                        <img src="{{ thumb }}" alt="Preview">
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                     {% if coll.description %}<div class="backtest-card-desc">{{ coll.description[:250] }}</div>{% endif %}
                     <div class="backtest-card-params">
                         <span class="collection-card-count"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> {{ coll._backtest_count }} backtest{{ 's' if coll._backtest_count != 1 }}</span>
@@ -4466,7 +4490,7 @@ COMMUNITY_HTML = """\
                             <span class="card-author-time">{{ time_ago(coll.created_at) }}</span>
                         </div>
                         <div class="engagement">
-                            <span>👁 {{ coll.views_count or 0 }}</span>
+                            <span>{{ coll.views_count or 0 }} views</span>
                         </div>
                     </div>
                 </a>
@@ -7114,6 +7138,7 @@ def _enrich_collection_cards(collections):
         coll['_avatar_color'] = _avatar_color(uid)
         coll['_initial'] = _user_initial(coll['_display_name'], coll.get('user_email', ''))
         coll['_first_thumbnail'] = db.get_collection_first_thumbnail(coll['id'])
+        coll['_thumbnails'] = db.get_collection_thumbnails(coll['id'], limit=4)
     return collections
 
 

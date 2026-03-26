@@ -1118,6 +1118,20 @@ def get_collection_first_thumbnail(collection_id):
     return row['thumbnail'] if row else None
 
 
+def get_collection_thumbnails(collection_id, limit=4):
+    """Get up to N thumbnails from backtests in a collection, ordered by sort_order."""
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT b.thumbnail FROM backtests b
+           JOIN collection_backtests cb ON b.id = cb.backtest_id
+           WHERE cb.collection_id=? AND b.thumbnail IS NOT NULL
+           ORDER BY cb.sort_order ASC LIMIT ?""",
+        (collection_id, limit)
+    ).fetchall()
+    conn.close()
+    return [r['thumbnail'] for r in rows]
+
+
 def get_backtests_in_published_collections(visibility):
     """Get set of backtest IDs that belong to collections with given visibility."""
     conn = _get_conn()
