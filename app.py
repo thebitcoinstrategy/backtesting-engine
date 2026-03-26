@@ -4406,15 +4406,8 @@ COMMUNITY_HTML = """\
                 </div>
                 {% endif %}
                 <a class="backtest-card" href="{{ '/backtest/' ~ bt.id if is_authenticated or loop.first else '#' }}">
-                    <div class="backtest-card-params">
-                        {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% endif %}
-                        <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
-                        <span class="backtest-card-tag" title="Strategy">{{ bt._strategy }}</span>
-                        {% if bt._leverage %}<span class="backtest-card-tag" title="Leverage (Long/Short)">{{ bt._leverage }}</span>{% endif %}
-                        {% if bt._start_date %}<span class="backtest-card-tag" title="Start date">{{ bt._start_date }}</span>{% endif %}
-                        {% if bt._exposure != 'long-cash' %}<span class="backtest-card-tag" title="Exposure">{{ bt._exposure }}</span>{% endif %}
-                    </div>
                     <div class="backtest-card-head">
+                        {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% endif %}
                         <div class="backtest-card-head-text">
                             <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled Backtest' }}</div>
                         </div>
@@ -4422,6 +4415,13 @@ COMMUNITY_HTML = """\
                     </div>
                     {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
                     {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
+                    <div class="backtest-card-params">
+                        <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
+                        <span class="backtest-card-tag" title="Strategy">{{ bt._strategy }}</span>
+                        {% if bt._leverage %}<span class="backtest-card-tag" title="Leverage (Long/Short)">{{ bt._leverage }}</span>{% endif %}
+                        {% if bt._start_date %}<span class="backtest-card-tag" title="Start date">{{ bt._start_date }}</span>{% endif %}
+                        {% if bt._exposure != 'long-cash' %}<span class="backtest-card-tag" title="Exposure">{{ bt._exposure }}</span>{% endif %}
+                    </div>
                     {% if bt._apr %}
                     <div class="backtest-card-metrics">
                         <div class="card-metric">
@@ -4530,15 +4530,8 @@ COMMUNITY_HTML = """\
             <a class="backtest-card" href="{{ '/backtest/' ~ bt.id if is_authenticated or loop.first else '#' }}">
                 {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
                 {% if bt.visibility == 'private' %}<span class="backtest-card-badge badge-private">Private</span>{% endif %}
-                <div class="backtest-card-params">
-                    {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
-                    <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
-                    <span class="backtest-card-tag" title="Strategy">{{ bt._strategy }}</span>
-                    {% if bt._leverage %}<span class="backtest-card-tag" title="Leverage (Long/Short)">{{ bt._leverage }}</span>{% endif %}
-                    {% if bt._start_date %}<span class="backtest-card-tag" title="Start date">{{ bt._start_date }}</span>{% endif %}
-                    {% if bt._exposure != 'long-cash' %}<span class="backtest-card-tag" title="Exposure">{{ bt._exposure }}</span>{% endif %}
-                </div>
                 <div class="backtest-card-head">
+                    {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                     <div class="backtest-card-head-text">
                         <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled Backtest' }}</div>
                         <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
@@ -4547,6 +4540,13 @@ COMMUNITY_HTML = """\
                 </div>
                 {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
                 {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
+                <div class="backtest-card-params">
+                    <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
+                    <span class="backtest-card-tag" title="Strategy">{{ bt._strategy }}</span>
+                    {% if bt._leverage %}<span class="backtest-card-tag" title="Leverage (Long/Short)">{{ bt._leverage }}</span>{% endif %}
+                    {% if bt._start_date %}<span class="backtest-card-tag" title="Start date">{{ bt._start_date }}</span>{% endif %}
+                    {% if bt._exposure != 'long-cash' %}<span class="backtest-card-tag" title="Exposure">{{ bt._exposure }}</span>{% endif %}
+                </div>
                 {% if bt._apr %}
                 <div class="backtest-card-metrics">
                     <div class="card-metric">
@@ -5921,14 +5921,8 @@ MY_BACKTESTS_HTML = """\
             <div class="backtest-card">
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
                     {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
-                    <div class="backtest-card-params">
-                        {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
-                        <span class="backtest-card-tag">{{ bt._mode_label }}</span>
-                        <span class="backtest-card-tag">{{ bt._strategy }}</span>
-                        {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
-                        {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
-                    </div>
                     <div class="backtest-card-head">
+                        {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                         <div class="backtest-card-head-text">
                             <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled' }}</div>
                             <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
@@ -5937,6 +5931,12 @@ MY_BACKTESTS_HTML = """\
                     </div>
                     {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
                     {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
+                    <div class="backtest-card-params">
+                        <span class="backtest-card-tag">{{ bt._mode_label }}</span>
+                        <span class="backtest-card-tag">{{ bt._strategy }}</span>
+                        {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
+                        {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
+                    </div>
                     {% if bt._apr %}
                     <div class="backtest-card-metrics">
                         <div class="card-metric">
@@ -5977,14 +5977,8 @@ MY_BACKTESTS_HTML = """\
             <div class="backtest-card">
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
                     <span class="backtest-card-badge badge-private">Private</span>
-                    <div class="backtest-card-params">
-                        {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
-                        <span class="backtest-card-tag">{{ bt._mode_label }}</span>
-                        <span class="backtest-card-tag">{{ bt._strategy }}</span>
-                        {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
-                        {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
-                    </div>
                     <div class="backtest-card-head">
+                        {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                         <div class="backtest-card-head-text">
                             <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Saved Backtest' }}</div>
                             <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
@@ -5992,6 +5986,12 @@ MY_BACKTESTS_HTML = """\
                         <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
                     </div>
                     {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
+                    <div class="backtest-card-params">
+                        <span class="backtest-card-tag">{{ bt._mode_label }}</span>
+                        <span class="backtest-card-tag">{{ bt._strategy }}</span>
+                        {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
+                        {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
+                    </div>
                     {% if bt._apr %}
                     <div class="backtest-card-metrics">
                         <div class="card-metric">
@@ -7929,14 +7929,8 @@ COLLECTION_DETAIL_HTML = """\
             <button class="remove-bt-btn" onclick="event.preventDefault();removeBacktest('{{ bt.id }}')" title="Remove from collection">&times;</button>
             {% endif %}
             <a class="backtest-card" href="/backtest/{{ bt.id }}">
-                <div class="backtest-card-params">
-                    {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
-                    <span class="backtest-card-tag">{{ bt._mode_label }}</span>
-                    <span class="backtest-card-tag">{{ bt._strategy }}</span>
-                    {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
-                    {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
-                </div>
                 <div class="backtest-card-head">
+                    {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                     <div class="backtest-card-head-text">
                         <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled Backtest' }}</div>
                         <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
@@ -7945,6 +7939,12 @@ COLLECTION_DETAIL_HTML = """\
                 </div>
                 {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
                 {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
+                <div class="backtest-card-params">
+                    <span class="backtest-card-tag">{{ bt._mode_label }}</span>
+                    <span class="backtest-card-tag">{{ bt._strategy }}</span>
+                    {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
+                    {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
+                </div>
                 {% if bt._apr %}
                 <div class="backtest-card-metrics">
                     <div class="card-metric">
