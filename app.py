@@ -4184,6 +4184,16 @@ COMMUNITY_HTML = """\
         .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
         .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
         .badge-private { background: rgba(136,144,164,0.15); color: var(--text-muted); }
+        .badge-collection { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+        .collection-card-wrapper { position: relative; }
+        .collection-card-wrapper::before { content: ''; position: absolute; top: 4px; left: 4px; right: -4px; bottom: -4px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px; z-index: -1; }
+        .collection-card-wrapper::after { content: ''; position: absolute; top: 8px; left: 8px; right: -8px; bottom: -8px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 14px; z-index: -2; opacity: 0.5; }
+        .collection-card { display: block; background: var(--bg-surface); border: 1px solid var(--border); border-left: 3px solid #8b5cf6; border-radius: 14px; padding: 18px; transition: all 0.2s ease; cursor: pointer; text-decoration: none; color: inherit; position: relative; z-index: 1; }
+        .collection-card:hover { border-color: var(--border-hover); border-left-color: #8b5cf6; transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .collection-card-count { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2); font-size: 0.7em; color: #8b5cf6; font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
+        .collection-card-count svg { width: 12px; height: 12px; }
+        .collection-yt-indicator { position: absolute; top: 12px; right: 12px; width: 24px; height: 24px; background: rgba(255,0,0,0.85); border-radius: 4px; display: flex; align-items: center; justify-content: center; z-index: 2; }
+        .collection-yt-indicator svg { width: 12px; height: 12px; color: #fff; }
         .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 24px; }
         .pagination a { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); color: var(--text-muted); text-decoration: none; font-size: 0.82em; transition: all 0.2s ease; }
         .pagination a:hover { border-color: var(--border-hover); color: var(--text); }
@@ -4293,6 +4303,53 @@ COMMUNITY_HTML = """\
         </div>
         {% endif %}
 
+        {% if collections|default(none) %}
+        {# Collections section #}
+        <div class="asset-section">
+            <div class="asset-section-header">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="background:var(--bg-deep);border-radius:50%;padding:6px"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+                <h3 class="asset-section-title">Collections</h3>
+            </div>
+            <div class="backtest-grid">
+                {% for coll in collections %}
+                <div class="collection-card-wrapper">
+                    {% if coll.youtube_url %}
+                    <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
+                    {% endif %}
+                    <a class="collection-card" href="/collection/{{ coll.id }}">
+                        <span class="backtest-card-badge badge-collection">Collection</span>
+                        <div class="backtest-card-head">
+                            <div class="backtest-card-head-text">
+                                <div class="backtest-card-title">{{ coll.title }}</div>
+                            </div>
+                        </div>
+                        {% if coll._first_thumbnail %}<img class="backtest-card-thumb" src="{{ coll._first_thumbnail }}" alt="Preview">{% endif %}
+                        {% if coll.description %}<div class="backtest-card-desc">{{ coll.description[:250] }}</div>{% endif %}
+                        <div class="backtest-card-params">
+                            <span class="collection-card-count"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> {{ coll._backtest_count }} backtest{{ 's' if coll._backtest_count != 1 }}</span>
+                        </div>
+                        <div class="backtest-card-footer">
+                            <div class="card-author">
+                                {% if coll._avatar %}
+                                <img src="/static/avatars/{{ coll._avatar }}" class="card-author-avatar" alt="">
+                                {% else %}
+                                <span class="card-author-initials" style="background:{{ coll._avatar_color }}">{{ coll._initial }}</span>
+                                {% endif %}
+                                <span class="card-author-name">{{ coll._display_name }}</span>
+                                <span class="card-author-sep">·</span>
+                                <span class="card-author-time">{{ time_ago(coll.created_at) }}</span>
+                            </div>
+                            <div class="engagement">
+                                <span>👁 {{ coll.views_count or 0 }}</span>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         {% if asset_sections|default(none) %}
         {# Grouped by asset view (featured page) #}
         {% for section in asset_sections %}
@@ -4377,7 +4434,47 @@ COMMUNITY_HTML = """\
         </div>
         {% endfor %}
 
-        {% elif backtests %}
+        {% elif backtests or collections|default(none) %}
+        {% if collections|default(none) and not asset_sections|default(none) %}
+        <div class="backtest-grid" style="margin-bottom:24px">
+            {% for coll in collections %}
+            <div class="collection-card-wrapper">
+                {% if coll.youtube_url %}
+                <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
+                {% endif %}
+                <a class="collection-card" href="/collection/{{ coll.id }}">
+                    <span class="backtest-card-badge badge-collection">Collection</span>
+                    <div class="backtest-card-head">
+                        <div class="backtest-card-head-text">
+                            <div class="backtest-card-title">{{ coll.title }}</div>
+                        </div>
+                    </div>
+                    {% if coll._first_thumbnail %}<img class="backtest-card-thumb" src="{{ coll._first_thumbnail }}" alt="Preview">{% endif %}
+                    {% if coll.description %}<div class="backtest-card-desc">{{ coll.description[:250] }}</div>{% endif %}
+                    <div class="backtest-card-params">
+                        <span class="collection-card-count"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> {{ coll._backtest_count }} backtest{{ 's' if coll._backtest_count != 1 }}</span>
+                    </div>
+                    <div class="backtest-card-footer">
+                        <div class="card-author">
+                            {% if coll._avatar %}
+                            <img src="/static/avatars/{{ coll._avatar }}" class="card-author-avatar" alt="">
+                            {% else %}
+                            <span class="card-author-initials" style="background:{{ coll._avatar_color }}">{{ coll._initial }}</span>
+                            {% endif %}
+                            <span class="card-author-name">{{ coll._display_name }}</span>
+                            <span class="card-author-sep">·</span>
+                            <span class="card-author-time">{{ time_ago(coll.created_at) }}</span>
+                        </div>
+                        <div class="engagement">
+                            <span>👁 {{ coll.views_count or 0 }}</span>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if backtests %}
         <div class="backtest-grid" id="backtest-grid">
             {% for bt in backtests %}
             <div class="backtest-card-wrapper{{ ' locked' if not is_authenticated and not loop.first else '' }}" data-id="{{ bt.id }}">
@@ -4459,6 +4556,7 @@ COMMUNITY_HTML = """\
             {% if page < total_pages %}<a href="?sort={{ sort }}&page={{ page + 1 }}">Next →</a>{% endif %}
         </div>
         {% endif %}
+        {% endif %}{# end if backtests #}
 
         {% else %}
         <div class="empty-state">
@@ -5736,6 +5834,42 @@ MY_BACKTESTS_HTML = """\
     <div class="panel">
         <h2 class="page-title">My Backtests</h2>
 
+        {# Collections section #}
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;margin-bottom:14px">
+            <h3 class="section-header" style="margin:0">My Collections ({{ collections|default([])|length }})</h3>
+            <button class="action-btn" onclick="openCollectionModal()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent;padding:8px 16px">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                New Collection
+            </button>
+        </div>
+        {% if collections|default(none) %}
+        <div class="backtest-grid">
+            {% for coll in collections %}
+            <div class="backtest-card" style="border-left:3px solid #8b5cf6;position:relative">
+                <a href="/collection/{{ coll.id }}" style="text-decoration:none;color:inherit">
+                    <span class="backtest-card-badge" style="background:rgba(139,92,246,0.15);color:#8b5cf6">Collection</span>
+                    <div class="backtest-card-title">{{ coll.title }}</div>
+                    {% if coll.description %}<div class="backtest-card-desc">{{ coll.description[:200] }}</div>{% endif %}
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+                        <span class="backtest-card-tag" style="background:rgba(139,92,246,0.1);border-color:rgba(139,92,246,0.2);color:#8b5cf6">{{ coll._backtest_count }} backtest{{ 's' if coll._backtest_count != 1 }}</span>
+                        {% if coll.youtube_url %}<span class="backtest-card-tag" style="background:rgba(255,0,0,0.1);border-color:rgba(255,0,0,0.2);color:#ef4444">Video</span>{% endif %}
+                        {% if coll.visibility == 'community' %}<span class="backtest-card-badge badge-community" style="margin:0">Community</span>{% elif coll.visibility == 'featured' %}<span class="backtest-card-badge badge-featured" style="margin:0">Featured</span>{% else %}<span class="backtest-card-badge badge-private" style="margin:0">Private</span>{% endif %}
+                    </div>
+                    <div class="backtest-card-footer">
+                        <span>{{ time_ago(coll.created_at) }}</span>
+                        <div class="engagement"><span>👁 {{ coll.views_count or 0 }}</span></div>
+                    </div>
+                </a>
+                <div class="card-actions">
+                    <a class="action-btn" href="/collection/{{ coll.id }}">View</a>
+                    <button class="action-btn" onclick="event.stopPropagation();openEditCollectionModal('{{ coll.id }}', '{{ coll.title|e }}', '{{ (coll.description or '')|e }}', '{{ (coll.youtube_url or '')|e }}')">Edit</button>
+                    <button class="action-btn danger" onclick="event.stopPropagation();deleteCollection('{{ coll.id }}')">Delete</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         {% if published %}
         <h3 class="section-header" style="margin-top:16px">Published ({{ published|length }})</h3>
         <div class="backtest-grid">
@@ -5842,7 +5976,7 @@ MY_BACKTESTS_HTML = """\
         </div>
         {% endif %}
 
-        {% if not published and not saved %}
+        {% if not published and not saved and not collections|default(none) %}
         <div class="empty-state">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f7931a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;opacity:0.7"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
             <h3>No backtests yet</h3>
@@ -5970,9 +6104,71 @@ function saveEdit() {
         location.reload();
     }).catch(function(e) { _swal.fire({icon:'error', title:'Failed to save', text:e.message}); });
 }
+// Collection functions
+function openCollectionModal() {
+    document.getElementById('coll-modal-overlay').classList.add('open');
+    document.getElementById('coll-title').focus();
+}
+function closeCollectionModal() {
+    document.getElementById('coll-modal-overlay').classList.remove('open');
+    document.getElementById('coll-title').value = '';
+    document.getElementById('coll-desc').value = '';
+    document.getElementById('coll-youtube').value = '';
+}
+function saveCollection() {
+    var title = document.getElementById('coll-title').value.trim();
+    if (!title) { _swal.fire({icon:'warning', title:'Title required'}); return; }
+    var desc = document.getElementById('coll-desc').value.trim();
+    var yt = document.getElementById('coll-youtube').value.trim();
+    fetch('/api/collection/create', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: title, description: desc, youtube_url: yt})
+    }).then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        closeCollectionModal();
+        location.reload();
+    }).catch(function(e) { _swal.fire({icon:'error', title:'Failed', text:e.message}); });
+}
+function deleteCollection(collId) {
+    _swal.fire({
+        title: 'Delete this collection?', text: 'Backtests inside will not be deleted.',
+        icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        fetch('/api/collection/' + collId + '/delete', { method: 'POST' })
+        .then(function() { location.reload(); });
+    });
+}
+function openEditCollectionModal(id, title, desc, yt) {
+    document.getElementById('edit-coll-id').value = id;
+    document.getElementById('edit-coll-title').value = title || '';
+    document.getElementById('edit-coll-desc').value = desc || '';
+    document.getElementById('edit-coll-youtube').value = yt || '';
+    document.getElementById('edit-coll-modal-overlay').classList.add('open');
+    document.getElementById('edit-coll-title').focus();
+}
+function closeEditCollectionModal() {
+    document.getElementById('edit-coll-modal-overlay').classList.remove('open');
+}
+function saveEditCollection() {
+    var id = document.getElementById('edit-coll-id').value;
+    var title = document.getElementById('edit-coll-title').value.trim();
+    var desc = document.getElementById('edit-coll-desc').value.trim();
+    var yt = document.getElementById('edit-coll-youtube').value.trim();
+    fetch('/api/collection/' + id + '/update', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: title, description: desc, youtube_url: yt})
+    }).then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        closeEditCollectionModal();
+        location.reload();
+    }).catch(function(e) { _swal.fire({icon:'error', title:'Failed', text:e.message}); });
+}
 </script>
 
-<!-- Edit Modal -->
+<!-- Edit Backtest Modal -->
 <div class="publish-modal-overlay" id="edit-modal-overlay">
     <div class="publish-modal">
         <button class="close-btn" onclick="closeEditModal()">&times;</button>
@@ -5985,6 +6181,43 @@ function saveEdit() {
         <div class="publish-modal-actions">
             <button class="action-btn" onclick="closeEditModal()">Cancel</button>
             <button class="action-btn primary" onclick="saveEdit()">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<!-- New Collection Modal -->
+<div class="publish-modal-overlay" id="coll-modal-overlay">
+    <div class="publish-modal">
+        <button class="close-btn" onclick="closeCollectionModal()">&times;</button>
+        <h3>New Collection</h3>
+        <label for="coll-title">Title</label>
+        <input type="text" id="coll-title" maxlength="120" placeholder="e.g. Bitcoin Moving Average Strategies">
+        <label for="coll-desc">Description (optional)</label>
+        <textarea id="coll-desc" placeholder="Describe what this collection is about..."></textarea>
+        <label for="coll-youtube">YouTube URL (optional)</label>
+        <input type="text" id="coll-youtube" placeholder="https://www.youtube.com/watch?v=...">
+        <div class="publish-modal-actions">
+            <button class="action-btn" onclick="closeCollectionModal()">Cancel</button>
+            <button class="action-btn" onclick="saveCollection()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent">Create Collection</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Collection Modal -->
+<div class="publish-modal-overlay" id="edit-coll-modal-overlay">
+    <div class="publish-modal">
+        <button class="close-btn" onclick="closeEditCollectionModal()">&times;</button>
+        <h3>Edit Collection</h3>
+        <input type="hidden" id="edit-coll-id">
+        <label for="edit-coll-title">Title</label>
+        <input type="text" id="edit-coll-title" maxlength="120">
+        <label for="edit-coll-desc">Description</label>
+        <textarea id="edit-coll-desc"></textarea>
+        <label for="edit-coll-youtube">YouTube URL</label>
+        <input type="text" id="edit-coll-youtube" placeholder="https://www.youtube.com/watch?v=...">
+        <div class="publish-modal-actions">
+            <button class="action-btn" onclick="closeEditCollectionModal()">Cancel</button>
+            <button class="action-btn" onclick="saveEditCollection()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent">Save Changes</button>
         </div>
     </div>
 </div>
@@ -6869,6 +7102,21 @@ MODE_LABELS = {
 }
 
 
+def _enrich_collection_cards(collections):
+    """Add display-ready fields to collection dicts."""
+    user_ids = {c.get('user_id') for c in collections if c.get('user_id')}
+    profiles = db.get_user_profiles(user_ids)
+    for coll in collections:
+        uid = coll.get('user_id', '')
+        profile = profiles.get(uid, {})
+        coll['_display_name'] = profile.get('display_name') or coll.get('user_email', '').split('@')[0]
+        coll['_avatar'] = profile.get('avatar')
+        coll['_avatar_color'] = _avatar_color(uid)
+        coll['_initial'] = _user_initial(coll['_display_name'], coll.get('user_email', ''))
+        coll['_first_thumbnail'] = db.get_collection_first_thumbnail(coll['id'])
+    return collections
+
+
 def _enrich_backtest_cards(backtests):
     """Parse params JSON and add display-ready fields to each backtest dict."""
     # Batch-resolve display names and avatars
@@ -7096,10 +7344,14 @@ def community():
         c['_avatar_color'] = _avatar_color(c['user_id'])
         c['_initial'] = _user_initial(c['_display_name'], c['user_email'])
         c['_time_ago'] = _time_ago(c['created_at'])
+    # Collections
+    community_collections, _ = db.list_collections(visibility='community', sort='newest')
+    _enrich_collection_cards(community_collections)
     return render_template_string(COMMUNITY_HTML,
         nav_active='community', page_title='Community Backtests',
         page_subtitle='Strategies shared by the community',
-        backtests=backtests, sort=sort, page=page, total_pages=total_pages,
+        backtests=backtests, collections=community_collections,
+        sort=sort, page=page, total_pages=total_pages,
         recent_comments=recent_comments,
         is_authenticated=_is_authenticated(), time_ago=_time_ago)
 
@@ -7129,10 +7381,14 @@ def featured():
             'logo': ASSET_LOGOS.get(asset, ''),
             'backtests': bts,
         })
+    # Collections
+    featured_collections, _ = db.list_collections(visibility='featured', sort='manual')
+    _enrich_collection_cards(featured_collections)
     return render_template_string(COMMUNITY_HTML,
         nav_active='featured', page_title='Home',
         page_subtitle='Curated strategies hand-picked by our team',
         backtests=backtests, asset_sections=asset_sections,
+        collections=featured_collections,
         sort=sort, page=1, total_pages=1,
         is_authenticated=_is_authenticated(), is_admin=_is_admin(), time_ago=_time_ago)
 
@@ -7147,11 +7403,15 @@ def my_backtests():
     saved = [b for b in all_bt if b['visibility'] == 'private']
     _enrich_backtest_cards(published)
     _enrich_backtest_cards(saved)
+    # Collections
+    user_collections = db.list_user_collections(user_id)
+    _enrich_collection_cards(user_collections)
     display_name = db.get_display_name(user_id)
     email = session.get('email', '')
     email_prefix = email.split('@')[0] if email else ''
     return render_template_string(MY_BACKTESTS_HTML,
-        published=published, saved=saved, time_ago=_time_ago,
+        published=published, saved=saved, collections=user_collections,
+        time_ago=_time_ago,
         display_name=display_name, email_prefix=email_prefix)
 
 
@@ -7220,6 +7480,505 @@ def backtest_detail(bt_id):
         display_name=author_display_name,
         author_avatar=author_avatar, author_initial=author_initial,
         author_avatar_color=author_avatar_color)
+
+
+# --- Collection Routes ---
+
+def _extract_youtube_id(url):
+    """Extract YouTube video ID from various URL formats."""
+    if not url:
+        return None
+    import re as re_mod
+    m = re_mod.search(r'(?:v=|youtu\.be/|embed/)([\w-]+)', url)
+    return m.group(1) if m else None
+
+
+@app.route('/collection/<collection_id>')
+def collection_detail(collection_id):
+    """Collection detail page."""
+    _try_token_auth()
+    coll = db.get_collection(collection_id)
+    if not coll:
+        abort(404)
+    if coll['visibility'] == 'private':
+        if not _is_authenticated() or str(session.get('user_id', '')) != str(coll['user_id']):
+            abort(404)
+    db.increment_collection_views(collection_id)
+    coll['views_count'] = (coll.get('views_count') or 0) + 1
+    backtests = db.get_collection_backtests(collection_id)
+    _enrich_backtest_cards(backtests)
+    # Author info
+    author_display_name = db.get_display_name(coll['user_id'])
+    author_avatar = db.get_user_avatar(coll['user_id'])
+    author_uid = coll['user_id']
+    author_initial = _user_initial(author_display_name, coll.get('user_email', ''))
+    author_avatar_color = _avatar_color(author_uid)
+    is_auth = _is_authenticated()
+    is_owner = is_auth and str(session.get('user_id', '')) == str(coll['user_id'])
+    # YouTube embed
+    yt_id = _extract_youtube_id(coll.get('youtube_url'))
+    youtube_embed_url = f'https://www.youtube.com/embed/{yt_id}' if yt_id else None
+    # User's backtests for "Add Backtest" dropdown
+    user_backtests = []
+    collection_bt_ids = set()
+    if is_owner:
+        user_backtests = db.list_user_backtests(session.get('user_id'))
+        collection_bt_ids = {bt['id'] for bt in backtests}
+    return render_template_string(COLLECTION_DETAIL_HTML,
+        collection=coll, backtests=backtests,
+        youtube_embed_url=youtube_embed_url,
+        is_authenticated=is_auth, is_admin=_is_admin(), is_owner=is_owner,
+        display_name=author_display_name or coll.get('user_email', '').split('@')[0],
+        author_avatar=author_avatar, author_initial=author_initial,
+        author_avatar_color=author_avatar_color,
+        user_backtests=user_backtests, collection_bt_ids=collection_bt_ids,
+        time_ago=_time_ago)
+
+
+@app.route('/cs/<code>')
+def collection_short_link(code):
+    """Short link redirect for collections."""
+    coll = db.get_collection_by_short_code(code)
+    if not coll:
+        abort(404)
+    return redirect(f'/collection/{coll["id"]}')
+
+
+@app.route('/api/collection/create', methods=['POST'])
+@require_auth
+def api_create_collection():
+    """Create a new collection."""
+    data = request.get_json()
+    title = (data.get('title') or '').strip()
+    if not title:
+        return jsonify(error='Title is required'), 400
+    description = (data.get('description') or '').strip() or None
+    youtube_url = (data.get('youtube_url') or '').strip() or None
+    user_id = session.get('user_id')
+    email = session.get('email', '')
+    coll = db.save_collection(user_id, email, title, description, youtube_url)
+    return jsonify(ok=True, id=coll['id'], short_code=coll['short_code'])
+
+
+@app.route('/api/collection/<collection_id>/update', methods=['POST'])
+@require_auth
+def api_update_collection(collection_id):
+    """Update collection metadata."""
+    data = request.get_json()
+    user_id = session.get('user_id')
+    title = data.get('title')
+    description = data.get('description')
+    youtube_url = data.get('youtube_url')
+    updated = db.update_collection(collection_id, user_id, title=title, description=description, youtube_url=youtube_url)
+    if not updated:
+        return jsonify(error='Not found or not authorized'), 404
+    return jsonify(ok=True)
+
+
+@app.route('/api/collection/<collection_id>/delete', methods=['POST'])
+@require_auth
+def api_delete_collection(collection_id):
+    """Delete a collection."""
+    user_id = session.get('user_id')
+    if _is_admin():
+        db.delete_collection_admin(collection_id)
+    else:
+        if not db.delete_collection(collection_id, user_id):
+            return jsonify(error='Not found or not authorized'), 404
+    return jsonify(ok=True)
+
+
+@app.route('/api/collection/<collection_id>/add-backtest', methods=['POST'])
+@require_auth
+def api_add_backtest_to_collection(collection_id):
+    """Add a backtest to a collection."""
+    data = request.get_json()
+    backtest_id = data.get('backtest_id')
+    if not backtest_id:
+        return jsonify(error='backtest_id required'), 400
+    # Verify ownership of collection
+    coll = db.get_collection(collection_id)
+    if not coll or str(coll['user_id']) != str(session.get('user_id')):
+        return jsonify(error='Not authorized'), 403
+    added = db.add_backtest_to_collection(collection_id, backtest_id)
+    if not added:
+        return jsonify(error='Already in collection'), 409
+    return jsonify(ok=True)
+
+
+@app.route('/api/collection/<collection_id>/remove-backtest', methods=['POST'])
+@require_auth
+def api_remove_backtest_from_collection(collection_id):
+    """Remove a backtest from a collection."""
+    data = request.get_json()
+    backtest_id = data.get('backtest_id')
+    if not backtest_id:
+        return jsonify(error='backtest_id required'), 400
+    coll = db.get_collection(collection_id)
+    if not coll or str(coll['user_id']) != str(session.get('user_id')):
+        return jsonify(error='Not authorized'), 403
+    db.remove_backtest_from_collection(collection_id, backtest_id)
+    return jsonify(ok=True)
+
+
+@app.route('/api/collection/<collection_id>/reorder', methods=['POST'])
+@require_auth
+def api_reorder_collection(collection_id):
+    """Reorder backtests within a collection."""
+    data = request.get_json()
+    ordered_ids = data.get('ordered_ids', [])
+    coll = db.get_collection(collection_id)
+    if not coll or str(coll['user_id']) != str(session.get('user_id')):
+        return jsonify(error='Not authorized'), 403
+    db.reorder_collection_backtests(collection_id, ordered_ids)
+    return jsonify(ok=True)
+
+
+@app.route('/api/collection/<collection_id>/visibility', methods=['POST'])
+def api_collection_visibility(collection_id):
+    """Admin: change collection visibility."""
+    if not _is_admin():
+        abort(403)
+    data = request.get_json()
+    new_vis = data.get('visibility')
+    if new_vis not in ('private', 'community', 'featured'):
+        return jsonify(error='Invalid visibility'), 400
+    db.update_collection_visibility(collection_id, new_vis)
+    return jsonify(ok=True)
+
+
+COLLECTION_DETAIL_HTML = """\
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ collection.title }} — Strategy Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        :root {
+            --bg-deep: #080a10; --bg-base: #0f1117; --bg-surface: #161922; --bg-elevated: #1c2030;
+            --border: #252a3a; --border-hover: #3a4060; --text: #e8eaf0; --text-muted: #8890a4; --text-dim: #555d74;
+            --accent: #f7931a; --accent-hover: #ffa940; --accent-glow: rgba(247, 147, 26, 0.15);
+            --green: #34d399; --blue: #6495ED;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'DM Sans', sans-serif; background: var(--bg-deep); color: var(--text); min-height: 100vh; }
+        body::before {
+            content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(139, 92, 246, 0.06), transparent),
+                        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100, 149, 237, 0.04), transparent);
+            pointer-events: none; z-index: 0;
+        }
+        .container { max-width: 960px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
+        .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); text-decoration: none; font-size: 0.85em; margin-bottom: 20px; transition: color 0.2s; }
+        .back-link:hover { color: var(--text); }
+        .coll-header { margin-bottom: 24px; }
+        .coll-badge { display: inline-block; padding: 3px 10px; border-radius: 5px; font-size: 0.72em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; background: rgba(139,92,246,0.15); color: #8b5cf6; }
+        .coll-title { font-size: 1.6em; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.02em; }
+        .coll-meta { display: flex; align-items: center; gap: 8px; font-size: 0.85em; color: var(--text-muted); margin-bottom: 16px; flex-wrap: wrap; }
+        .coll-meta-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+        .coll-meta-initials { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.7em; font-weight: 700; }
+        .coll-actions { display: flex; gap: 8px; margin-bottom: 20px; }
+        .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); cursor: pointer; font-size: 0.8em; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; text-decoration: none; }
+        .action-btn:hover { border-color: var(--border-hover); color: var(--text); }
+        .action-btn.danger { border-color: #ef4444; color: #ef4444; }
+        .action-btn.danger:hover { background: rgba(239,68,68,0.1); }
+        .yt-embed { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px; margin-bottom: 24px; border: 1px solid var(--border); }
+        .yt-embed iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+        .coll-desc { font-size: 0.95em; color: var(--text-muted); line-height: 1.6; margin-bottom: 24px; white-space: pre-wrap; }
+        .section-divider { display: flex; align-items: center; gap: 12px; margin: 24px 0 16px; }
+        .section-divider span { font-size: 0.85em; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+        .section-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+        .backtest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+        .backtest-card { display: block; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: all 0.2s ease; cursor: pointer; text-decoration: none; color: inherit; }
+        .backtest-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .backtest-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .backtest-card-asset-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); flex-shrink: 0; }
+        .backtest-card-asset-fallback { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8em; color: var(--text-muted); flex-shrink: 0; }
+        .backtest-card-head-text { flex: 1; min-width: 0; }
+        .backtest-card-title { font-size: 1em; font-weight: 600; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+        .backtest-card-asset-name { font-size: 0.75em; color: var(--text-muted); }
+        .backtest-card-mode-icon { color: var(--text-dim); flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--bg-deep); }
+        .backtest-card-thumb { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border); }
+        .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+        .backtest-card-params { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+        .backtest-card-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: var(--bg-deep); border: 1px solid var(--border); font-size: 0.7em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
+        .backtest-card-metrics { display: flex; gap: 12px; margin-bottom: 10px; }
+        .card-metric { flex: 1; padding: 8px 10px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 8px; text-align: center; }
+        .card-metric-label { display: block; font-size: 0.65em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 2px; }
+        .card-metric-val { display: block; font-size: 0.95em; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+        .card-metric-val.positive { color: var(--green); }
+        .card-metric-val.negative { color: #ef4444; }
+        .card-metric-vs { display: block; font-size: 0.6em; color: #ffffff; font-family: 'JetBrains Mono', monospace; margin-top: 1px; }
+        .backtest-card-footer { display: flex; align-items: center; justify-content: space-between; font-size: 0.75em; color: var(--text-dim); }
+        .backtest-card-footer .engagement { display: flex; gap: 12px; }
+        .backtest-card-footer .engagement span { display: flex; align-items: center; gap: 3px; }
+        .card-author { display: flex; align-items: center; gap: 6px; }
+        .card-author-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+        .card-author-initials { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.7em; font-weight: 700; flex-shrink: 0; }
+        .card-author-name { font-weight: 600; color: var(--text-muted); }
+        .card-author-sep { color: var(--text-dim); }
+        .card-author-time { color: var(--text-dim); }
+        .backtest-card-wrapper { position: relative; }
+        .remove-bt-btn { position: absolute; top: 8px; right: 8px; z-index: 10; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-dim); cursor: pointer; font-size: 0.9em; display: flex; align-items: center; justify-content: center; opacity: 0; transition: all 0.15s ease; }
+        .backtest-card-wrapper:hover .remove-bt-btn { opacity: 1; }
+        .remove-bt-btn:hover { background: rgba(239,68,68,0.15); color: #ef4444; border-color: #ef4444; }
+        .publish-modal-overlay { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+        .publish-modal-overlay.open { display: flex; }
+        .publish-modal { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 90%; max-width: 500px; position: relative; }
+        .publish-modal h3 { font-size: 1.1em; font-weight: 600; margin-bottom: 16px; }
+        .publish-modal label { display: block; font-size: 0.8em; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
+        .publish-modal input, .publish-modal textarea { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-size: 0.9em; font-family: 'DM Sans', sans-serif; margin-bottom: 14px; }
+        .publish-modal input:focus, .publish-modal textarea:focus { outline: none; border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139,92,246,0.15); }
+        .publish-modal textarea { resize: vertical; min-height: 80px; }
+        .publish-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+        .publish-modal .close-btn { position: absolute; top: 12px; right: 16px; background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2em; }
+        .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+        .empty-state h3 { font-size: 1.1em; margin-bottom: 8px; color: var(--text); }
+        /* Add backtest dropdown */
+        .add-bt-section { margin-top: 24px; }
+        .add-bt-dropdown { position: relative; display: inline-block; }
+        .add-bt-list { position: absolute; top: calc(100% + 4px); left: 0; min-width: 320px; max-height: 300px; overflow-y: auto; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 100; padding: 6px 0; }
+        .add-bt-list.hidden { display: none; }
+        .add-bt-item { display: flex; align-items: center; gap: 10px; padding: 8px 14px; cursor: pointer; font-size: 0.82em; color: var(--text-muted); transition: background 0.15s; }
+        .add-bt-item:hover { background: var(--bg-elevated); color: var(--text); }
+        .add-bt-item.in-collection { opacity: 0.5; pointer-events: none; }
+        .add-bt-item .abt-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .add-bt-item .abt-check { color: #8b5cf6; font-weight: 700; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="javascript:history.back()" class="back-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Back
+    </a>
+    <div class="coll-header">
+        <span class="coll-badge">Collection</span>
+        <h1 class="coll-title">{{ collection.title }}</h1>
+        <div class="coll-meta">
+            {% if author_avatar %}
+            <img src="/static/avatars/{{ author_avatar }}" class="coll-meta-avatar" alt="">
+            {% else %}
+            <span class="coll-meta-initials" style="background:{{ author_avatar_color }}">{{ author_initial }}</span>
+            {% endif %}
+            <span>{{ display_name }}</span>
+            <span style="color:var(--text-dim)">·</span>
+            <span>{{ time_ago(collection.created_at) }}</span>
+            <span style="color:var(--text-dim)">·</span>
+            <span>{{ backtests|length }} backtest{{ 's' if backtests|length != 1 }}</span>
+            <span style="color:var(--text-dim)">·</span>
+            <span>{{ collection.views_count or 0 }} views</span>
+        </div>
+        {% if is_owner or is_admin %}
+        <div class="coll-actions">
+            <button class="action-btn" onclick="openEditModal()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Edit
+            </button>
+            <button class="action-btn" onclick="copyLink()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                Share
+            </button>
+            <button class="action-btn danger" onclick="deleteCollection()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                Delete
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if youtube_embed_url %}
+    <div class="yt-embed">
+        <iframe src="{{ youtube_embed_url }}" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+    </div>
+    {% endif %}
+
+    {% if collection.description %}
+    <div class="coll-desc">{{ collection.description }}</div>
+    {% endif %}
+
+    <div class="section-divider"><span>Backtests in this Collection</span></div>
+
+    {% if backtests %}
+    <div class="backtest-grid">
+        {% for bt in backtests %}
+        <div class="backtest-card-wrapper">
+            {% if is_owner %}
+            <button class="remove-bt-btn" onclick="event.preventDefault();removeBacktest('{{ bt.id }}')" title="Remove from collection">&times;</button>
+            {% endif %}
+            <a class="backtest-card" href="/backtest/{{ bt.id }}">
+                <div class="backtest-card-head">
+                    {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
+                    <div class="backtest-card-head-text">
+                        <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled Backtest' }}</div>
+                        <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
+                    </div>
+                    <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
+                </div>
+                {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
+                {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
+                <div class="backtest-card-params">
+                    <span class="backtest-card-tag">{{ bt._mode_label }}</span>
+                    <span class="backtest-card-tag">{{ bt._strategy }}</span>
+                    {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
+                    {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
+                </div>
+                {% if bt._apr %}
+                <div class="backtest-card-metrics">
+                    <div class="card-metric">
+                        <span class="card-metric-label">APR</span>
+                        <span class="card-metric-val {{ 'positive' if bt._apr|float > 0 else 'negative' }}">{{ bt._apr }}%</span>
+                        <span class="card-metric-vs">vs {{ bt._apr_bh }}% B&H</span>
+                    </div>
+                    <div class="card-metric">
+                        <span class="card-metric-label">Max DD</span>
+                        <span class="card-metric-val negative">{{ bt._max_dd }}%</span>
+                        <span class="card-metric-vs">vs {{ bt._max_dd_bh }}% B&H</span>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="backtest-card-footer">
+                    <div class="card-author">
+                        {% if bt._avatar %}
+                        <img src="/static/avatars/{{ bt._avatar }}" class="card-author-avatar" alt="">
+                        {% else %}
+                        <span class="card-author-initials" style="background:{{ bt._avatar_color }}">{{ bt._initial }}</span>
+                        {% endif %}
+                        <span class="card-author-name">{{ bt._display_name }}</span>
+                        <span class="card-author-sep">·</span>
+                        <span class="card-author-time">{{ time_ago(bt.created_at) }}</span>
+                    </div>
+                    <div class="engagement">
+                        <span>{{ bt.likes_count }} likes</span>
+                        <span>{{ bt.comments_count }} comments</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <h3>No backtests yet</h3>
+        <p>Add backtests to this collection from your My Backtests page.</p>
+    </div>
+    {% endif %}
+
+    {% if is_owner %}
+    <div class="add-bt-section">
+        <div class="add-bt-dropdown">
+            <button class="action-btn" onclick="toggleAddBtList()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Backtest
+            </button>
+            <div class="add-bt-list hidden" id="add-bt-list">
+                {% for ubt in user_backtests %}
+                <div class="add-bt-item{{ ' in-collection' if ubt.id in collection_bt_ids else '' }}" onclick="addBacktest('{{ ubt.id }}')">
+                    <span class="abt-title">{{ ubt.title or 'Untitled' }}</span>
+                    {% if ubt.id in collection_bt_ids %}<span class="abt-check">Added</span>{% endif %}
+                </div>
+                {% endfor %}
+                {% if not user_backtests %}
+                <div style="padding:12px 14px;color:var(--text-dim);font-size:0.82em">No backtests to add</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+var _swal = Swal.mixin({
+    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#8b5cf6',
+    customClass: { popup: 'swal-dark' }
+});
+var collId = '{{ collection.id }}';
+function copyLink() {
+    navigator.clipboard.writeText(window.location.href);
+    _swal.fire({icon:'success', title:'Link copied!', timer:1500, showConfirmButton:false});
+}
+function deleteCollection() {
+    _swal.fire({
+        title: 'Delete this collection?', text: 'Backtests inside will not be deleted.',
+        icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
+    }).then(function(result) {
+        if (!result.isConfirmed) return;
+        fetch('/api/collection/' + collId + '/delete', { method: 'POST' })
+        .then(function() { window.location.href = '/my-backtests'; });
+    });
+}
+function removeBacktest(btId) {
+    fetch('/api/collection/' + collId + '/remove-backtest', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({backtest_id: btId})
+    }).then(function() { location.reload(); });
+}
+function toggleAddBtList() {
+    document.getElementById('add-bt-list').classList.toggle('hidden');
+}
+function addBacktest(btId) {
+    fetch('/api/collection/' + collId + '/add-backtest', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({backtest_id: btId})
+    }).then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) { _swal.fire({icon:'warning', title:data.error}); return; }
+        location.reload();
+    });
+}
+function openEditModal() {
+    document.getElementById('edit-modal-overlay').classList.add('open');
+    document.getElementById('edit-coll-title').focus();
+}
+function closeEditModal() {
+    document.getElementById('edit-modal-overlay').classList.remove('open');
+}
+function saveEditColl() {
+    var title = document.getElementById('edit-coll-title').value.trim();
+    var desc = document.getElementById('edit-coll-desc').value.trim();
+    var yt = document.getElementById('edit-coll-youtube').value.trim();
+    fetch('/api/collection/' + collId + '/update', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: title, description: desc, youtube_url: yt})
+    }).then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        closeEditModal(); location.reload();
+    }).catch(function(e) { _swal.fire({icon:'error', title:'Failed', text:e.message}); });
+}
+document.addEventListener('click', function(e) {
+    var list = document.getElementById('add-bt-list');
+    if (list && !list.classList.contains('hidden')) {
+        var wrap = e.target.closest('.add-bt-dropdown');
+        if (!wrap) list.classList.add('hidden');
+    }
+});
+</script>
+
+{% if is_owner or is_admin %}
+<div class="publish-modal-overlay" id="edit-modal-overlay">
+    <div class="publish-modal">
+        <button class="close-btn" onclick="closeEditModal()">&times;</button>
+        <h3>Edit Collection</h3>
+        <label for="edit-coll-title">Title</label>
+        <input type="text" id="edit-coll-title" maxlength="120" value="{{ collection.title|e }}">
+        <label for="edit-coll-desc">Description</label>
+        <textarea id="edit-coll-desc">{{ collection.description or '' }}</textarea>
+        <label for="edit-coll-youtube">YouTube URL</label>
+        <input type="text" id="edit-coll-youtube" value="{{ collection.youtube_url or '' }}" placeholder="https://www.youtube.com/watch?v=...">
+        <div class="publish-modal-actions">
+            <button class="action-btn" onclick="closeEditModal()">Cancel</button>
+            <button class="action-btn" onclick="saveEditColl()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent">Save Changes</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+</body>
+</html>
+"""
 
 
 ACCOUNT_HTML = """<!DOCTYPE html>

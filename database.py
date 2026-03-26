@@ -146,16 +146,47 @@ def init_db():
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_reactions_comment ON comment_reactions(comment_id)")
+    # Collections tables
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS collections (
+            id TEXT PRIMARY KEY,
+            short_code TEXT UNIQUE,
+            user_id TEXT NOT NULL,
+            user_email TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            youtube_url TEXT,
+            visibility TEXT NOT NULL DEFAULT 'private',
+            views_count INTEGER DEFAULT 0,
+            sort_order INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS collection_backtests (
+            collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+            backtest_id TEXT NOT NULL REFERENCES backtests(id) ON DELETE CASCADE,
+            sort_order INTEGER DEFAULT 0,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (collection_id, backtest_id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_collections_visibility ON collections(visibility)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_collections_user ON collections(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_collections_short_code ON collections(short_code)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_collection_backtests_collection ON collection_backtests(collection_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_collection_backtests_backtest ON collection_backtests(backtest_id)")
     conn.close()
 
 
-def generate_short_code():
+def generate_short_code(table='backtests'):
     """Generate a unique 6-char alphanumeric short code."""
     chars = string.ascii_lowercase + string.digits
     conn = _get_conn()
     for _ in range(100):
         code = ''.join(random.choices(chars, k=6))
-        row = conn.execute("SELECT 1 FROM backtests WHERE short_code=?", (code,)).fetchone()
+        row = conn.execute(f"SELECT 1 FROM {table} WHERE short_code=?", (code,)).fetchone()
         if not row:
             conn.close()
             return code
@@ -816,3 +847,272 @@ def get_reactions_for_comments(comment_ids, user_id=None):
                 result[cid][ur['emoji']]['reacted'] = True
     conn.close()
     return result
+
+
+# --- Collections ---
+
+def save_collection(user_id, email, title, description=None, youtube_url=None, visibility='private'):
+    """Save a new collection. Returns the collection dict."""
+    conn = _get_conn()
+    coll_id = str(uuid.uuid4())
+    short_code = generate_short_code(table='collections')
+    now = datetime.utcnow().isoformat()
+    max_order = conn.execute("SELECT COALESCE(MAX(sort_order), -1) FROM collections").fetchone()[0]
+    new_order = max_order + 1
+    conn.execute(
+        """INSERT INTO collections (id, short_code, user_id, user_email, title, description,
+           youtube_url, visibility, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (coll_id, short_code, user_id, email, title, description,
+         youtube_url, visibility, new_order, now, now)
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM collections WHERE id=?", (coll_id,)).fetchone()
+    conn.close()
+    return _row_to_dict(row)
+
+
+def get_collection(collection_id):
+    """Get a collection by ID."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM collections WHERE id=?", (collection_id,)).fetchone()
+    conn.close()
+    return _row_to_dict(row)
+
+
+def get_collection_by_short_code(code):
+    """Get a collection by short code."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM collections WHERE short_code=?", (code,)).fetchone()
+    conn.close()
+    return _row_to_dict(row)
+
+
+def update_collection(collection_id, user_id, title=None, description=None, youtube_url=None):
+    """Update a collection. Owner only. Returns updated dict or None."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM collections WHERE id=?", (collection_id,)).fetchone()
+    if not row:
+        conn.close()
+        return None
+    coll = _row_to_dict(row)
+    if str(coll['user_id']) != str(user_id):
+        conn.close()
+        return None
+    now = datetime.utcnow().isoformat()
+    new_title = title if title is not None else coll['title']
+    new_desc = description if description is not None else coll['description']
+    new_yt = youtube_url if youtube_url is not None else coll['youtube_url']
+    conn.execute(
+        "UPDATE collections SET title=?, description=?, youtube_url=?, updated_at=? WHERE id=?",
+        (new_title, new_desc, new_yt, now, collection_id)
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM collections WHERE id=?", (collection_id,)).fetchone()
+    conn.close()
+    return _row_to_dict(row)
+
+
+def delete_collection(collection_id, user_id):
+    """Delete a collection. Owner only. Returns True if deleted."""
+    conn = _get_conn()
+    row = conn.execute("SELECT user_id FROM collections WHERE id=?", (collection_id,)).fetchone()
+    if not row:
+        conn.close()
+        return False
+    if str(row['user_id']) != str(user_id):
+        conn.close()
+        return False
+    conn.execute("DELETE FROM collections WHERE id=?", (collection_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def delete_collection_admin(collection_id):
+    """Admin delete collection — no ownership check."""
+    conn = _get_conn()
+    conn.execute("DELETE FROM collections WHERE id=?", (collection_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def update_collection_visibility(collection_id, new_visibility):
+    """Update collection visibility (admin). Returns True."""
+    conn = _get_conn()
+    now = datetime.utcnow().isoformat()
+    max_order = conn.execute("SELECT COALESCE(MAX(sort_order), -1) FROM collections").fetchone()[0]
+    new_order = max_order + 1
+    conn.execute(
+        "UPDATE collections SET visibility=?, sort_order=?, updated_at=? WHERE id=?",
+        (new_visibility, new_order, now, collection_id)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def add_backtest_to_collection(collection_id, backtest_id, sort_order=None):
+    """Add a backtest to a collection. Returns True if added, False if already exists."""
+    conn = _get_conn()
+    if sort_order is None:
+        max_order = conn.execute(
+            "SELECT COALESCE(MAX(sort_order), -1) FROM collection_backtests WHERE collection_id=?",
+            (collection_id,)
+        ).fetchone()[0]
+        sort_order = max_order + 1
+    try:
+        conn.execute(
+            "INSERT INTO collection_backtests (collection_id, backtest_id, sort_order) VALUES (?, ?, ?)",
+            (collection_id, backtest_id, sort_order)
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except sqlite3.IntegrityError:
+        conn.close()
+        return False
+
+
+def remove_backtest_from_collection(collection_id, backtest_id):
+    """Remove a backtest from a collection. Returns True if removed."""
+    conn = _get_conn()
+    cursor = conn.execute(
+        "DELETE FROM collection_backtests WHERE collection_id=? AND backtest_id=?",
+        (collection_id, backtest_id)
+    )
+    conn.commit()
+    removed = cursor.rowcount > 0
+    conn.close()
+    return removed
+
+
+def reorder_collection_backtests(collection_id, ordered_backtest_ids):
+    """Reorder backtests within a collection."""
+    conn = _get_conn()
+    for i, bt_id in enumerate(ordered_backtest_ids):
+        conn.execute(
+            "UPDATE collection_backtests SET sort_order=? WHERE collection_id=? AND backtest_id=?",
+            (i, collection_id, bt_id)
+        )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_collection_backtests(collection_id):
+    """Get backtests in a collection, ordered by sort_order."""
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT b.* FROM backtests b
+           JOIN collection_backtests cb ON b.id = cb.backtest_id
+           WHERE cb.collection_id=?
+           ORDER BY cb.sort_order ASC""",
+        (collection_id,)
+    ).fetchall()
+    conn.close()
+    return [_row_to_dict(r) for r in rows]
+
+
+def get_collection_backtest_count(collection_id):
+    """Get count of backtests in a collection."""
+    conn = _get_conn()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM collection_backtests WHERE collection_id=?",
+        (collection_id,)
+    ).fetchone()[0]
+    conn.close()
+    return count
+
+
+def get_user_collections(user_id):
+    """Get all collections for a user (for 'add to collection' dropdowns)."""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT * FROM collections WHERE user_id=? ORDER BY created_at DESC",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    return [_row_to_dict(r) for r in rows]
+
+
+def get_backtest_collection_ids(user_id, backtest_id):
+    """Get collection IDs that contain a specific backtest (for the current user's collections)."""
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT cb.collection_id FROM collection_backtests cb
+           JOIN collections c ON cb.collection_id = c.id
+           WHERE cb.backtest_id=? AND c.user_id=?""",
+        (backtest_id, user_id)
+    ).fetchall()
+    conn.close()
+    return {r['collection_id'] for r in rows}
+
+
+def list_collections(visibility=None, sort='newest', page=1, per_page=20):
+    """List collections filtered by visibility. Returns (list, total_count)."""
+    conn = _get_conn()
+    where = ""
+    params = []
+    if visibility:
+        where = "WHERE visibility=?"
+        params = [visibility]
+
+    if sort == 'manual':
+        order = "sort_order ASC, created_at DESC"
+    else:
+        order = "created_at DESC"
+    offset = (page - 1) * per_page
+
+    total = conn.execute(f"SELECT COUNT(*) FROM collections {where}", params).fetchone()[0]
+    rows = conn.execute(
+        f"SELECT * FROM collections {where} ORDER BY {order} LIMIT ? OFFSET ?",
+        params + [per_page, offset]
+    ).fetchall()
+    conn.close()
+    collections = []
+    for r in rows:
+        c = _row_to_dict(r)
+        # Attach backtest count
+        c['_backtest_count'] = get_collection_backtest_count(c['id'])
+        collections.append(c)
+    return collections, total
+
+
+def list_user_collections(user_id):
+    """List all collections for a user."""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT * FROM collections WHERE user_id=? ORDER BY created_at DESC",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    collections = []
+    for r in rows:
+        c = _row_to_dict(r)
+        c['_backtest_count'] = get_collection_backtest_count(c['id'])
+        collections.append(c)
+    return collections
+
+
+def increment_collection_views(collection_id):
+    """Increment view count for a collection."""
+    conn = _get_conn()
+    conn.execute("UPDATE collections SET views_count = COALESCE(views_count, 0) + 1 WHERE id=?", (collection_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_collection_first_thumbnail(collection_id):
+    """Get the thumbnail of the first backtest in a collection (for card display)."""
+    conn = _get_conn()
+    row = conn.execute(
+        """SELECT b.thumbnail FROM backtests b
+           JOIN collection_backtests cb ON b.id = cb.backtest_id
+           WHERE cb.collection_id=? AND b.thumbnail IS NOT NULL
+           ORDER BY cb.sort_order ASC LIMIT 1""",
+        (collection_id,)
+    ).fetchone()
+    conn.close()
+    return row['thumbnail'] if row else None
