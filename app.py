@@ -3566,9 +3566,16 @@ def _run_post_handler(cancel_event):
             "combined_ann": combined_ann,
             "combined_label": f"{title_label} with long {best_long_lev:.2f}x / short {best_short_lev:.2f}x",
         }
-        price_json = _series_to_lw_json(df["close"])
-        ind1_json = _series_to_lw_json(best["ind1_series"]) if best.get("ind1_name") != "price" else "[]"
-        ind2_json = _series_to_lw_json(best["ind2_series"])
+        price_json = _series_to_lw_json(df_price_all["close"])
+        _lc2, _ = bt.compute_indicator_from_spec(df_price_all, best["ind2_name"], best.get("ind2_period"))
+        _lc2 = _lc2[_lc2.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
+        ind2_json = _series_to_lw_json(_lc2)
+        if best.get("ind1_name") != "price":
+            _lc1, _ = bt.compute_indicator_from_spec(df_price_all, best["ind1_name"], best.get("ind1_period"))
+            _lc1 = _lc1[_lc1.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
+            ind1_json = _series_to_lw_json(_lc1)
+        else:
+            ind1_json = "[]"
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info, thumb_b64=thumb_b64,
@@ -3727,9 +3734,16 @@ def _run_post_handler(cancel_event):
                                        p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
         best = _enrich_best(best_result, df)
 
-        price_json = _series_to_lw_json(df["close"])
-        ind1_json = _series_to_lw_json(best["ind1_series"]) if best.get("ind1_name") != "price" else "[]"
-        ind2_json = _series_to_lw_json(best["ind2_series"])
+        price_json = _series_to_lw_json(df_price_all["close"])
+        _lc2, _ = bt.compute_indicator_from_spec(df_price_all, best["ind2_name"], best.get("ind2_period"))
+        _lc2 = _lc2[_lc2.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
+        ind2_json = _series_to_lw_json(_lc2)
+        if best.get("ind1_name") != "price":
+            _lc1, _ = bt.compute_indicator_from_spec(df_price_all, best["ind1_name"], best.get("ind1_period"))
+            _lc1 = _lc1[_lc1.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
+            ind1_json = _series_to_lw_json(_lc1)
+        else:
+            ind1_json = "[]"
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       hide_buyhold=(p.exposure == "short-cash"), thumb_b64=thumb_b64,
@@ -3892,12 +3906,15 @@ def _run_post_handler(cancel_event):
             ax1.plot(df_price_all.index, df_price_all["close"], label=f"{asset_name} {'Ratio' if is_ratio else 'Price'}", color="#e8eaf0", linewidth=0.8)
 
             if not is_oscillator:
-                # Plot ind2 (main/slow indicator)
-                ax1.plot(best["ind2_series"].index, best["ind2_series"],
+                # Compute indicators on full price data (extends beyond backtest end_date)
+                _ext_ind2, _ = bt.compute_indicator_from_spec(df_price_all, best["ind2_name"], best.get("ind2_period"))
+                _ext_ind2 = _ext_ind2[_ext_ind2.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
+                ax1.plot(_ext_ind2.index, _ext_ind2,
                          label=best["ind2_label"], color="#6495ED", linewidth=0.8, alpha=0.8)
-                # Plot ind1 if not price
                 if best.get("ind1_name") != "price":
-                    ax1.plot(best["ind1_series"].index, best["ind1_series"],
+                    _ext_ind1, _ = bt.compute_indicator_from_spec(df_price_all, best["ind1_name"], best.get("ind1_period"))
+                    _ext_ind1 = _ext_ind1[_ext_ind1.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
+                    ax1.plot(_ext_ind1.index, _ext_ind1,
                              label=best["ind1_label"], color="#f7931a", linewidth=0.8, alpha=0.8)
 
             ax1.set_yscale("log")
@@ -4041,9 +4058,20 @@ def _run_post_handler(cancel_event):
     if is_oscillator:
         ind1_json = "[]"
         ind2_json = "[]"
+    elif best:
+        # Compute indicators on full price data for live chart (extends beyond backtest end_date)
+        _lc_ind2, _ = bt.compute_indicator_from_spec(df_price_all, best["ind2_name"], best.get("ind2_period"))
+        _lc_ind2 = _lc_ind2[_lc_ind2.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
+        ind2_json = _series_to_lw_json(_lc_ind2)
+        if best.get("ind1_name") != "price":
+            _lc_ind1, _ = bt.compute_indicator_from_spec(df_price_all, best["ind1_name"], best.get("ind1_period"))
+            _lc_ind1 = _lc_ind1[_lc_ind1.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
+            ind1_json = _series_to_lw_json(_lc_ind1)
+        else:
+            ind1_json = "[]"
     else:
-        ind1_json = _series_to_lw_json(best["ind1_series"]) if best and best.get("ind1_name") != "price" else "[]"
-        ind2_json = _series_to_lw_json(best["ind2_series"]) if best else "[]"
+        ind1_json = "[]"
+        ind2_json = "[]"
     return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
                                   asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                   hide_buyhold=(p.exposure == "short-cash"),
@@ -7584,11 +7612,57 @@ def backtest_detail(bt_id):
     cached = re.sub(r'(Drawdown Duration.*?m-val[^>]*>)(\d+)d(.*?m-val[^>]*>)(\d+)d',
                     lambda m: m.group(1) + duration_filter(int(m.group(2))) + m.group(3) + duration_filter(int(m.group(4))),
                     cached, flags=re.DOTALL)
-    bt_entry = dict(bt_entry)
-    bt_entry['cached_html'] = cached
-    # Parse params for display
+
+    # Inject fresh live chart data (price + indicators extended to newest date)
     import json as json_mod
     bt_params = json_mod.loads(bt_entry.get('params', '{}') or '{}')
+    try:
+        import pandas as pd_mod
+        _asset = bt_params.get('asset', 'bitcoin')
+        _vs = bt_params.get('vs_asset', '')
+        _df_all = ASSETS.get(_asset, ASSETS.get(DEFAULT_ASSET)).copy()
+        if _vs and _vs in ASSETS:
+            _df_vs = ASSETS[_vs].copy()
+            _df_all.index = _df_all.index.normalize()
+            _df_vs.index = _df_vs.index.normalize()
+            _df_all = _df_all[~_df_all.index.duplicated(keep='first')]
+            _df_vs = _df_vs[~_df_vs.index.duplicated(keep='first')]
+            _cidx = _df_all.index.intersection(_df_vs.index)
+            _df_all = _df_all.loc[_cidx]
+            _df_all["close"] = _df_all["close"] / _df_vs.loc[_cidx, "close"]
+        _sd = bt_params.get('start_date', '')
+        if _sd:
+            _df_all = _df_all[_df_all.index >= pd_mod.Timestamp(_sd, tz="UTC")]
+        if not _df_all.empty:
+            _fresh_price = _series_to_lw_json(_df_all["close"])
+            _ind1_name = bt_params.get('ind1_name', 'price')
+            _ind2_name = bt_params.get('ind2_name', 'sma')
+            _p1 = int(bt_params.get('period1', 0) or 0) or None
+            _p2 = int(bt_params.get('period2', 0) or 0) or None
+            _ind2_s, _ = bt.compute_indicator_from_spec(_df_all, _ind2_name, _p2)
+            _fresh_ind2 = _series_to_lw_json(_ind2_s)
+            if _ind1_name != "price":
+                _ind1_s, _ = bt.compute_indicator_from_spec(_df_all, _ind1_name, _p1)
+                _fresh_ind1 = _series_to_lw_json(_ind1_s)
+            else:
+                _fresh_ind1 = "[]"
+            # Build labels
+            _ind1_lbl = f"{_ind1_name.upper()}({_p1})" if _ind1_name != "price" and _p1 else ("Price" if _ind1_name == "price" else _ind1_name.upper())
+            _ind2_lbl = f"{_ind2_name.upper()}({_p2})" if _p2 else _ind2_name.upper()
+            # Replace the __lwData block in cached HTML
+            _new_lw = (f'<script>\nvar __lwData = {{\n'
+                       f'    price: {_fresh_price},\n'
+                       f'    ind1: {_fresh_ind1},\n'
+                       f'    ind2: {_fresh_ind2},\n'
+                       f'    ind1Label: {json_mod.dumps(_ind1_lbl)},\n'
+                       f'    ind2Label: {json_mod.dumps(_ind2_lbl)}\n'
+                       f'}};\n</script>')
+            cached = re.sub(r'<script>\s*var __lwData\s*=\s*\{.*?\};\s*</script>', _new_lw, cached, flags=re.DOTALL)
+    except Exception:
+        pass  # If fresh data injection fails, keep original cached HTML
+
+    bt_entry = dict(bt_entry)
+    bt_entry['cached_html'] = cached
     return render_template_string(DETAIL_HTML,
         backtest=bt_entry, comments=comments, bt_params=bt_params,
         is_authenticated=is_auth, is_admin=_is_admin(),
