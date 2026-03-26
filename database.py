@@ -872,6 +872,16 @@ def save_collection(user_id, email, title, description=None, youtube_url=None, v
     return _row_to_dict(row)
 
 
+def reorder_collections(ordered_ids):
+    """Update sort_order for a list of collection IDs. Index = order position."""
+    conn = _get_conn()
+    for i, coll_id in enumerate(ordered_ids):
+        conn.execute("UPDATE collections SET sort_order=? WHERE id=?", (i, coll_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
 def get_collection(collection_id):
     """Get a collection by ID."""
     conn = _get_conn()

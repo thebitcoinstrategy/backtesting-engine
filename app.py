@@ -4147,7 +4147,7 @@ COMMUNITY_HTML = """\
         .locked-overlay span { font-size: 0.8em; font-weight: 600; color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase; }
         @keyframes lockShake { 0%,100% { transform: translateX(0) rotate(0); } 15% { transform: translateX(-4px) rotate(-5deg); } 30% { transform: translateX(4px) rotate(5deg); } 45% { transform: translateX(-3px) rotate(-3deg); } 60% { transform: translateX(3px) rotate(3deg); } 75% { transform: translateX(-1px) rotate(-1deg); } }
         .reorder-controls { position: absolute; top: 8px; right: 8px; z-index: 10; display: flex; flex-direction: column; gap: 2px; opacity: 0; transition: opacity 0.2s ease; }
-        .backtest-card-wrapper:hover .reorder-controls { opacity: 1; }
+        .backtest-card-wrapper:hover .reorder-controls, .collection-card-wrapper:hover .reorder-controls { opacity: 1; }
         .reorder-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-muted); cursor: pointer; font-size: 0.7em; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease; }
         .reorder-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
         .backtest-card { display: block; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: all 0.2s ease; cursor: pointer; text-decoration: none; color: inherit; }
@@ -4325,9 +4325,15 @@ COMMUNITY_HTML = """\
                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="background:var(--bg-deep);border-radius:50%;padding:6px"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
                 <h3 class="asset-section-title">Strategies</h3>
             </div>
-            <div class="backtest-grid">
+            <div class="backtest-grid" id="collections-grid">
                 {% for coll in collections %}
-                <div class="collection-card-wrapper">
+                <div class="collection-card-wrapper" data-coll-id="{{ coll.id }}">
+                    {% if is_admin|default(false) %}
+                    <div class="reorder-controls">
+                        <button class="reorder-btn" onclick="event.preventDefault();moveCollection('{{ coll.id }}', -1)" title="Move up">&#9650;</button>
+                        <button class="reorder-btn" onclick="event.preventDefault();moveCollection('{{ coll.id }}', 1)" title="Move down">&#9660;</button>
+                    </div>
+                    {% endif %}
                     {% if coll.youtube_url %}
                     <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
                     {% endif %}
@@ -4464,9 +4470,15 @@ COMMUNITY_HTML = """\
 
         {% elif backtests or collections|default(none) %}
         {% if collections|default(none) and not asset_sections|default(none) %}
-        <div class="backtest-grid" style="margin-bottom:24px">
+        <div class="backtest-grid" id="collections-grid" style="margin-bottom:24px">
             {% for coll in collections %}
-            <div class="collection-card-wrapper">
+            <div class="collection-card-wrapper" data-coll-id="{{ coll.id }}">
+                {% if is_admin|default(false) %}
+                <div class="reorder-controls">
+                    <button class="reorder-btn" onclick="event.preventDefault();moveCollection('{{ coll.id }}', -1)" title="Move up">&#9650;</button>
+                    <button class="reorder-btn" onclick="event.preventDefault();moveCollection('{{ coll.id }}', 1)" title="Move down">&#9660;</button>
+                </div>
+                {% endif %}
                 {% if coll.youtube_url %}
                 <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
                 {% endif %}
@@ -4781,6 +4793,28 @@ function moveSection(asset, direction) {
     // Collect all backtest IDs in new section order
     var orderedIds = Array.from(document.querySelectorAll('.backtest-card-wrapper')).map(function(w) { return w.getAttribute('data-id'); });
     fetch('/api/reorder-featured', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ordered_ids: orderedIds})
+    });
+}
+function moveCollection(id, direction) {
+    var grid = document.getElementById('collections-grid');
+    if (!grid) return;
+    var el = grid.querySelector('.collection-card-wrapper[data-coll-id="' + id + '"]');
+    if (!el) return;
+    var wrappers = Array.from(grid.querySelectorAll('.collection-card-wrapper'));
+    var idx = wrappers.indexOf(el);
+    if (idx < 0) return;
+    var newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= wrappers.length) return;
+    if (direction < 0) {
+        grid.insertBefore(el, wrappers[newIdx]);
+    } else {
+        grid.insertBefore(wrappers[newIdx], el);
+    }
+    var orderedIds = Array.from(grid.querySelectorAll('.collection-card-wrapper')).map(function(w) { return w.getAttribute('data-coll-id'); });
+    fetch('/api/reorder-collections', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ordered_ids: orderedIds})
@@ -6856,6 +6890,18 @@ def api_reorder_featured():
     data = request.get_json(force=True)
     ordered_ids = data.get('ordered_ids', [])
     db.reorder_backtests(ordered_ids)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/reorder-collections', methods=['POST'])
+def api_reorder_collections():
+    """Admin: reorder collections."""
+    user_id, email = _require_auth_api()
+    if email != db.ADMIN_EMAIL:
+        abort(403)
+    data = request.get_json(force=True)
+    ordered_ids = data.get('ordered_ids', [])
+    db.reorder_collections(ordered_ids)
     return jsonify({'ok': True})
 
 
