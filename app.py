@@ -2371,11 +2371,14 @@ function loadLWChart() {
         var fromDate = new Date(lastDate);
         fromDate.setFullYear(fromDate.getFullYear() - 1);
         var fromStr = fromDate.toISOString().split('T')[0];
+        // Add 30 days padding to the right so price doesn't overlap y-axis labels
+        var toDate = new Date(lastDate);
+        toDate.setDate(toDate.getDate() + 30);
+        var toStr = toDate.toISOString().split('T')[0];
         chart.timeScale().setVisibleRange({
             from: fromStr,
-            to: lastPoint.time
+            to: toStr
         });
-        chart.timeScale().scrollToPosition(-20, false);
     } else {
         chart.timeScale().fitContent();
     }
@@ -5705,8 +5708,9 @@ function loadLWChart() {
         var lastDate = new Date(lastPoint.time);
         var fromDate = new Date(lastDate);
         fromDate.setFullYear(fromDate.getFullYear() - 1);
-        chart.timeScale().setVisibleRange({ from: fromDate.toISOString().split('T')[0], to: lastPoint.time });
-        chart.timeScale().scrollToPosition(-20, false);
+        var toDate = new Date(lastDate);
+        toDate.setDate(toDate.getDate() + 30);
+        chart.timeScale().setVisibleRange({ from: fromDate.toISOString().split('T')[0], to: toDate.toISOString().split('T')[0] });
     } else {
         chart.timeScale().fitContent();
     }
