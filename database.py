@@ -340,6 +340,20 @@ def reorder_backtests(ordered_ids):
     return True
 
 
+def reorder_mixed(ordered_items):
+    """Update sort_order for a mixed list of backtests and collections.
+    Each item is {type: 'bt'|'coll', id: '...'}. Index = order position."""
+    conn = _get_conn()
+    for i, item in enumerate(ordered_items):
+        if item['type'] == 'bt':
+            conn.execute("UPDATE backtests SET sort_order=? WHERE id=?", (i, item['id']))
+        elif item['type'] == 'coll':
+            conn.execute("UPDATE collections SET sort_order=? WHERE id=?", (i, item['id']))
+    conn.commit()
+    conn.close()
+    return True
+
+
 def update_visibility(bt_id, new_visibility):
     """Update backtest visibility. Returns True if updated."""
     conn = _get_conn()

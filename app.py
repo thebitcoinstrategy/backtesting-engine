@@ -4731,27 +4731,30 @@ function featureBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' })
     .then(function() { location.reload(); });
 }
+function saveMixedOrder() {
+    // Collect all cards (backtests + collections) across all grids in DOM order
+    var items = [];
+    document.querySelectorAll('.backtest-card-wrapper[data-id], .collection-card-wrapper[data-coll-id]').forEach(function(el) {
+        if (el.dataset.id) items.push({type: 'bt', id: el.dataset.id});
+        else if (el.dataset.collId) items.push({type: 'coll', id: el.dataset.collId});
+    });
+    fetch('/api/reorder-mixed', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ordered_items: items})
+    });
+}
 function moveCard(id, direction) {
     var el = document.querySelector('.backtest-card-wrapper[data-id="' + id + '"]');
     if (!el) return;
     var grid = el.parentElement;
-    var wrappers = Array.from(grid.querySelectorAll('.backtest-card-wrapper'));
-    var idx = wrappers.indexOf(el);
+    var siblings = Array.from(grid.children);
+    var idx = siblings.indexOf(el);
     if (idx < 0) return;
     var newIdx = idx + direction;
-    if (newIdx < 0 || newIdx >= wrappers.length) return;
-    if (direction < 0) {
-        grid.insertBefore(el, wrappers[newIdx]);
-    } else {
-        grid.insertBefore(wrappers[newIdx], el);
-    }
-    // Collect all IDs across all grids in order
-    var orderedIds = Array.from(document.querySelectorAll('.backtest-card-wrapper')).map(function(w) { return w.getAttribute('data-id'); });
-    fetch('/api/reorder-featured', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ordered_ids: orderedIds})
-    });
+    if (newIdx < 0 || newIdx >= siblings.length) return;
+    if (direction < 0) { grid.insertBefore(el, siblings[newIdx]); }
+    else { grid.insertBefore(siblings[newIdx], el); }
+    saveMixedOrder();
 }
 function shakeLock(el) {
     el.classList.remove('shake');
@@ -4767,18 +4770,9 @@ function moveSection(asset, direction) {
     var newIdx = idx + direction;
     if (newIdx < 0 || newIdx >= sections.length) return;
     var parent = el.parentElement;
-    if (direction < 0) {
-        parent.insertBefore(el, sections[newIdx]);
-    } else {
-        parent.insertBefore(sections[newIdx], el);
-    }
-    // Collect all backtest IDs in new section order
-    var orderedIds = Array.from(document.querySelectorAll('.backtest-card-wrapper')).map(function(w) { return w.getAttribute('data-id'); });
-    fetch('/api/reorder-featured', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ordered_ids: orderedIds})
-    });
+    if (direction < 0) { parent.insertBefore(el, sections[newIdx]); }
+    else { parent.insertBefore(sections[newIdx], el); }
+    saveMixedOrder();
 }
 function moveCollection(id, direction) {
     var el = document.querySelector('.collection-card-wrapper[data-coll-id="' + id + '"]');
@@ -4789,22 +4783,9 @@ function moveCollection(id, direction) {
     if (idx < 0) return;
     var newIdx = idx + direction;
     if (newIdx < 0 || newIdx >= siblings.length) return;
-    if (direction < 0) {
-        grid.insertBefore(el, siblings[newIdx]);
-    } else {
-        grid.insertBefore(siblings[newIdx], el);
-    }
-    // Save order: collect all backtest IDs (for backtest reorder) and collection IDs separately
-    var orderedBtIds = Array.from(document.querySelectorAll('.backtest-card-wrapper[data-id]')).map(function(w) { return w.getAttribute('data-id'); });
-    fetch('/api/reorder-featured', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ordered_ids: orderedBtIds})
-    });
-    var orderedCollIds = Array.from(document.querySelectorAll('.collection-card-wrapper[data-coll-id]')).map(function(w) { return w.getAttribute('data-coll-id'); });
-    fetch('/api/reorder-collections', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ordered_ids: orderedCollIds})
-    });
+    if (direction < 0) { grid.insertBefore(el, siblings[newIdx]); }
+    else { grid.insertBefore(siblings[newIdx], el); }
+    saveMixedOrder();
 }
 </script>
 </body>
@@ -6867,6 +6848,18 @@ def api_feature_backtest(bt_id):
     return jsonify({'ok': True})
 
 
+@app.route('/api/reorder-mixed', methods=['POST'])
+def api_reorder_mixed():
+    """Admin: reorder mixed backtests and collections."""
+    user_id, email = _require_auth_api()
+    if email != db.ADMIN_EMAIL:
+        abort(403)
+    data = request.get_json(force=True)
+    ordered_items = data.get('ordered_items', [])
+    db.reorder_mixed(ordered_items)
+    return jsonify({'ok': True})
+
+
 @app.route('/api/reorder-featured', methods=['POST'])
 def api_reorder_featured():
     """Admin: reorder featured backtests."""
@@ -7451,24 +7444,23 @@ def featured():
     in_coll = db.get_backtests_in_published_collections('featured')
     backtests = [bt for bt in backtests if bt['id'] not in in_coll]
     _enrich_backtest_cards(backtests)
-    # Group by asset, preserving sort order
-    from collections import OrderedDict
-    grouped = OrderedDict()
-    for bt in backtests:
-        asset = bt.get('_asset', '') or 'other'
-        if asset not in grouped:
-            grouped[asset] = []
-        grouped[asset].append(bt)
-    # Collections — inject into asset groups by primary asset
+    # Collections
     featured_collections, _ = db.list_collections(visibility='featured', sort='manual')
     _enrich_collection_cards(featured_collections)
     for coll in featured_collections:
         coll['_is_collection'] = True
-    for coll in featured_collections:
-        asset = coll.get('_primary_asset', 'other') or 'other'
+        coll['_asset'] = coll.get('_primary_asset', 'other') or 'other'
+    # Merge backtests + collections into one list sorted by sort_order
+    all_items = backtests + featured_collections
+    all_items.sort(key=lambda x: x.get('sort_order', 0) or 0)
+    # Group by asset, preserving sort order
+    from collections import OrderedDict
+    grouped = OrderedDict()
+    for item in all_items:
+        asset = item.get('_asset', '') or 'other'
         if asset not in grouped:
             grouped[asset] = []
-        grouped[asset].append(coll)
+        grouped[asset].append(item)
     # Build sections with display info
     asset_sections = []
     for asset, items in grouped.items():
