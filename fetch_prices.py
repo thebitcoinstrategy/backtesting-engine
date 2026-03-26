@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""Daily price fetcher — run via cron to keep PostgreSQL prices up to date.
+
+Usage:
+    # Cron (00:15 UTC daily):
+    15 0 * * * /path/to/venv/bin/python /path/to/fetch_prices.py
+
+Requires environment variables:
+    PRICE_DB_URL    — PostgreSQL connection string
+    COINGECKO_API_KEY — CoinGecko Demo API key (free tier)
+
+Fetches latest daily close prices from:
+    - CoinGecko API for crypto assets
+    - yfinance for stocks, indices, commodities
+"""
+
+import logging
+import os
+import sys
+import time
+
+import pandas as pd
+import requests
+
+import price_db
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+LOG_DIR = os.environ.get("FETCH_LOG_DIR", os.path.dirname(os.path.abspath(__file__)))
+LOG_FILE = os.path.join(LOG_DIR, "fetch_prices.log")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# CoinGecko
+# ---------------------------------------------------------------------------
+COINGECKO_API_KEY = os.environ.get("COINGECKO_API_KEY", "")
+COINGECKO_BASE = "https://api.coingecko.com/api/v3"
+
+
+def fetch_coingecko(coin_id):
+    """Fetch last 2 days of daily close prices from CoinGecko.
+
+    Returns DataFrame with DatetimeIndex(UTC) + 'close' column, or empty DataFrame on failure.
+    """
+    url = f"{COINGECKO_BASE}/coins/{coin_id}/market_chart"
+    params = {"vs_currency": "usd", "days": 2, "interval": "daily"}
+    headers = {}
+    if COINGECKO_API_KEY:
+        headers["x-cg-demo-api-key"] = COINGECKO_API_KEY
+
+    resp = requests.get(url, params=params, headers=headers, timeout=30)
+    resp.raise_for_status()
+
+    prices = resp.json().get("prices", [])
+    if not prices:
+        return pd.DataFrame(columns=["close"])
+
+    df = pd.DataFrame(prices, columns=["time_ms", "close"])
+    df["date"] = pd.to_datetime(df["time_ms"], unit="ms", utc=True).dt.normalize()
+    df = df.drop_duplicates(subset="date", keep="last")
+    df = df.set_index("date")[["close"]].sort_index()
+    return df
+
+
+# ---------------------------------------------------------------------------
+# yfinance
+# ---------------------------------------------------------------------------
+def fetch_yfinance(ticker):
+    """Fetch last 5 trading days from Yahoo Finance.
+
+    Returns DataFrame with DatetimeIndex(UTC) + 'close' column, or empty DataFrame on failure.
+    """
+    import yfinance as yf
+
+    data = yf.download(ticker, period="5d", auto_adjust=True, progress=False)
+    if data.empty:
+        return pd.DataFrame(columns=["close"])
+
+    # yfinance may return MultiIndex columns for single ticker — flatten
+    if hasattr(data.columns, "levels"):
+        data.columns = data.columns.get_level_values(0)
+
+    df = data[["Close"]].rename(columns={"Close": "close"})
+    if df.index.tz is None:
+        df.index = df.index.tz_localize("UTC")
+    else:
+        df.index = df.index.tz_convert("UTC")
+    df.index = df.index.normalize()
+    df.index.name = "date"
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+SIGNAL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "_asset_signal")
+
+
+def main():
+    log.info("Starting daily price fetch...")
+
+    price_db.init_db()
+    assets = price_db.get_all_asset_metadata()
+    log.info("Found %d assets in database", len(assets))
+
+    updated = 0
+    errors = 0
+
+    for asset in assets:
+        name = asset["name"]
+        source = asset["source"]
+        source_id = asset["source_id"]
+
+        if not source or not source_id or source == "csv":
+            log.debug("Skipping %s (source=%s)", name, source)
+            continue
+
+        try:
+            if source == "coingecko":
+                df = fetch_coingecko(source_id)
+                time.sleep(2.5)  # respect 30 calls/min rate limit
+            elif source == "yfinance":
+                df = fetch_yfinance(source_id)
+            else:
+                log.warning("Unknown source '%s' for %s, skipping", source, name)
+                continue
+
+            if df.empty:
+                log.warning("No data returned for %s (%s:%s)", name, source, source_id)
+                continue
+
+            count = price_db.upsert_prices(asset["id"], df)
+            last_date = df.index[-1].date()
+            log.info("Updated %s: %d rows, latest=%s", name, len(df), last_date)
+            updated += 1
+
+        except Exception:
+            log.exception("Failed to fetch %s (%s:%s)", name, source, source_id)
+            errors += 1
+
+    # Signal Flask workers to reload ASSETS
+    try:
+        with open(SIGNAL_FILE, "w") as f:
+            f.write(str(time.time()))
+        log.info("Touched asset signal file")
+    except OSError:
+        log.warning("Could not touch signal file: %s", SIGNAL_FILE)
+
+    log.info("Done. Updated %d assets, %d errors.", updated, errors)
+
+    if errors:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

@@ -20,6 +20,35 @@ def load_data(path):
     return df
 
 
+def load_asset(name, data_dir=None, use_db=None):
+    """Load an asset by name — from PostgreSQL if available, else from CSV.
+
+    Args:
+        name: Asset name (e.g., "bitcoin").
+        data_dir: Directory containing CSV files (default: data/ next to this file).
+        use_db: Force DB mode (True), CSV mode (False), or auto-detect (None).
+                Auto-detect checks for PRICE_DB_URL env var.
+    Returns:
+        DataFrame with DatetimeIndex(UTC) and 'close' column.
+    """
+    if use_db is None:
+        use_db = bool(os.environ.get("PRICE_DB_URL"))
+
+    if use_db:
+        import price_db
+        df = price_db.get_asset_df(name)
+        if df.empty:
+            raise FileNotFoundError(f"Asset '{name}' not found in database")
+        return df
+
+    if data_dir is None:
+        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    path = os.path.join(data_dir, f"{name}.csv")
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"CSV not found: {path}")
+    return load_data(path)
+
+
 def compute_sma(df, period):
     """Return rolling mean Series for the close column."""
     return df["close"].rolling(window=period).mean()
@@ -1605,6 +1634,8 @@ def main():
     parser.add_argument("--vs", default=None,
                         help="Denominator asset for relative price mode (e.g., --asset ethereum --vs bitcoin)")
     parser.add_argument("--data", default=None, help="CSV file path (overrides --asset)")
+    parser.add_argument("--db", action="store_true",
+                        help="Force loading from PostgreSQL (requires PRICE_DB_URL env var)")
 
     # New indicator args
     parser.add_argument("--ind1", choices=list(INDICATORS.keys()), default=None,
@@ -1670,10 +1701,16 @@ def main():
         sell_thr = args.sell_threshold if args.sell_threshold is not None else osc_spec["sell_threshold"]
 
         data_dir_osc = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-        data_path = args.data or os.path.join(data_dir_osc, f"{args.asset}.csv")
-        df = load_data(data_path)
+        use_db_osc = True if args.db else None
+        if args.data:
+            df = load_data(args.data)
+        else:
+            df = load_asset(args.asset, data_dir=data_dir_osc, use_db=use_db_osc)
         if args.vs:
-            df_vs = load_data(os.path.join(data_dir_osc, f"{args.vs}.csv"))
+            if args.data:
+                df_vs = load_data(os.path.join(data_dir_osc, f"{args.vs}.csv"))
+            else:
+                df_vs = load_asset(args.vs, data_dir=data_dir_osc, use_db=use_db_osc)
             common_idx = df.index.intersection(df_vs.index)
             if len(common_idx) == 0:
                 print(f"Error: No overlapping dates between {args.asset} and {args.vs}.")
@@ -1766,18 +1803,25 @@ def main():
 
     # Load data
     data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-    if args.data is None:
-        args.data = os.path.join(data_dir, f"{args.asset}.csv")
+    use_db = True if args.db else None  # None = auto-detect via PRICE_DB_URL
 
     asset_label = args.asset
-    print(f"Loading {args.asset} data from {args.data}...")
-    df = load_data(args.data)
+    if args.data:
+        print(f"Loading {args.asset} data from {args.data}...")
+        df = load_data(args.data)
+    else:
+        source = "database" if (use_db or (use_db is None and os.environ.get("PRICE_DB_URL"))) else f"data/{args.asset}.csv"
+        print(f"Loading {args.asset} data from {source}...")
+        df = load_asset(args.asset, data_dir=data_dir, use_db=use_db)
 
     # Relative price mode: divide by denominator asset
     if args.vs:
-        vs_path = os.path.join(data_dir, f"{args.vs}.csv")
         print(f"Loading {args.vs} data for relative price (ratio)...")
-        df_vs = load_data(vs_path)
+        if args.data:
+            vs_path = os.path.join(data_dir, f"{args.vs}.csv")
+            df_vs = load_data(vs_path)
+        else:
+            df_vs = load_asset(args.vs, data_dir=data_dir, use_db=use_db)
         common_idx = df.index.intersection(df_vs.index)
         if len(common_idx) == 0:
             print(f"Error: No overlapping dates between {args.asset} and {args.vs}.")

@@ -19,6 +19,7 @@ import backtest as bt
 import threading
 import uuid
 import database as db
+import price_db
 
 app = Flask(__name__)
 db.init_db()
@@ -2941,14 +2942,22 @@ class Params:
 # Load data once at startup
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
+# Use PostgreSQL if available, fall back to CSV files
 ASSETS = {}
 ASSET_STARTS = {}
-for _fname in sorted(os.listdir(DATA_DIR)):
-    if _fname.endswith(".csv"):
-        _name = _fname.replace(".csv", "")
-        _df = bt.load_data(os.path.join(DATA_DIR, _fname))
+_USE_PRICE_DB = bool(os.environ.get("PRICE_DB_URL"))
+if _USE_PRICE_DB:
+    price_db.init_db()
+    for _name, _df in price_db.get_all_assets().items():
         ASSETS[_name] = _df
         ASSET_STARTS[_name] = str(_df.index[0].date())
+else:
+    for _fname in sorted(os.listdir(DATA_DIR)):
+        if _fname.endswith(".csv"):
+            _name = _fname.replace(".csv", "")
+            _df = bt.load_data(os.path.join(DATA_DIR, _fname))
+            ASSETS[_name] = _df
+            ASSET_STARTS[_name] = str(_df.index[0].date())
 ASSET_NAMES = sorted(ASSETS.keys())
 _PRIORITY_ORDER = ["bitcoin", "ethereum", "solana"]
 _CRYPTO_AGG_ASSETS = set()
@@ -3103,20 +3112,25 @@ def _touch_asset_signal():
 
 
 def _reload_assets_from_disk():
-    """Full reload of ASSETS, categories, logos from disk. Called by workers that detect a signal."""
+    """Full reload of ASSETS, categories, logos. Called by workers that detect a signal."""
     global ASSETS, ASSET_STARTS, ASSET_LOGOS, _CRYPTO_AGG_ASSETS, _STOCK_ASSETS, _INDEX_ASSETS, _METAL_ASSETS, _COMMODITY_ASSETS
 
     ASSETS.clear()
     ASSET_STARTS.clear()
-    for fname in sorted(os.listdir(DATA_DIR)):
-        if fname.endswith(".csv"):
-            name = fname.replace(".csv", "")
-            try:
-                df = bt.load_data(os.path.join(DATA_DIR, fname))
-                ASSETS[name] = df
-                ASSET_STARTS[name] = str(df.index[0].date())
-            except Exception:
-                pass
+    if _USE_PRICE_DB:
+        for name, df in price_db.get_all_assets().items():
+            ASSETS[name] = df
+            ASSET_STARTS[name] = str(df.index[0].date())
+    else:
+        for fname in sorted(os.listdir(DATA_DIR)):
+            if fname.endswith(".csv"):
+                name = fname.replace(".csv", "")
+                try:
+                    df = bt.load_data(os.path.join(DATA_DIR, fname))
+                    ASSETS[name] = df
+                    ASSET_STARTS[name] = str(df.index[0].date())
+                except Exception:
+                    pass
 
     # Reload categories
     _CRYPTO_AGG_ASSETS.clear()
@@ -7119,9 +7133,15 @@ def api_upload_asset():
         os.unlink(tmp_path)
         return jsonify(error=f'Failed to parse CSV: {str(e)}'), 400
 
-    # Move to data/ directory
-    csv_path = os.path.join(DATA_DIR, f"{asset_name}.csv")
-    shutil.move(tmp_path, csv_path)
+    # Persist price data
+    if _USE_PRICE_DB:
+        asset_id = price_db.get_or_create_asset(
+            asset_name, category=asset_type, source='csv', source_id=None)
+        price_db.upsert_prices(asset_id, df)
+        os.unlink(tmp_path)
+    else:
+        csv_path = os.path.join(DATA_DIR, f"{asset_name}.csv")
+        shutil.move(tmp_path, csv_path)
 
     # Update in-memory state
     ASSETS[asset_name] = df
@@ -7297,10 +7317,13 @@ def api_delete_asset():
     if name == 'bitcoin':
         return jsonify(error='Cannot delete the default asset'), 400
 
-    # Remove CSV file
-    csv_path = os.path.join(DATA_DIR, f"{name}.csv")
-    if os.path.exists(csv_path):
-        os.unlink(csv_path)
+    # Remove from storage
+    if _USE_PRICE_DB:
+        price_db.delete_asset(name)
+    else:
+        csv_path = os.path.join(DATA_DIR, f"{name}.csv")
+        if os.path.exists(csv_path):
+            os.unlink(csv_path)
 
     # Remove from in-memory state
     ASSETS.pop(name, None)
@@ -7333,13 +7356,15 @@ def api_rename_asset():
     if new_name in ASSETS:
         return jsonify(error=f'Asset "{new_name}" already exists'), 400
 
-    import shutil
-
-    # Rename CSV file
-    old_path = os.path.join(DATA_DIR, f"{old_name}.csv")
-    new_path = os.path.join(DATA_DIR, f"{new_name}.csv")
-    if os.path.exists(old_path):
-        shutil.move(old_path, new_path)
+    # Rename in storage
+    if _USE_PRICE_DB:
+        price_db.rename_asset(old_name, new_name)
+    else:
+        import shutil
+        old_path = os.path.join(DATA_DIR, f"{old_name}.csv")
+        new_path = os.path.join(DATA_DIR, f"{new_name}.csv")
+        if os.path.exists(old_path):
+            shutil.move(old_path, new_path)
 
     # Update in-memory state
     ASSETS[new_name] = ASSETS.pop(old_name)

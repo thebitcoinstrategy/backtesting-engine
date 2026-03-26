@@ -2,3 +2,6 @@ pandas
 matplotlib
 flask
 scipy
+psycopg2-binary
+yfinance
+requests
