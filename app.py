@@ -4592,7 +4592,6 @@ COMMUNITY_HTML = """\
             {% if page < total_pages %}<a href="?sort={{ sort }}&page={{ page + 1 }}">Next →</a>{% endif %}
         </div>
         {% endif %}
-        {% endif %}{# end if backtests #}
 
         {% else %}
         <div class="empty-state">
