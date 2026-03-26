@@ -3191,8 +3191,17 @@ def _check_asset_signal():
 
 def _series_to_lw_json(series):
     """Convert pandas Series (datetime index + float values) to Lightweight Charts format."""
+    def _smart_round(val):
+        """Round to 6 significant figures — preserves precision for small ratio values."""
+        if val == 0:
+            return 0
+        from math import log10, floor
+        magnitude = floor(log10(abs(val)))
+        digits = max(2, 6 - magnitude - 1)  # at least 2 decimal places
+        return round(val, digits)
+
     return json.dumps([
-        {"time": str(idx.date()), "value": round(float(val), 2)}
+        {"time": str(idx.date()), "value": _smart_round(float(val))}
         for idx, val in series.dropna().items()
     ])
 
