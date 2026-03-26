@@ -3335,15 +3335,18 @@ def _run_post_handler(cancel_event):
         _cap = lambda s: s.capitalize() if s == s.lower() else s
         asset_display = _cap(p.asset)
 
-    if p.end_date:
-        df_full = df_full[df_full.index <= pd_mod.Timestamp(p.end_date, tz="UTC")]
+    # df_price_all = full price data from start_date to newest available (for chart price line)
     if not p.start_date:
         p.start_date = str(df_full.index[0].date())
     if not p.end_date:
         p.end_date = str(df_full.index[-1].date())
+    df_price_all = df_full[df_full.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
+    if p.end_date:
+        df_full = df_full[df_full.index <= pd_mod.Timestamp(p.end_date, tz="UTC")]
     warmup_start_date = p.start_date
-    # df_full = full data for indicator warmup (passed to strategy functions)
-    # df = trimmed to start_date for display (charts, n_days, buy-and-hold)
+    # df_full = data up to end_date for indicator warmup (passed to strategy functions)
+    # df = trimmed to start_date..end_date for display (equity, metrics, buy-and-hold)
+    # df_price_all = start_date to newest date (for price line on charts)
     df = df_full[df_full.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
 
     fee = p.fee / 100
@@ -3886,7 +3889,7 @@ def _run_post_handler(cancel_event):
                     equity_top = 7 / (7 + 3)
                     equity_bottom = 1.0
 
-            ax1.plot(df.index, df["close"], label=f"{asset_name} {'Ratio' if is_ratio else 'Price'}", color="#e8eaf0", linewidth=0.8)
+            ax1.plot(df_price_all.index, df_price_all["close"], label=f"{asset_name} {'Ratio' if is_ratio else 'Price'}", color="#e8eaf0", linewidth=0.8)
 
             if not is_oscillator:
                 # Plot ind2 (main/slow indicator)
@@ -3999,7 +4002,8 @@ def _run_post_handler(cancel_event):
             last_ax.set_xlabel("Date")
             last_ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
             import math
-            date_range_years = (df.index[-1] - df.index[0]).days / 365.25
+            chart_last_date = max(df.index[-1], df_price_all.index[-1])
+            date_range_years = (chart_last_date - df.index[0]).days / 365.25
             year_step = max(1, math.ceil(date_range_years / 18))
             last_ax.xaxis.set_major_locator(mdates.YearLocator(year_step))
             plt.tight_layout()
@@ -4033,7 +4037,7 @@ def _run_post_handler(cancel_event):
             thumb_buf.seek(0)
             thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
 
-    price_json = _series_to_lw_json(df["close"]) if best else None
+    price_json = _series_to_lw_json(df_price_all["close"]) if best else None
     if is_oscillator:
         ind1_json = "[]"
         ind2_json = "[]"
