@@ -4781,25 +4781,29 @@ function moveSection(asset, direction) {
     });
 }
 function moveCollection(id, direction) {
-    var grid = document.getElementById('collections-grid');
-    if (!grid) return;
-    var el = grid.querySelector('.collection-card-wrapper[data-coll-id="' + id + '"]');
+    var el = document.querySelector('.collection-card-wrapper[data-coll-id="' + id + '"]');
     if (!el) return;
-    var wrappers = Array.from(grid.querySelectorAll('.collection-card-wrapper'));
-    var idx = wrappers.indexOf(el);
+    var grid = el.parentElement;
+    var siblings = Array.from(grid.children);
+    var idx = siblings.indexOf(el);
     if (idx < 0) return;
     var newIdx = idx + direction;
-    if (newIdx < 0 || newIdx >= wrappers.length) return;
+    if (newIdx < 0 || newIdx >= siblings.length) return;
     if (direction < 0) {
-        grid.insertBefore(el, wrappers[newIdx]);
+        grid.insertBefore(el, siblings[newIdx]);
     } else {
-        grid.insertBefore(wrappers[newIdx], el);
+        grid.insertBefore(siblings[newIdx], el);
     }
-    var orderedIds = Array.from(grid.querySelectorAll('.collection-card-wrapper')).map(function(w) { return w.getAttribute('data-coll-id'); });
+    // Save order: collect all backtest IDs (for backtest reorder) and collection IDs separately
+    var orderedBtIds = Array.from(document.querySelectorAll('.backtest-card-wrapper[data-id]')).map(function(w) { return w.getAttribute('data-id'); });
+    fetch('/api/reorder-featured', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ordered_ids: orderedBtIds})
+    });
+    var orderedCollIds = Array.from(document.querySelectorAll('.collection-card-wrapper[data-coll-id]')).map(function(w) { return w.getAttribute('data-coll-id'); });
     fetch('/api/reorder-collections', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ordered_ids: orderedIds})
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ordered_ids: orderedCollIds})
     });
 }
 </script>
