@@ -7693,7 +7693,10 @@ COLLECTION_DETAIL_HTML = """\
         .coll-meta { display: flex; align-items: center; gap: 8px; font-size: 0.85em; color: var(--text-muted); margin-bottom: 16px; flex-wrap: wrap; }
         .coll-meta-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
         .coll-meta-initials { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.7em; font-weight: 700; }
-        .coll-actions { display: flex; gap: 8px; margin-bottom: 20px; }
+        .coll-actions { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+        .vis-select { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); cursor: pointer; font-size: 0.8em; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; appearance: none; -webkit-appearance: none; padding-right: 28px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238890a4' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; }
+        .vis-select:hover { border-color: var(--border-hover); color: var(--text); }
+        .vis-select:focus { outline: none; border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139,92,246,0.15); }
         .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted); cursor: pointer; font-size: 0.8em; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; text-decoration: none; }
         .action-btn:hover { border-color: var(--border-hover); color: var(--text); }
         .action-btn.danger { border-color: #ef4444; color: #ef4444; }
@@ -7809,6 +7812,13 @@ COLLECTION_DETAIL_HTML = """\
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 Delete
             </button>
+            {% if is_admin %}
+            <select class="vis-select" id="coll-visibility" onchange="changeVisibility(this.value)">
+                <option value="private"{{ ' selected' if collection.visibility == 'private' }}>Private</option>
+                <option value="community"{{ ' selected' if collection.visibility == 'community' }}>Community</option>
+                <option value="featured"{{ ' selected' if collection.visibility == 'featured' }}>Featured</option>
+            </select>
+            {% endif %}
         </div>
         {% endif %}
     </div>
@@ -7938,6 +7948,16 @@ function deleteCollection() {
         if (!result.isConfirmed) return;
         fetch('/api/collection/' + collId + '/delete', { method: 'POST' })
         .then(function() { window.location.href = '/my-backtests'; });
+    });
+}
+function changeVisibility(vis) {
+    fetch('/api/collection/' + collId + '/visibility', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({visibility: vis})
+    }).then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) { _swal.fire({icon:'error', title:data.error}); return; }
+        _swal.fire({icon:'success', title:'Visibility updated to ' + vis, timer:1500, showConfirmButton:false});
     });
 }
 function removeBacktest(btId) {
