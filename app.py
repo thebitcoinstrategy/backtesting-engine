@@ -2327,7 +2327,8 @@ function loadLWChart() {
         },
         timeScale: {
             borderColor: '#252a3a',
-            timeVisible: false
+            timeVisible: false,
+            rightOffset: 20
         },
         crosshair: {
             horzLine: { color: '#555d74', labelBackgroundColor: '#252a3a' },
@@ -5685,7 +5686,7 @@ function loadLWChart() {
         layout: { background: { color: '#161922' }, textColor: '#8890a4', fontFamily: "'DM Sans', sans-serif" },
         grid: { vertLines: { color: '#252a3a' }, horzLines: { color: '#252a3a' } },
         rightPriceScale: { mode: LightweightCharts.PriceScaleMode.Logarithmic, borderColor: '#252a3a' },
-        timeScale: { borderColor: '#252a3a', timeVisible: false },
+        timeScale: { borderColor: '#252a3a', timeVisible: false, rightOffset: 20 },
         crosshair: { horzLine: { color: '#555d74', labelBackgroundColor: '#252a3a' }, vertLine: { color: '#555d74', labelBackgroundColor: '#252a3a' } }
     });
     var priceSeries = chart.addSeries(LightweightCharts.LineSeries, { color: '#e8eaf0', lineWidth: 2, title: 'Price', priceLineVisible: false });
