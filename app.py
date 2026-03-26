@@ -862,6 +862,14 @@ HTML = """\
             border-color: var(--accent);
             border-bottom-color: var(--bg-elevated);
         }
+        /* Measure tool */
+        .lw-measure-label {
+            position: absolute; z-index: 5; pointer-events: none;
+            background: rgba(22,25,34,0.92); border: 1px solid var(--border-hover);
+            border-radius: 6px; padding: 6px 10px; font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; line-height: 1.5; color: var(--text); white-space: nowrap;
+            backdrop-filter: blur(4px); box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
         /* Chart */
         .chart-img {
             width: 100%;
@@ -1833,7 +1841,7 @@ HTML = """\
                 {% if price_json %}
                 <div id="livechart-tab" style="display:none">
                     <div id="lw-chart-container"
-                         style="height:600px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
+                         style="position:relative;height:600px;border-radius:12px;overflow:hidden;border:1px solid var(--border);cursor:crosshair"
                     </div>
                 </div>
                 <script>
@@ -2401,6 +2409,157 @@ function loadLWChart() {
 
     window.addEventListener('resize', function() {
         chart.applyOptions({ width: container.clientWidth });
+    });
+
+    // --- Measure tool (Shift+Click) ---
+    var measureStart = null;  // {time, price}
+    var measureLabel = null;
+    var measureLine = null;
+
+    function removeMeasure() {
+        if (measureLabel) { measureLabel.remove(); measureLabel = null; }
+        if (measureLine) { measureLine.remove(); measureLine = null; }
+        measureStart = null;
+    }
+
+    function createMeasureLabel(text, x, y) {
+        var el = document.createElement('div');
+        el.className = 'lw-measure-label';
+        el.innerHTML = text;
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        container.appendChild(el);
+        // keep label within container bounds
+        var rect = el.getBoundingClientRect();
+        var cRect = container.getBoundingClientRect();
+        if (rect.right > cRect.right - 4) el.style.left = (x - rect.width - 8) + 'px';
+        if (rect.bottom > cRect.bottom - 4) el.style.top = (y - rect.height - 8) + 'px';
+        return el;
+    }
+
+    function createMeasureLine(x1, y1, x2, y2) {
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;';
+        svg.setAttribute('width', '100%');
+        svg.setAttribute('height', '100%');
+        var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+        line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+        line.setAttribute('stroke', '#f7931a');
+        line.setAttribute('stroke-width', '1.5');
+        line.setAttribute('stroke-dasharray', '6,3');
+        line.setAttribute('opacity', '0.8');
+        svg.appendChild(line);
+        // start dot
+        var c1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c1.setAttribute('cx', x1); c1.setAttribute('cy', y1); c1.setAttribute('r', '4');
+        c1.setAttribute('fill', '#f7931a');
+        svg.appendChild(c1);
+        // end dot
+        var c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c2.setAttribute('cx', x2); c2.setAttribute('cy', y2); c2.setAttribute('r', '4');
+        c2.setAttribute('fill', '#f7931a');
+        svg.appendChild(c2);
+        container.appendChild(svg);
+        return svg;
+    }
+
+    function formatMeasure(startPrice, endPrice, startTime, endTime) {
+        var pctChange = ((endPrice - startPrice) / startPrice * 100);
+        var sign = pctChange >= 0 ? '+' : '';
+        var color = pctChange >= 0 ? '#34d399' : '#ef4444';
+        var pctStr = sign + pctChange.toFixed(2) + '%';
+        var absChange = endPrice - startPrice;
+        var absStr = (absChange >= 0 ? '+' : '') + absChange.toFixed(priceFmt.precision);
+        // date range
+        var days = '';
+        if (startTime && endTime) {
+            var d1 = new Date(startTime), d2 = new Date(endTime);
+            var diff = Math.round(Math.abs(d2 - d1) / 86400000);
+            days = '<span style="color:#8890a4">' + diff + 'd</span>  ';
+        }
+        return days + '<span style="color:' + color + ';font-weight:600;font-size:13px">' + pctStr + '</span>' +
+               '<br><span style="color:#8890a4;font-size:11px">' + absStr + '</span>';
+    }
+
+    // Build a price lookup from priceData for snapping
+    var priceLookup = {};
+    priceData.forEach(function(d) { priceLookup[d.time] = d.value; });
+
+    container.addEventListener('click', function(e) {
+        if (!e.shiftKey) {
+            // normal click clears any active measurement
+            if (measureStart) removeMeasure();
+            return;
+        }
+        // Get logical point from click coordinates
+        var cRect = container.getBoundingClientRect();
+        var x = e.clientX - cRect.left;
+        var y = e.clientY - cRect.top;
+        var timeCoord = chart.timeScale().coordinateToTime(x);
+        if (timeCoord == null) return;
+        var priceCoord = priceSeries.coordinateToPrice(y);
+        if (priceCoord == null || priceCoord <= 0) return;
+
+        // Snap to actual price data if possible
+        var snapPrice = priceLookup[timeCoord] || priceCoord;
+
+        if (!measureStart) {
+            // First click — set start
+            removeMeasure();
+            measureStart = { time: timeCoord, price: snapPrice, x: x, y: y };
+            // Show start dot
+            measureLine = createMeasureLine(x, y, x, y);
+        } else {
+            // Second click — finalize
+            if (measureLine) measureLine.remove();
+            var startY = priceSeries.priceToCoordinate(measureStart.price);
+            var endY = priceSeries.priceToCoordinate(snapPrice);
+            if (startY == null) startY = measureStart.y;
+            if (endY == null) endY = y;
+            var startX = chart.timeScale().timeToCoordinate(measureStart.time);
+            if (startX == null) startX = measureStart.x;
+            measureLine = createMeasureLine(startX, startY, x, endY);
+            var labelX = Math.max(startX, x) + 12;
+            var labelY = Math.min(startY, endY) - 8;
+            measureLabel = createMeasureLabel(
+                formatMeasure(measureStart.price, snapPrice, measureStart.time, timeCoord),
+                labelX, labelY
+            );
+            measureStart = null;
+        }
+    });
+
+    // Live preview while measuring (crosshair move)
+    chart.subscribeCrosshairMove(function(param) {
+        if (!measureStart) return;
+        if (!param.time) return;
+        var curPrice = priceLookup[param.time];
+        if (!curPrice) {
+            // Try to get from series data
+            var seriesData = param.seriesData && param.seriesData.get(priceSeries);
+            if (seriesData) curPrice = seriesData.value;
+        }
+        if (!curPrice || curPrice <= 0) return;
+
+        // Update live line + label
+        if (measureLine) measureLine.remove();
+        if (measureLabel) { measureLabel.remove(); measureLabel = null; }
+
+        var startX = chart.timeScale().timeToCoordinate(measureStart.time);
+        var startY = priceSeries.priceToCoordinate(measureStart.price);
+        var endX = chart.timeScale().timeToCoordinate(param.time);
+        var endY = priceSeries.priceToCoordinate(curPrice);
+
+        if (startX == null || startY == null || endX == null || endY == null) return;
+
+        measureLine = createMeasureLine(startX, startY, endX, endY);
+        var labelX = Math.max(startX, endX) + 12;
+        var labelY = Math.min(startY, endY) - 8;
+        measureLabel = createMeasureLabel(
+            formatMeasure(measureStart.price, curPrice, measureStart.time, param.time),
+            labelX, labelY
+        );
     });
 }
 
@@ -5125,6 +5284,13 @@ DETAIL_HTML = """\
         }
         .chart-tab:hover { color: var(--text); background: var(--bg-elevated); }
         .chart-tab.active { background: var(--bg-elevated); color: var(--text); border-bottom-color: var(--bg-elevated); }
+        .lw-measure-label {
+            position: absolute; z-index: 5; pointer-events: none;
+            background: rgba(22,25,34,0.92); border: 1px solid var(--border-hover);
+            border-radius: 6px; padding: 6px 10px; font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; line-height: 1.5; color: var(--text); white-space: nowrap;
+            backdrop-filter: blur(4px); box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
         .backtest-card-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
         .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
         .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
@@ -5755,6 +5921,67 @@ function loadLWChart() {
         chart.timeScale().fitContent();
     }
     window.addEventListener('resize', function() { chart.applyOptions({ width: container.clientWidth }); });
+    // --- Measure tool (Shift+Click) ---
+    var measureStart = null, measureLabel = null, measureLine = null;
+    function removeMeasure() { if (measureLabel) { measureLabel.remove(); measureLabel = null; } if (measureLine) { measureLine.remove(); measureLine = null; } measureStart = null; }
+    function createMeasureLabel(text, x, y) {
+        var el = document.createElement('div'); el.className = 'lw-measure-label'; el.innerHTML = text;
+        el.style.left = x + 'px'; el.style.top = y + 'px'; container.appendChild(el);
+        var rect = el.getBoundingClientRect(), cRect = container.getBoundingClientRect();
+        if (rect.right > cRect.right - 4) el.style.left = (x - rect.width - 8) + 'px';
+        if (rect.bottom > cRect.bottom - 4) el.style.top = (y - rect.height - 8) + 'px';
+        return el;
+    }
+    function createMeasureLine(x1, y1, x2, y2) {
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;';
+        svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%');
+        var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x1); line.setAttribute('y1', y1); line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+        line.setAttribute('stroke', '#f7931a'); line.setAttribute('stroke-width', '1.5'); line.setAttribute('stroke-dasharray', '6,3'); line.setAttribute('opacity', '0.8');
+        svg.appendChild(line);
+        var c1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c1.setAttribute('cx', x1); c1.setAttribute('cy', y1); c1.setAttribute('r', '4'); c1.setAttribute('fill', '#f7931a'); svg.appendChild(c1);
+        var c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c2.setAttribute('cx', x2); c2.setAttribute('cy', y2); c2.setAttribute('r', '4'); c2.setAttribute('fill', '#f7931a'); svg.appendChild(c2);
+        container.appendChild(svg); return svg;
+    }
+    function formatMeasure(sp, ep, st, et) {
+        var pct = ((ep - sp) / sp * 100), sign = pct >= 0 ? '+' : '', color = pct >= 0 ? '#34d399' : '#ef4444';
+        var days = '';
+        if (st && et) { var diff = Math.round(Math.abs(new Date(et) - new Date(st)) / 86400000); days = '<span style="color:#8890a4">' + diff + 'd</span>  '; }
+        return days + '<span style="color:' + color + ';font-weight:600;font-size:13px">' + sign + pct.toFixed(2) + '%</span><br><span style="color:#8890a4;font-size:11px">' + (ep-sp >= 0 ? '+' : '') + (ep-sp).toFixed(priceFmt.precision) + '</span>';
+    }
+    var priceLookup = {}; priceData.forEach(function(d) { priceLookup[d.time] = d.value; });
+    container.addEventListener('click', function(e) {
+        if (!e.shiftKey) { if (measureStart) removeMeasure(); return; }
+        var cRect = container.getBoundingClientRect(), x = e.clientX - cRect.left, y = e.clientY - cRect.top;
+        var timeCoord = chart.timeScale().coordinateToTime(x); if (timeCoord == null) return;
+        var priceCoord = priceSeries.coordinateToPrice(y); if (priceCoord == null || priceCoord <= 0) return;
+        var snapPrice = priceLookup[timeCoord] || priceCoord;
+        if (!measureStart) { removeMeasure(); measureStart = { time: timeCoord, price: snapPrice, x: x, y: y }; measureLine = createMeasureLine(x, y, x, y); }
+        else {
+            if (measureLine) measureLine.remove();
+            var sY = priceSeries.priceToCoordinate(measureStart.price), eY = priceSeries.priceToCoordinate(snapPrice);
+            if (sY == null) sY = measureStart.y; if (eY == null) eY = y;
+            var sX = chart.timeScale().timeToCoordinate(measureStart.time); if (sX == null) sX = measureStart.x;
+            measureLine = createMeasureLine(sX, sY, x, eY);
+            measureLabel = createMeasureLabel(formatMeasure(measureStart.price, snapPrice, measureStart.time, timeCoord), Math.max(sX, x) + 12, Math.min(sY, eY) - 8);
+            measureStart = null;
+        }
+    });
+    chart.subscribeCrosshairMove(function(param) {
+        if (!measureStart || !param.time) return;
+        var curPrice = priceLookup[param.time];
+        if (!curPrice) { var sd = param.seriesData && param.seriesData.get(priceSeries); if (sd) curPrice = sd.value; }
+        if (!curPrice || curPrice <= 0) return;
+        if (measureLine) measureLine.remove(); if (measureLabel) { measureLabel.remove(); measureLabel = null; }
+        var sX = chart.timeScale().timeToCoordinate(measureStart.time), sY = priceSeries.priceToCoordinate(measureStart.price);
+        var eX = chart.timeScale().timeToCoordinate(param.time), eY = priceSeries.priceToCoordinate(curPrice);
+        if (sX == null || sY == null || eX == null || eY == null) return;
+        measureLine = createMeasureLine(sX, sY, eX, eY);
+        measureLabel = createMeasureLabel(formatMeasure(measureStart.price, curPrice, measureStart.time, param.time), Math.max(sX, eX) + 12, Math.min(sY, eY) - 8);
+    });
 }
 function copyLink(el) {
     navigator.clipboard.writeText(location.origin + '/s/{{ backtest.short_code }}');
