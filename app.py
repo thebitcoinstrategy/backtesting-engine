@@ -4318,72 +4318,6 @@ COMMUNITY_HTML = """\
         </div>
         {% endif %}
 
-        {% if collections|default(none) %}
-        {# Collections section #}
-        <div class="asset-section">
-            <div class="asset-section-header">
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="background:var(--bg-deep);border-radius:50%;padding:6px"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
-                <h3 class="asset-section-title">Strategies</h3>
-            </div>
-            <div class="backtest-grid" id="collections-grid">
-                {% for coll in collections %}
-                <div class="collection-card-wrapper" data-coll-id="{{ coll.id }}">
-                    {% if is_admin|default(false) %}
-                    <div class="reorder-controls">
-                        <button class="reorder-btn" onclick="event.preventDefault();moveCollection('{{ coll.id }}', -1)" title="Move up">&#9650;</button>
-                        <button class="reorder-btn" onclick="event.preventDefault();moveCollection('{{ coll.id }}', 1)" title="Move down">&#9660;</button>
-                    </div>
-                    {% endif %}
-                    {% if coll.youtube_url %}
-                    <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
-                    {% endif %}
-                    <a class="collection-card" href="/collection/{{ coll.id }}">
-                        <span class="backtest-card-badge badge-collection">Strategy</span>
-                        <div class="backtest-card-head">
-                            <div class="backtest-card-head-text">
-                                <div class="backtest-card-title">{{ coll.title }}</div>
-                            </div>
-                        </div>
-                        {% if coll._thumbnails %}
-                        <div class="coll-thumb-grid thumbs-{{ coll._thumbnails|length }}">
-                            {% for thumb in coll._thumbnails %}
-                            <img src="{{ thumb }}" alt="Preview">
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if coll._assets %}
-                        <div class="coll-asset-logos">
-                            {% for asset_name, asset_logo in coll._assets %}
-                            {% if asset_logo %}<img class="coll-asset-logo" src="/static/logos/{{ asset_logo }}" alt="{{ asset_name }}" title="{{ asset_name|capitalize }}">{% else %}<span class="coll-asset-fallback" title="{{ asset_name|capitalize }}">{{ asset_name[:1]|upper }}</span>{% endif %}
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if coll.description %}<div class="backtest-card-desc">{{ coll.description[:250] }}</div>{% endif %}
-                        <div class="backtest-card-params">
-                            <span class="collection-card-count"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> {{ coll._backtest_count }} backtest{{ 's' if coll._backtest_count != 1 }}</span>
-                        </div>
-                        <div class="backtest-card-footer">
-                            <div class="card-author">
-                                {% if coll._avatar %}
-                                <img src="/static/avatars/{{ coll._avatar }}" class="card-author-avatar" alt="">
-                                {% else %}
-                                <span class="card-author-initials" style="background:{{ coll._avatar_color }}">{{ coll._initial }}</span>
-                                {% endif %}
-                                <span class="card-author-name">{{ coll._display_name }}</span>
-                                <span class="card-author-sep">·</span>
-                                <span class="card-author-time">{{ time_ago(coll.created_at) }}</span>
-                            </div>
-                            <div class="engagement">
-                                <span>{{ coll.views_count or 0 }} views</span>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-
         {% if asset_sections|default(none) %}
         {# Grouped by asset view (featured page) #}
         {% for section in asset_sections %}
@@ -4400,6 +4334,62 @@ COMMUNITY_HTML = """\
             </div>
             <div class="backtest-grid" id="backtest-grid-{{ section.asset }}">
                 {% for bt in section.backtests %}
+                {% if bt._is_collection|default(false) %}
+                {# Collection card inline #}
+                <div class="collection-card-wrapper" data-coll-id="{{ bt.id }}">
+                    {% if is_admin|default(false) %}
+                    <div class="reorder-controls">
+                        <button class="reorder-btn" onclick="event.preventDefault();moveCollection('{{ bt.id }}', -1)" title="Move up">&#9650;</button>
+                        <button class="reorder-btn" onclick="event.preventDefault();moveCollection('{{ bt.id }}', 1)" title="Move down">&#9660;</button>
+                    </div>
+                    {% endif %}
+                    {% if bt.youtube_url %}
+                    <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
+                    {% endif %}
+                    <a class="collection-card" href="/collection/{{ bt.id }}">
+                        <span class="backtest-card-badge badge-collection">Strategy</span>
+                        <div class="backtest-card-head">
+                            <div class="backtest-card-head-text">
+                                <div class="backtest-card-title">{{ bt.title }}</div>
+                            </div>
+                        </div>
+                        {% if bt._thumbnails %}
+                        <div class="coll-thumb-grid thumbs-{{ bt._thumbnails|length }}">
+                            {% for thumb in bt._thumbnails %}
+                            <img src="{{ thumb }}" alt="Preview">
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% if bt._assets %}
+                        <div class="coll-asset-logos">
+                            {% for asset_name, asset_logo in bt._assets %}
+                            {% if asset_logo %}<img class="coll-asset-logo" src="/static/logos/{{ asset_logo }}" alt="{{ asset_name }}" title="{{ asset_name|capitalize }}">{% else %}<span class="coll-asset-fallback" title="{{ asset_name|capitalize }}">{{ asset_name[:1]|upper }}</span>{% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
+                        <div class="backtest-card-params">
+                            <span class="collection-card-count"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> {{ bt._backtest_count }} backtest{{ 's' if bt._backtest_count != 1 }}</span>
+                        </div>
+                        <div class="backtest-card-footer">
+                            <div class="card-author">
+                                {% if bt._avatar %}
+                                <img src="/static/avatars/{{ bt._avatar }}" class="card-author-avatar" alt="">
+                                {% else %}
+                                <span class="card-author-initials" style="background:{{ bt._avatar_color }}">{{ bt._initial }}</span>
+                                {% endif %}
+                                <span class="card-author-name">{{ bt._display_name }}</span>
+                                <span class="card-author-sep">·</span>
+                                <span class="card-author-time">{{ time_ago(bt.created_at) }}</span>
+                            </div>
+                            <div class="engagement">
+                                <span>{{ bt.views_count or 0 }} views</span>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                {% else %}
+                {# Regular backtest card #}
                 <div class="backtest-card-wrapper{{ ' locked' if not is_authenticated and not loop.first else '' }}" data-id="{{ bt.id }}">
                 {% if not is_authenticated and not loop.first %}
                 <div class="locked-overlay" onclick="shakeLock(this)">
@@ -4463,73 +4453,65 @@ COMMUNITY_HTML = """\
                     </div>
                 </a>
                 </div>
+                {% endif %}
                 {% endfor %}
             </div>
         </div>
         {% endfor %}
 
-        {% elif backtests or collections|default(none) %}
-        {% if collections|default(none) and not asset_sections|default(none) %}
-        <div class="backtest-grid" id="collections-grid" style="margin-bottom:24px">
-            {% for coll in collections %}
-            <div class="collection-card-wrapper" data-coll-id="{{ coll.id }}">
-                {% if is_admin|default(false) %}
-                <div class="reorder-controls">
-                    <button class="reorder-btn" onclick="event.preventDefault();moveCollection('{{ coll.id }}', -1)" title="Move up">&#9650;</button>
-                    <button class="reorder-btn" onclick="event.preventDefault();moveCollection('{{ coll.id }}', 1)" title="Move down">&#9660;</button>
-                </div>
-                {% endif %}
-                {% if coll.youtube_url %}
+        {% elif backtests %}
+        <div class="backtest-grid" id="backtest-grid">
+            {% for bt in backtests %}
+            {% if bt._is_collection|default(false) %}
+            {# Collection card inline #}
+            <div class="collection-card-wrapper" data-coll-id="{{ bt.id }}">
+                {% if bt.youtube_url %}
                 <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
                 {% endif %}
-                <a class="collection-card" href="/collection/{{ coll.id }}">
+                <a class="collection-card" href="/collection/{{ bt.id }}">
                     <span class="backtest-card-badge badge-collection">Strategy</span>
                     <div class="backtest-card-head">
                         <div class="backtest-card-head-text">
-                            <div class="backtest-card-title">{{ coll.title }}</div>
+                            <div class="backtest-card-title">{{ bt.title }}</div>
                         </div>
                     </div>
-                    {% if coll._thumbnails %}
-                    <div class="coll-thumb-grid thumbs-{{ coll._thumbnails|length }}">
-                        {% for thumb in coll._thumbnails %}
+                    {% if bt._thumbnails %}
+                    <div class="coll-thumb-grid thumbs-{{ bt._thumbnails|length }}">
+                        {% for thumb in bt._thumbnails %}
                         <img src="{{ thumb }}" alt="Preview">
                         {% endfor %}
                     </div>
                     {% endif %}
-                    {% if coll._assets %}
+                    {% if bt._assets %}
                     <div class="coll-asset-logos">
-                        {% for asset_name, asset_logo in coll._assets %}
+                        {% for asset_name, asset_logo in bt._assets %}
                         {% if asset_logo %}<img class="coll-asset-logo" src="/static/logos/{{ asset_logo }}" alt="{{ asset_name }}" title="{{ asset_name|capitalize }}">{% else %}<span class="coll-asset-fallback" title="{{ asset_name|capitalize }}">{{ asset_name[:1]|upper }}</span>{% endif %}
                         {% endfor %}
                     </div>
                     {% endif %}
-                    {% if coll.description %}<div class="backtest-card-desc">{{ coll.description[:250] }}</div>{% endif %}
+                    {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
                     <div class="backtest-card-params">
-                        <span class="collection-card-count"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> {{ coll._backtest_count }} backtest{{ 's' if coll._backtest_count != 1 }}</span>
+                        <span class="collection-card-count"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> {{ bt._backtest_count }} backtest{{ 's' if bt._backtest_count != 1 }}</span>
                     </div>
                     <div class="backtest-card-footer">
                         <div class="card-author">
-                            {% if coll._avatar %}
-                            <img src="/static/avatars/{{ coll._avatar }}" class="card-author-avatar" alt="">
+                            {% if bt._avatar %}
+                            <img src="/static/avatars/{{ bt._avatar }}" class="card-author-avatar" alt="">
                             {% else %}
-                            <span class="card-author-initials" style="background:{{ coll._avatar_color }}">{{ coll._initial }}</span>
+                            <span class="card-author-initials" style="background:{{ bt._avatar_color }}">{{ bt._initial }}</span>
                             {% endif %}
-                            <span class="card-author-name">{{ coll._display_name }}</span>
+                            <span class="card-author-name">{{ bt._display_name }}</span>
                             <span class="card-author-sep">·</span>
-                            <span class="card-author-time">{{ time_ago(coll.created_at) }}</span>
+                            <span class="card-author-time">{{ time_ago(bt.created_at) }}</span>
                         </div>
                         <div class="engagement">
-                            <span>{{ coll.views_count or 0 }} views</span>
+                            <span>{{ bt.views_count or 0 }} views</span>
                         </div>
                     </div>
                 </a>
             </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        {% if backtests %}
-        <div class="backtest-grid" id="backtest-grid">
-            {% for bt in backtests %}
+            {% else %}
+            {# Regular backtest card #}
             <div class="backtest-card-wrapper{{ ' locked' if not is_authenticated and not loop.first else '' }}" data-id="{{ bt.id }}">
             {% if not is_authenticated and not loop.first %}
             <div class="locked-overlay" onclick="shakeLock(this)">
@@ -4596,6 +4578,7 @@ COMMUNITY_HTML = """\
                 </div>
             </a>
             </div>
+            {% endif %}
             {% endfor %}
         </div>
 
@@ -7203,6 +7186,7 @@ def _enrich_collection_cards(collections):
         coll['_first_thumbnail'] = db.get_collection_first_thumbnail(coll['id'])
         coll['_thumbnails'] = db.get_collection_thumbnails(coll['id'], limit=4)
         coll['_assets'] = [(a, ASSET_LOGOS.get(a, '')) for a in db.get_collection_assets(coll['id'])]
+        coll['_primary_asset'] = db.get_collection_primary_asset(coll['id'])
     return collections
 
 
@@ -7436,13 +7420,18 @@ def community():
         c['_avatar_color'] = _avatar_color(c['user_id'])
         c['_initial'] = _user_initial(c['_display_name'], c['user_email'])
         c['_time_ago'] = _time_ago(c['created_at'])
-    # Collections
+    # Collections — merge into backtests list
     community_collections, _ = db.list_collections(visibility='community', sort='newest')
     _enrich_collection_cards(community_collections)
+    # Mark collections so template can distinguish them
+    for coll in community_collections:
+        coll['_is_collection'] = True
+    # Prepend collections to backtests list
+    mixed_items = community_collections + backtests
     return render_template_string(COMMUNITY_HTML,
         nav_active='community', page_title='Community Backtests',
         page_subtitle='Strategies shared by the community',
-        backtests=backtests, collections=community_collections,
+        backtests=mixed_items,
         sort=sort, page=page, total_pages=total_pages,
         recent_comments=recent_comments,
         is_authenticated=_is_authenticated(), time_ago=_time_ago)
@@ -7467,23 +7456,29 @@ def featured():
         if asset not in grouped:
             grouped[asset] = []
         grouped[asset].append(bt)
+    # Collections — inject into asset groups by primary asset
+    featured_collections, _ = db.list_collections(visibility='featured', sort='manual')
+    _enrich_collection_cards(featured_collections)
+    for coll in featured_collections:
+        coll['_is_collection'] = True
+    for coll in featured_collections:
+        asset = coll.get('_primary_asset', 'other') or 'other'
+        if asset not in grouped:
+            grouped[asset] = []
+        grouped[asset].append(coll)
     # Build sections with display info
     asset_sections = []
-    for asset, bts in grouped.items():
+    for asset, items in grouped.items():
         asset_sections.append({
             'asset': asset,
             'display': asset.capitalize() if asset != 'other' else 'Other',
             'logo': ASSET_LOGOS.get(asset, ''),
-            'backtests': bts,
+            'backtests': items,
         })
-    # Collections
-    featured_collections, _ = db.list_collections(visibility='featured', sort='manual')
-    _enrich_collection_cards(featured_collections)
     return render_template_string(COMMUNITY_HTML,
         nav_active='featured', page_title='Home',
         page_subtitle='Curated strategies hand-picked by our team',
         backtests=backtests, asset_sections=asset_sections,
-        collections=featured_collections,
         sort=sort, page=1, total_pages=1,
         is_authenticated=_is_authenticated(), is_admin=_is_admin(), time_ago=_time_ago)
 

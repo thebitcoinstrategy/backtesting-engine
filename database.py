@@ -1060,6 +1060,32 @@ def get_backtest_collection_ids(user_id, backtest_id):
     return {r['collection_id'] for r in rows}
 
 
+def get_collection_primary_asset(collection_id):
+    """Get the most common asset among backtests in a collection."""
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT b.params FROM backtests b
+           JOIN collection_backtests cb ON b.id = cb.backtest_id
+           WHERE cb.collection_id=?""",
+        (collection_id,)
+    ).fetchall()
+    conn.close()
+    import json
+    from collections import Counter
+    assets = []
+    for r in rows:
+        try:
+            p = json.loads(r['params'] or '{}')
+            asset = p.get('asset', '')
+            if asset:
+                assets.append(asset)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if not assets:
+        return 'other'
+    return Counter(assets).most_common(1)[0][0]
+
+
 def get_backtests_in_any_collection(user_id):
     """Get set of backtest IDs that belong to any collection owned by the user."""
     conn = _get_conn()
