@@ -2364,7 +2364,7 @@ function loadLWChart() {
         ind1Series.setData(ind1Data);
     }
 
-    // Default zoom: show last 12 months
+    // Default zoom: show last 12 months with right padding
     if (priceData.length > 0) {
         var lastPoint = priceData[priceData.length - 1];
         var lastDate = new Date(lastPoint.time);
@@ -2375,6 +2375,7 @@ function loadLWChart() {
             from: fromStr,
             to: lastPoint.time
         });
+        chart.timeScale().scrollToPosition(-20, false);
     } else {
         chart.timeScale().fitContent();
     }
@@ -5705,6 +5706,7 @@ function loadLWChart() {
         var fromDate = new Date(lastDate);
         fromDate.setFullYear(fromDate.getFullYear() - 1);
         chart.timeScale().setVisibleRange({ from: fromDate.toISOString().split('T')[0], to: lastPoint.time });
+        chart.timeScale().scrollToPosition(-20, false);
     } else {
         chart.timeScale().fitContent();
     }
