@@ -862,7 +862,22 @@ HTML = """\
             border-color: var(--accent);
             border-bottom-color: var(--bg-elevated);
         }
-        /* Measure tool */
+        /* Chart toolbar & tools */
+        .lw-toolbar {
+            position: absolute; top: 10px; left: 10px; z-index: 6;
+            display: flex; flex-direction: column; gap: 2px;
+            background: rgba(22,25,34,0.88); border: 1px solid var(--border);
+            border-radius: 8px; padding: 4px;
+            backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+        .lw-toolbar-btn {
+            width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+            background: none; border: none; border-radius: 6px; cursor: pointer;
+            color: var(--text-muted); transition: all 0.15s ease;
+        }
+        .lw-toolbar-btn:hover { background: var(--bg-elevated); color: var(--text); }
+        .lw-toolbar-btn.active { background: rgba(247,147,26,0.15); color: var(--accent); }
+        .lw-toolbar-sep { height: 1px; background: var(--border); margin: 2px 4px; }
         .lw-measure-label {
             position: absolute; z-index: 5; pointer-events: none;
             background: rgba(22,25,34,0.92); border: 1px solid var(--border-hover);
@@ -2411,20 +2426,89 @@ function loadLWChart() {
         chart.applyOptions({ width: container.clientWidth });
     });
 
-    // --- Measure tool (Shift+Click) — free-form, any point to any point ---
-    var measureStart = null;  // {x, y, price}
-    var measureLabel = null;
-    var measureLine = null;
-    var measureActive = false;  // true while dragging from first click
+    // ===== Toolbar =====
+    var toolbar = document.createElement('div');
+    toolbar.className = 'lw-toolbar';
+    // Measure button (ruler icon)
+    toolbar.innerHTML =
+        '<button class="lw-toolbar-btn" id="lw-btn-measure" title="Measure (Shift+Click)">' +
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M2 22L22 2"/><path d="M6 18l2-2"/><path d="M10 14l2-2"/><path d="M14 10l2-2"/><path d="M18 6l2-2"/></svg>' +
+        '</button>' +
+        '<button class="lw-toolbar-btn" id="lw-btn-draw" title="Draw Line">' +
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<line x1="4" y1="20" x2="20" y2="4"/></svg>' +
+        '</button>' +
+        '<div class="lw-toolbar-sep"></div>' +
+        '<button class="lw-toolbar-btn" id="lw-btn-scale" title="Toggle Log / Linear">' +
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M3 20Q8 18 12 10Q16 2 21 4"/></svg>' +
+        '</button>' +
+        '<div class="lw-toolbar-sep"></div>' +
+        '<button class="lw-toolbar-btn" id="lw-btn-clear" title="Clear All Drawings">' +
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M5 6v14a2 2 0 002 2h10a2 2 0 002-2V6"/></svg>' +
+        '</button>';
+    container.appendChild(toolbar);
 
-    function removeMeasure() {
-        if (measureLabel) { measureLabel.remove(); measureLabel = null; }
-        if (measureLine) { measureLine.remove(); measureLine = null; }
-        measureStart = null;
-        measureActive = false;
+    var activeTool = null;  // 'measure' | 'draw' | null
+    var isLogScale = true;
+    var btnMeasure = document.getElementById('lw-btn-measure');
+    var btnDraw = document.getElementById('lw-btn-draw');
+    var btnScale = document.getElementById('lw-btn-scale');
+    var btnClear = document.getElementById('lw-btn-clear');
+
+    function setTool(tool) {
+        if (activeTool === tool) { activeTool = null; } else { activeTool = tool; }
+        btnMeasure.classList.toggle('active', activeTool === 'measure');
+        btnDraw.classList.toggle('active', activeTool === 'draw');
+        container.style.cursor = activeTool ? 'crosshair' : '';
+        // Cancel any in-progress action
+        if (activeTool !== 'measure') removeMeasure();
+        if (activeTool !== 'draw') cancelDraw();
     }
 
-    function createMeasureLabel(text, x, y) {
+    btnMeasure.addEventListener('click', function(e) { e.stopPropagation(); setTool('measure'); });
+    btnDraw.addEventListener('click', function(e) { e.stopPropagation(); setTool('draw'); });
+
+    // ===== Log / Linear toggle =====
+    btnScale.addEventListener('click', function(e) {
+        e.stopPropagation();
+        isLogScale = !isLogScale;
+        chart.applyOptions({
+            rightPriceScale: {
+                mode: isLogScale ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal
+            }
+        });
+        // Update icon appearance
+        btnScale.classList.toggle('active', !isLogScale);
+        btnScale.title = isLogScale ? 'Toggle Log / Linear (Log)' : 'Toggle Log / Linear (Linear)';
+    });
+
+    // ===== Shared SVG helpers =====
+    function makeSvgOverlay() {
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;';
+        svg.setAttribute('width', '100%');
+        svg.setAttribute('height', '100%');
+        return svg;
+    }
+    function addDot(svg, cx, cy, color) {
+        var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', '4');
+        c.setAttribute('fill', color);
+        svg.appendChild(c);
+    }
+    function addLine(svg, x1, y1, x2, y2, color, dash) {
+        var l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        l.setAttribute('x1', x1); l.setAttribute('y1', y1);
+        l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+        l.setAttribute('stroke', color); l.setAttribute('stroke-width', '1.5');
+        if (dash) l.setAttribute('stroke-dasharray', dash);
+        l.setAttribute('opacity', '0.8');
+        svg.appendChild(l);
+    }
+    function createLabel(text, x, y) {
         var el = document.createElement('div');
         el.className = 'lw-measure-label';
         el.innerHTML = text;
@@ -2437,93 +2521,138 @@ function loadLWChart() {
         if (rect.bottom > cRect.bottom - 4) el.style.top = (y - rect.height - 8) + 'px';
         return el;
     }
-
-    function createMeasureLine(x1, y1, x2, y2) {
-        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;';
-        svg.setAttribute('width', '100%');
-        svg.setAttribute('height', '100%');
-        var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-        line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-        line.setAttribute('stroke', '#f7931a');
-        line.setAttribute('stroke-width', '1.5');
-        line.setAttribute('stroke-dasharray', '6,3');
-        line.setAttribute('opacity', '0.8');
-        svg.appendChild(line);
-        var c1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        c1.setAttribute('cx', x1); c1.setAttribute('cy', y1); c1.setAttribute('r', '4');
-        c1.setAttribute('fill', '#f7931a');
-        svg.appendChild(c1);
-        var c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        c2.setAttribute('cx', x2); c2.setAttribute('cy', y2); c2.setAttribute('r', '4');
-        c2.setAttribute('fill', '#f7931a');
-        svg.appendChild(c2);
-        container.appendChild(svg);
-        return svg;
-    }
-
     function formatMeasure(startPrice, endPrice) {
         if (!startPrice || startPrice <= 0) return '';
         var pctChange = ((endPrice - startPrice) / startPrice * 100);
         var sign = pctChange >= 0 ? '+' : '';
         var color = pctChange >= 0 ? '#34d399' : '#ef4444';
-        var pctStr = sign + pctChange.toFixed(2) + '%';
-        var absChange = endPrice - startPrice;
-        var absStr = (absChange >= 0 ? '+' : '') + absChange.toFixed(priceFmt.precision);
-        return '<span style="color:' + color + ';font-weight:600;font-size:13px">' + pctStr + '</span>' +
-               '<br><span style="color:#8890a4;font-size:11px">' + absStr + '</span>';
+        return '<span style="color:' + color + ';font-weight:600;font-size:13px">' + sign + pctChange.toFixed(2) + '%</span>' +
+               '<br><span style="color:#8890a4;font-size:11px">' + (endPrice - startPrice >= 0 ? '+' : '') + (endPrice - startPrice).toFixed(priceFmt.precision) + '</span>';
     }
 
+    // ===== Measure tool =====
+    var measureStart = null, measureLabel = null, measureLine = null, measureActive = false;
+    function removeMeasure() {
+        if (measureLabel) { measureLabel.remove(); measureLabel = null; }
+        if (measureLine) { measureLine.remove(); measureLine = null; }
+        measureStart = null; measureActive = false;
+    }
+
+    // ===== Draw lines tool =====
+    var drawStart = null, drawPreview = null, drawActive = false;
+    var drawnLines = [];  // persistent lines [{svg, ...}]
+    function cancelDraw() {
+        if (drawPreview) { drawPreview.remove(); drawPreview = null; }
+        drawStart = null; drawActive = false;
+    }
+
+    // ===== Clear all =====
+    btnClear.addEventListener('click', function(e) {
+        e.stopPropagation();
+        removeMeasure();
+        cancelDraw();
+        drawnLines.forEach(function(item) { item.remove(); });
+        drawnLines = [];
+    });
+
+    // ===== Click handler =====
     container.addEventListener('click', function(e) {
-        if (!e.shiftKey) {
-            if (measureStart) removeMeasure();
-            return;
-        }
+        // Ignore clicks on toolbar
+        if (e.target.closest('.lw-toolbar')) return;
         var cRect = container.getBoundingClientRect();
         var x = e.clientX - cRect.left;
         var y = e.clientY - cRect.top;
-        var price = priceSeries.coordinateToPrice(y);
 
-        if (!measureStart) {
-            removeMeasure();
-            measureStart = { x: x, y: y, price: price };
-            measureActive = true;
-            measureLine = createMeasureLine(x, y, x, y);
-        } else {
-            // Finalize
-            if (measureLine) measureLine.remove();
-            measureLine = createMeasureLine(measureStart.x, measureStart.y, x, y);
-            var labelX = Math.max(measureStart.x, x) + 12;
-            var labelY = Math.min(measureStart.y, y) - 8;
-            if (measureStart.price && price && measureStart.price > 0 && price > 0) {
-                measureLabel = createMeasureLabel(
-                    formatMeasure(measureStart.price, price), labelX, labelY
-                );
+        // Shift+Click always activates measure regardless of active tool
+        if (e.shiftKey) {
+            if (activeTool !== 'measure') setTool('measure');
+        }
+
+        if (activeTool === 'measure') {
+            var price = priceSeries.coordinateToPrice(y);
+            if (!measureStart) {
+                removeMeasure();
+                measureStart = { x: x, y: y, price: price };
+                measureActive = true;
+                var svg = makeSvgOverlay(); addDot(svg, x, y, '#f7931a'); addLine(svg, x, y, x, y, '#f7931a', '6,3');
+                container.appendChild(svg); measureLine = svg;
+            } else {
+                if (measureLine) measureLine.remove();
+                var svg = makeSvgOverlay();
+                addLine(svg, measureStart.x, measureStart.y, x, y, '#f7931a', '6,3');
+                addDot(svg, measureStart.x, measureStart.y, '#f7931a');
+                addDot(svg, x, y, '#f7931a');
+                container.appendChild(svg); measureLine = svg;
+                if (measureStart.price && price && measureStart.price > 0 && price > 0) {
+                    measureLabel = createLabel(formatMeasure(measureStart.price, price),
+                        Math.max(measureStart.x, x) + 12, Math.min(measureStart.y, y) - 8);
+                }
+                measureStart = null; measureActive = false;
             }
-            measureStart = null;
-            measureActive = false;
+            return;
+        }
+
+        if (activeTool === 'draw') {
+            if (!drawStart) {
+                drawStart = { x: x, y: y };
+                drawActive = true;
+                var svg = makeSvgOverlay(); addDot(svg, x, y, '#6495ED'); addLine(svg, x, y, x, y, '#6495ED');
+                container.appendChild(svg); drawPreview = svg;
+            } else {
+                if (drawPreview) drawPreview.remove(); drawPreview = null;
+                var svg = makeSvgOverlay();
+                addLine(svg, drawStart.x, drawStart.y, x, y, '#6495ED');
+                addDot(svg, drawStart.x, drawStart.y, '#6495ED');
+                addDot(svg, x, y, '#6495ED');
+                container.appendChild(svg);
+                drawnLines.push(svg);
+                drawStart = null; drawActive = false;
+            }
+            return;
+        }
+
+        // No tool active — plain click clears measure if any
+        if (measureStart) removeMeasure();
+    });
+
+    // ===== Mousemove for live preview =====
+    container.addEventListener('mousemove', function(e) {
+        if (e.target.closest('.lw-toolbar')) return;
+        var cRect = container.getBoundingClientRect();
+        var x = e.clientX - cRect.left;
+        var y = e.clientY - cRect.top;
+
+        if (measureActive && measureStart) {
+            if (measureLine) measureLine.remove();
+            if (measureLabel) { measureLabel.remove(); measureLabel = null; }
+            var svg = makeSvgOverlay();
+            addLine(svg, measureStart.x, measureStart.y, x, y, '#f7931a', '6,3');
+            addDot(svg, measureStart.x, measureStart.y, '#f7931a');
+            addDot(svg, x, y, '#f7931a');
+            container.appendChild(svg); measureLine = svg;
+            var price = priceSeries.coordinateToPrice(y);
+            if (measureStart.price && price && measureStart.price > 0 && price > 0) {
+                measureLabel = createLabel(formatMeasure(measureStart.price, price),
+                    Math.max(measureStart.x, x) + 12, Math.min(measureStart.y, y) - 8);
+            }
+        }
+
+        if (drawActive && drawStart) {
+            if (drawPreview) drawPreview.remove();
+            var svg = makeSvgOverlay();
+            addLine(svg, drawStart.x, drawStart.y, x, y, '#6495ED');
+            addDot(svg, drawStart.x, drawStart.y, '#6495ED');
+            addDot(svg, x, y, '#6495ED');
+            container.appendChild(svg); drawPreview = svg;
         }
     });
 
-    // Live preview while measuring
-    container.addEventListener('mousemove', function(e) {
-        if (!measureActive || !measureStart) return;
-        var cRect = container.getBoundingClientRect();
-        var x = e.clientX - cRect.left;
-        var y = e.clientY - cRect.top;
-
-        if (measureLine) measureLine.remove();
-        if (measureLabel) { measureLabel.remove(); measureLabel = null; }
-
-        measureLine = createMeasureLine(measureStart.x, measureStart.y, x, y);
-        var price = priceSeries.coordinateToPrice(y);
-        if (measureStart.price && price && measureStart.price > 0 && price > 0) {
-            var labelX = Math.max(measureStart.x, x) + 12;
-            var labelY = Math.min(measureStart.y, y) - 8;
-            measureLabel = createMeasureLabel(
-                formatMeasure(measureStart.price, price), labelX, labelY
-            );
+    // Escape key cancels active drawing
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            if (measureActive) removeMeasure();
+            if (drawActive) cancelDraw();
+            if (activeTool) setTool(null);
         }
     });
 }
@@ -5256,6 +5385,21 @@ DETAIL_HTML = """\
             font-size: 12px; line-height: 1.5; color: var(--text); white-space: nowrap;
             backdrop-filter: blur(4px); box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         }
+        .lw-toolbar {
+            position: absolute; top: 10px; left: 10px; z-index: 6;
+            display: flex; flex-direction: column; gap: 2px;
+            background: rgba(22,25,34,0.88); border: 1px solid var(--border);
+            border-radius: 8px; padding: 4px;
+            backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+        .lw-toolbar-btn {
+            width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+            background: none; border: none; border-radius: 6px; cursor: pointer;
+            color: var(--text-muted); transition: all 0.15s ease;
+        }
+        .lw-toolbar-btn:hover { background: var(--bg-elevated); color: var(--text); }
+        .lw-toolbar-btn.active { background: rgba(247,147,26,0.15); color: var(--accent); }
+        .lw-toolbar-sep { height: 1px; background: var(--border); margin: 2px 4px; }
         .backtest-card-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
         .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
         .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
@@ -5886,62 +6030,70 @@ function loadLWChart() {
         chart.timeScale().fitContent();
     }
     window.addEventListener('resize', function() { chart.applyOptions({ width: container.clientWidth }); });
-    // --- Measure tool (Shift+Click) — free-form, any point to any point ---
+    // ===== Toolbar =====
+    var toolbar = document.createElement('div'); toolbar.className = 'lw-toolbar';
+    toolbar.innerHTML =
+        '<button class="lw-toolbar-btn" id="lw-btn-measure2" title="Measure (Shift+Click)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22L22 2"/><path d="M6 18l2-2"/><path d="M10 14l2-2"/><path d="M14 10l2-2"/><path d="M18 6l2-2"/></svg></button>' +
+        '<button class="lw-toolbar-btn" id="lw-btn-draw2" title="Draw Line"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="20" y2="4"/></svg></button>' +
+        '<div class="lw-toolbar-sep"></div>' +
+        '<button class="lw-toolbar-btn" id="lw-btn-scale2" title="Toggle Log / Linear"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20Q8 18 12 10Q16 2 21 4"/></svg></button>' +
+        '<div class="lw-toolbar-sep"></div>' +
+        '<button class="lw-toolbar-btn" id="lw-btn-clear2" title="Clear All Drawings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M5 6v14a2 2 0 002 2h10a2 2 0 002-2V6"/></svg></button>';
+    container.appendChild(toolbar);
+    var activeTool = null, isLogScale = true;
+    var btnM = document.getElementById('lw-btn-measure2'), btnD = document.getElementById('lw-btn-draw2');
+    var btnS = document.getElementById('lw-btn-scale2'), btnC = document.getElementById('lw-btn-clear2');
     var measureStart = null, measureLabel = null, measureLine = null, measureActive = false;
+    var drawStart = null, drawPreview = null, drawActive = false, drawnLines = [];
     function removeMeasure() { if (measureLabel) { measureLabel.remove(); measureLabel = null; } if (measureLine) { measureLine.remove(); measureLine = null; } measureStart = null; measureActive = false; }
-    function createMeasureLabel(text, x, y) {
-        var el = document.createElement('div'); el.className = 'lw-measure-label'; el.innerHTML = text;
-        el.style.left = x + 'px'; el.style.top = y + 'px'; container.appendChild(el);
-        var rect = el.getBoundingClientRect(), cRect = container.getBoundingClientRect();
-        if (rect.right > cRect.right - 4) el.style.left = (x - rect.width - 8) + 'px';
-        if (rect.bottom > cRect.bottom - 4) el.style.top = (y - rect.height - 8) + 'px';
-        return el;
+    function cancelDraw() { if (drawPreview) { drawPreview.remove(); drawPreview = null; } drawStart = null; drawActive = false; }
+    function setTool(tool) {
+        if (activeTool === tool) activeTool = null; else activeTool = tool;
+        btnM.classList.toggle('active', activeTool === 'measure'); btnD.classList.toggle('active', activeTool === 'draw');
+        container.style.cursor = activeTool ? 'crosshair' : '';
+        if (activeTool !== 'measure') removeMeasure(); if (activeTool !== 'draw') cancelDraw();
     }
-    function createMeasureLine(x1, y1, x2, y2) {
-        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;';
-        svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%');
-        var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', x1); line.setAttribute('y1', y1); line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-        line.setAttribute('stroke', '#f7931a'); line.setAttribute('stroke-width', '1.5'); line.setAttribute('stroke-dasharray', '6,3'); line.setAttribute('opacity', '0.8');
-        svg.appendChild(line);
-        var c1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        c1.setAttribute('cx', x1); c1.setAttribute('cy', y1); c1.setAttribute('r', '4'); c1.setAttribute('fill', '#f7931a'); svg.appendChild(c1);
-        var c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        c2.setAttribute('cx', x2); c2.setAttribute('cy', y2); c2.setAttribute('r', '4'); c2.setAttribute('fill', '#f7931a'); svg.appendChild(c2);
-        container.appendChild(svg); return svg;
-    }
-    function formatMeasure(sp, ep) {
-        if (!sp || sp <= 0) return '';
-        var pct = ((ep - sp) / sp * 100), sign = pct >= 0 ? '+' : '', color = pct >= 0 ? '#34d399' : '#ef4444';
-        return '<span style="color:' + color + ';font-weight:600;font-size:13px">' + sign + pct.toFixed(2) + '%</span><br><span style="color:#8890a4;font-size:11px">' + (ep-sp >= 0 ? '+' : '') + (ep-sp).toFixed(priceFmt.precision) + '</span>';
-    }
+    function makeSvgOverlay() { var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;'; s.setAttribute('width', '100%'); s.setAttribute('height', '100%'); return s; }
+    function addDot(s, cx, cy, c) { var d = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); d.setAttribute('cx', cx); d.setAttribute('cy', cy); d.setAttribute('r', '4'); d.setAttribute('fill', c); s.appendChild(d); }
+    function addLine(s, x1, y1, x2, y2, c, dash) { var l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l.setAttribute('x1', x1); l.setAttribute('y1', y1); l.setAttribute('x2', x2); l.setAttribute('y2', y2); l.setAttribute('stroke', c); l.setAttribute('stroke-width', '1.5'); if (dash) l.setAttribute('stroke-dasharray', dash); l.setAttribute('opacity', '0.8'); s.appendChild(l); }
+    function createLabel(text, x, y) { var el = document.createElement('div'); el.className = 'lw-measure-label'; el.innerHTML = text; el.style.left = x + 'px'; el.style.top = y + 'px'; container.appendChild(el); var r = el.getBoundingClientRect(), cr = container.getBoundingClientRect(); if (r.right > cr.right - 4) el.style.left = (x - r.width - 8) + 'px'; if (r.bottom > cr.bottom - 4) el.style.top = (y - r.height - 8) + 'px'; return el; }
+    function fmtMeasure(sp, ep) { if (!sp || sp <= 0) return ''; var pct = ((ep-sp)/sp*100), sign = pct >= 0 ? '+' : '', color = pct >= 0 ? '#34d399' : '#ef4444'; return '<span style="color:'+color+';font-weight:600;font-size:13px">'+sign+pct.toFixed(2)+'%</span><br><span style="color:#8890a4;font-size:11px">'+(ep-sp>=0?'+':'')+(ep-sp).toFixed(priceFmt.precision)+'</span>'; }
+    btnM.addEventListener('click', function(e) { e.stopPropagation(); setTool('measure'); });
+    btnD.addEventListener('click', function(e) { e.stopPropagation(); setTool('draw'); });
+    btnS.addEventListener('click', function(e) { e.stopPropagation(); isLogScale = !isLogScale; chart.applyOptions({ rightPriceScale: { mode: isLogScale ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal } }); btnS.classList.toggle('active', !isLogScale); });
+    btnC.addEventListener('click', function(e) { e.stopPropagation(); removeMeasure(); cancelDraw(); drawnLines.forEach(function(i) { i.remove(); }); drawnLines = []; });
     container.addEventListener('click', function(e) {
-        if (!e.shiftKey) { if (measureStart) removeMeasure(); return; }
-        var cRect = container.getBoundingClientRect(), x = e.clientX - cRect.left, y = e.clientY - cRect.top;
-        var price = priceSeries.coordinateToPrice(y);
-        if (!measureStart) {
-            removeMeasure(); measureStart = { x: x, y: y, price: price }; measureActive = true;
-            measureLine = createMeasureLine(x, y, x, y);
-        } else {
-            if (measureLine) measureLine.remove();
-            measureLine = createMeasureLine(measureStart.x, measureStart.y, x, y);
-            if (measureStart.price && price && measureStart.price > 0 && price > 0) {
-                measureLabel = createMeasureLabel(formatMeasure(measureStart.price, price), Math.max(measureStart.x, x) + 12, Math.min(measureStart.y, y) - 8);
-            }
-            measureStart = null; measureActive = false;
+        if (e.target.closest('.lw-toolbar')) return;
+        var cr = container.getBoundingClientRect(), x = e.clientX - cr.left, y = e.clientY - cr.top;
+        if (e.shiftKey && activeTool !== 'measure') setTool('measure');
+        if (activeTool === 'measure') {
+            var price = priceSeries.coordinateToPrice(y);
+            if (!measureStart) { removeMeasure(); measureStart = { x:x, y:y, price:price }; measureActive = true; var sv = makeSvgOverlay(); addDot(sv,x,y,'#f7931a'); addLine(sv,x,y,x,y,'#f7931a','6,3'); container.appendChild(sv); measureLine = sv; }
+            else { if (measureLine) measureLine.remove(); var sv = makeSvgOverlay(); addLine(sv,measureStart.x,measureStart.y,x,y,'#f7931a','6,3'); addDot(sv,measureStart.x,measureStart.y,'#f7931a'); addDot(sv,x,y,'#f7931a'); container.appendChild(sv); measureLine = sv; if (measureStart.price&&price&&measureStart.price>0&&price>0) measureLabel = createLabel(fmtMeasure(measureStart.price,price),Math.max(measureStart.x,x)+12,Math.min(measureStart.y,y)-8); measureStart = null; measureActive = false; }
+            return;
         }
+        if (activeTool === 'draw') {
+            if (!drawStart) { drawStart = { x:x, y:y }; drawActive = true; var sv = makeSvgOverlay(); addDot(sv,x,y,'#6495ED'); addLine(sv,x,y,x,y,'#6495ED'); container.appendChild(sv); drawPreview = sv; }
+            else { if (drawPreview) drawPreview.remove(); drawPreview = null; var sv = makeSvgOverlay(); addLine(sv,drawStart.x,drawStart.y,x,y,'#6495ED'); addDot(sv,drawStart.x,drawStart.y,'#6495ED'); addDot(sv,x,y,'#6495ED'); container.appendChild(sv); drawnLines.push(sv); drawStart = null; drawActive = false; }
+            return;
+        }
+        if (measureStart) removeMeasure();
     });
     container.addEventListener('mousemove', function(e) {
-        if (!measureActive || !measureStart) return;
-        var cRect = container.getBoundingClientRect(), x = e.clientX - cRect.left, y = e.clientY - cRect.top;
-        if (measureLine) measureLine.remove(); if (measureLabel) { measureLabel.remove(); measureLabel = null; }
-        measureLine = createMeasureLine(measureStart.x, measureStart.y, x, y);
-        var price = priceSeries.coordinateToPrice(y);
-        if (measureStart.price && price && measureStart.price > 0 && price > 0) {
-            measureLabel = createMeasureLabel(formatMeasure(measureStart.price, price), Math.max(measureStart.x, x) + 12, Math.min(measureStart.y, y) - 8);
+        if (e.target.closest('.lw-toolbar')) return;
+        var cr = container.getBoundingClientRect(), x = e.clientX - cr.left, y = e.clientY - cr.top;
+        if (measureActive && measureStart) {
+            if (measureLine) measureLine.remove(); if (measureLabel) { measureLabel.remove(); measureLabel = null; }
+            var sv = makeSvgOverlay(); addLine(sv,measureStart.x,measureStart.y,x,y,'#f7931a','6,3'); addDot(sv,measureStart.x,measureStart.y,'#f7931a'); addDot(sv,x,y,'#f7931a'); container.appendChild(sv); measureLine = sv;
+            var price = priceSeries.coordinateToPrice(y);
+            if (measureStart.price&&price&&measureStart.price>0&&price>0) measureLabel = createLabel(fmtMeasure(measureStart.price,price),Math.max(measureStart.x,x)+12,Math.min(measureStart.y,y)-8);
+        }
+        if (drawActive && drawStart) {
+            if (drawPreview) drawPreview.remove();
+            var sv = makeSvgOverlay(); addLine(sv,drawStart.x,drawStart.y,x,y,'#6495ED'); addDot(sv,drawStart.x,drawStart.y,'#6495ED'); addDot(sv,x,y,'#6495ED'); container.appendChild(sv); drawPreview = sv;
         }
     });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { if (measureActive) removeMeasure(); if (drawActive) cancelDraw(); if (activeTool) setTool(null); } });
 }
 function copyLink(el) {
     navigator.clipboard.writeText(location.origin + '/s/{{ backtest.short_code }}');
