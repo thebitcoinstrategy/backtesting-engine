@@ -2309,6 +2309,23 @@ function loadLWChart() {
 
     if (priceData.length === 0) return;
 
+    // Determine decimal precision from data magnitude
+    function calcPriceFormat(data) {
+        if (!data || data.length === 0) return { precision: 2, minMove: 0.01 };
+        var vals = data.map(function(d) { return Math.abs(d.value); }).filter(function(v) { return v > 0; });
+        if (vals.length === 0) return { precision: 2, minMove: 0.01 };
+        var median = vals.sort(function(a,b){return a-b;})[Math.floor(vals.length/2)];
+        var prec;
+        if (median >= 1) prec = 2;
+        else if (median >= 0.1) prec = 3;
+        else if (median >= 0.01) prec = 4;
+        else if (median >= 0.001) prec = 5;
+        else if (median >= 0.0001) prec = 6;
+        else prec = 8;
+        return { precision: prec, minMove: Math.pow(10, -prec) };
+    }
+    var priceFmt = calcPriceFormat(priceData);
+
     var chart = LightweightCharts.createChart(container, {
         width: container.clientWidth,
         height: 600,
@@ -2339,26 +2356,31 @@ function loadLWChart() {
         color: '#e8eaf0',
         lineWidth: 2,
         title: 'Price',
-        priceLineVisible: false
+        priceLineVisible: false,
+        priceFormat: { type: 'price', precision: priceFmt.precision, minMove: priceFmt.minMove }
     });
     priceSeries.setData(priceData);
 
     if (ind2Data.length > 0) {
+        var ind2Fmt = calcPriceFormat(ind2Data);
         var ind2Series = chart.addSeries(LightweightCharts.LineSeries, {
             color: '#6495ED',
             lineWidth: 2,
             title: ind2Label,
-            priceLineVisible: false
+            priceLineVisible: false,
+            priceFormat: { type: 'price', precision: ind2Fmt.precision, minMove: ind2Fmt.minMove }
         });
         ind2Series.setData(ind2Data);
     }
 
     if (ind1Data.length > 0) {
+        var ind1Fmt = calcPriceFormat(ind1Data);
         var ind1Series = chart.addSeries(LightweightCharts.LineSeries, {
             color: '#f7931a',
             lineWidth: 2,
             title: ind1Label,
-            priceLineVisible: false
+            priceLineVisible: false,
+            priceFormat: { type: 'price', precision: ind1Fmt.precision, minMove: ind1Fmt.minMove }
         });
         ind1Series.setData(ind1Data);
     }
@@ -5688,6 +5710,21 @@ function loadLWChart() {
     var ind1Label = __lwData.ind1Label || '';
     var ind2Label = __lwData.ind2Label || '';
     if (priceData.length === 0) return;
+    function calcPriceFormat(data) {
+        if (!data || data.length === 0) return { precision: 2, minMove: 0.01 };
+        var vals = data.map(function(d) { return Math.abs(d.value); }).filter(function(v) { return v > 0; });
+        if (vals.length === 0) return { precision: 2, minMove: 0.01 };
+        var median = vals.sort(function(a,b){return a-b;})[Math.floor(vals.length/2)];
+        var prec;
+        if (median >= 1) prec = 2;
+        else if (median >= 0.1) prec = 3;
+        else if (median >= 0.01) prec = 4;
+        else if (median >= 0.001) prec = 5;
+        else if (median >= 0.0001) prec = 6;
+        else prec = 8;
+        return { precision: prec, minMove: Math.pow(10, -prec) };
+    }
+    var priceFmt = calcPriceFormat(priceData);
     var chart = LightweightCharts.createChart(container, {
         width: container.clientWidth, height: 600,
         layout: { background: { color: '#161922' }, textColor: '#8890a4', fontFamily: "'DM Sans', sans-serif" },
@@ -5696,14 +5733,16 @@ function loadLWChart() {
         timeScale: { borderColor: '#252a3a', timeVisible: false },
         crosshair: { horzLine: { color: '#555d74', labelBackgroundColor: '#252a3a' }, vertLine: { color: '#555d74', labelBackgroundColor: '#252a3a' } }
     });
-    var priceSeries = chart.addSeries(LightweightCharts.LineSeries, { color: '#e8eaf0', lineWidth: 2, title: 'Price', priceLineVisible: false });
+    var priceSeries = chart.addSeries(LightweightCharts.LineSeries, { color: '#e8eaf0', lineWidth: 2, title: 'Price', priceLineVisible: false, priceFormat: { type: 'price', precision: priceFmt.precision, minMove: priceFmt.minMove } });
     priceSeries.setData(priceData);
     if (ind2Data.length > 0) {
-        var ind2Series = chart.addSeries(LightweightCharts.LineSeries, { color: '#6495ED', lineWidth: 2, title: ind2Label, priceLineVisible: false });
+        var ind2Fmt = calcPriceFormat(ind2Data);
+        var ind2Series = chart.addSeries(LightweightCharts.LineSeries, { color: '#6495ED', lineWidth: 2, title: ind2Label, priceLineVisible: false, priceFormat: { type: 'price', precision: ind2Fmt.precision, minMove: ind2Fmt.minMove } });
         ind2Series.setData(ind2Data);
     }
     if (ind1Data.length > 0) {
-        var ind1Series = chart.addSeries(LightweightCharts.LineSeries, { color: '#f7931a', lineWidth: 2, title: ind1Label, priceLineVisible: false });
+        var ind1Fmt = calcPriceFormat(ind1Data);
+        var ind1Series = chart.addSeries(LightweightCharts.LineSeries, { color: '#f7931a', lineWidth: 2, title: ind1Label, priceLineVisible: false, priceFormat: { type: 'price', precision: ind1Fmt.precision, minMove: ind1Fmt.minMove } });
         ind1Series.setData(ind1Data);
     }
     if (priceData.length > 0) {
