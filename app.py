@@ -2327,8 +2327,7 @@ function loadLWChart() {
         },
         timeScale: {
             borderColor: '#252a3a',
-            timeVisible: false,
-            rightOffset: 20
+            timeVisible: false
         },
         crosshair: {
             horzLine: { color: '#555d74', labelBackgroundColor: '#252a3a' },
@@ -2364,9 +2363,19 @@ function loadLWChart() {
         ind1Series.setData(ind1Data);
     }
 
-    // Fit content then apply right margin so labels don't overlap last data
-    chart.timeScale().fitContent();
-    chart.timeScale().scrollToPosition(-20, false);
+    // Default zoom: show last 12 months
+    if (priceData.length > 0) {
+        var lastPoint = priceData[priceData.length - 1];
+        var lastDate = new Date(lastPoint.time);
+        var fromDate = new Date(lastDate);
+        fromDate.setFullYear(fromDate.getFullYear() - 1);
+        chart.timeScale().setVisibleRange({
+            from: fromDate.toISOString().split('T')[0],
+            to: lastPoint.time
+        });
+    } else {
+        chart.timeScale().fitContent();
+    }
 
     window.addEventListener('resize', function() {
         chart.applyOptions({ width: container.clientWidth });
@@ -5675,7 +5684,7 @@ function loadLWChart() {
         layout: { background: { color: '#161922' }, textColor: '#8890a4', fontFamily: "'DM Sans', sans-serif" },
         grid: { vertLines: { color: '#252a3a' }, horzLines: { color: '#252a3a' } },
         rightPriceScale: { mode: LightweightCharts.PriceScaleMode.Logarithmic, borderColor: '#252a3a' },
-        timeScale: { borderColor: '#252a3a', timeVisible: false, rightOffset: 20 },
+        timeScale: { borderColor: '#252a3a', timeVisible: false },
         crosshair: { horzLine: { color: '#555d74', labelBackgroundColor: '#252a3a' }, vertLine: { color: '#555d74', labelBackgroundColor: '#252a3a' } }
     });
     var priceSeries = chart.addSeries(LightweightCharts.LineSeries, { color: '#e8eaf0', lineWidth: 2, title: 'Price', priceLineVisible: false });
@@ -5688,8 +5697,15 @@ function loadLWChart() {
         var ind1Series = chart.addSeries(LightweightCharts.LineSeries, { color: '#f7931a', lineWidth: 2, title: ind1Label, priceLineVisible: false });
         ind1Series.setData(ind1Data);
     }
-    chart.timeScale().fitContent();
-    chart.timeScale().scrollToPosition(-20, false);
+    if (priceData.length > 0) {
+        var lastPoint = priceData[priceData.length - 1];
+        var lastDate = new Date(lastPoint.time);
+        var fromDate = new Date(lastDate);
+        fromDate.setFullYear(fromDate.getFullYear() - 1);
+        chart.timeScale().setVisibleRange({ from: fromDate.toISOString().split('T')[0], to: lastPoint.time });
+    } else {
+        chart.timeScale().fitContent();
+    }
     window.addEventListener('resize', function() { chart.applyOptions({ width: container.clientWidth }); });
 }
 function copyLink(el) {
