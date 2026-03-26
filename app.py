@@ -7331,6 +7331,9 @@ def community():
     sort = request.args.get('sort', 'newest')
     page = int(request.args.get('page', 1))
     backtests, total = db.list_backtests(visibility='community', sort=sort, page=page, per_page=20)
+    # Filter out backtests that belong to a published collection
+    in_coll = db.get_backtests_in_published_collections('community')
+    backtests = [bt for bt in backtests if bt['id'] not in in_coll]
     _enrich_backtest_cards(backtests)
     total_pages = max(1, (total + 19) // 20)
     # Recent comments
@@ -7363,6 +7366,9 @@ def featured():
     _try_token_auth()
     sort = request.args.get('sort', 'manual')
     backtests, total = db.list_backtests(visibility='featured', sort=sort, page=1, per_page=200)
+    # Filter out backtests that belong to a featured collection
+    in_coll = db.get_backtests_in_published_collections('featured')
+    backtests = [bt for bt in backtests if bt['id'] not in in_coll]
     _enrich_backtest_cards(backtests)
     # Group by asset, preserving sort order
     from collections import OrderedDict
@@ -7523,6 +7529,13 @@ def collection_detail(collection_id):
     collection_bt_ids = set()
     if is_owner:
         user_backtests = db.list_user_backtests(session.get('user_id'))
+        # Parse asset from params for dropdown display
+        for ubt in user_backtests:
+            try:
+                p = json.loads(ubt.get('params', '{}'))
+            except (json.JSONDecodeError, TypeError):
+                p = {}
+            ubt['_asset'] = (p.get('asset', '') or '').capitalize()
         collection_bt_ids = {bt['id'] for bt in backtests}
     return render_template_string(COLLECTION_DETAIL_HTML,
         collection=coll, backtests=backtests,
@@ -7725,6 +7738,13 @@ COLLECTION_DETAIL_HTML = """\
         .remove-bt-btn { position: absolute; top: 8px; right: 8px; z-index: 10; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-dim); cursor: pointer; font-size: 0.9em; display: flex; align-items: center; justify-content: center; opacity: 0; transition: all 0.15s ease; }
         .backtest-card-wrapper:hover .remove-bt-btn { opacity: 1; }
         .remove-bt-btn:hover { background: rgba(239,68,68,0.15); color: #ef4444; border-color: #ef4444; }
+        /* Drag-and-drop reorder */
+        .drag-handle { position: absolute; top: 8px; left: 8px; z-index: 10; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-dim); cursor: grab; font-size: 0.8em; display: flex; align-items: center; justify-content: center; opacity: 0; transition: all 0.15s ease; }
+        .backtest-card-wrapper:hover .drag-handle { opacity: 1; }
+        .drag-handle:hover { background: var(--bg-elevated); color: var(--text); border-color: var(--border-hover); }
+        .drag-handle:active { cursor: grabbing; }
+        .backtest-card-wrapper.dragging { opacity: 0.4; }
+        .backtest-card-wrapper.drag-over { border-top: 2px solid #8b5cf6; }
         .publish-modal-overlay { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
         .publish-modal-overlay.open { display: flex; }
         .publish-modal { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 90%; max-width: 500px; position: relative; }
@@ -7740,13 +7760,16 @@ COLLECTION_DETAIL_HTML = """\
         /* Add backtest dropdown */
         .add-bt-section { margin-top: 24px; }
         .add-bt-dropdown { position: relative; display: inline-block; }
-        .add-bt-list { position: absolute; top: calc(100% + 4px); left: 0; min-width: 320px; max-height: 300px; overflow-y: auto; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 100; padding: 6px 0; }
+        .add-bt-list { position: absolute; top: calc(100% + 4px); left: 0; min-width: 380px; max-height: 360px; overflow-y: auto; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 100; padding: 6px 0; }
         .add-bt-list.hidden { display: none; }
-        .add-bt-item { display: flex; align-items: center; gap: 10px; padding: 8px 14px; cursor: pointer; font-size: 0.82em; color: var(--text-muted); transition: background 0.15s; }
+        .add-bt-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; font-size: 0.82em; color: var(--text-muted); transition: background 0.15s; border-bottom: 1px solid var(--border); }
+        .add-bt-item:last-child { border-bottom: none; }
         .add-bt-item:hover { background: var(--bg-elevated); color: var(--text); }
         .add-bt-item.in-collection { opacity: 0.5; pointer-events: none; }
-        .add-bt-item .abt-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .add-bt-item .abt-check { color: #8b5cf6; font-weight: 700; }
+        .add-bt-item .abt-info { flex: 1; min-width: 0; }
+        .add-bt-item .abt-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--text); }
+        .add-bt-item .abt-meta { font-size: 0.85em; color: var(--text-dim); margin-top: 2px; display: flex; gap: 8px; }
+        .add-bt-item .abt-check { color: #8b5cf6; font-weight: 700; flex-shrink: 0; }
     </style>
 </head>
 <body>
@@ -7805,8 +7828,9 @@ COLLECTION_DETAIL_HTML = """\
     {% if backtests %}
     <div class="backtest-grid">
         {% for bt in backtests %}
-        <div class="backtest-card-wrapper">
+        <div class="backtest-card-wrapper" data-bt-id="{{ bt.id }}" {% if is_owner %}draggable="true"{% endif %}>
             {% if is_owner %}
+            <div class="drag-handle" title="Drag to reorder">⠿</div>
             <button class="remove-bt-btn" onclick="event.preventDefault();removeBacktest('{{ bt.id }}')" title="Remove from collection">&times;</button>
             {% endif %}
             <a class="backtest-card" href="/backtest/{{ bt.id }}">
@@ -7875,9 +7899,15 @@ COLLECTION_DETAIL_HTML = """\
                 Add Backtest
             </button>
             <div class="add-bt-list hidden" id="add-bt-list">
-                {% for ubt in user_backtests %}
+                {% for ubt in user_backtests|sort(attribute='created_at', reverse=true) %}
                 <div class="add-bt-item{{ ' in-collection' if ubt.id in collection_bt_ids else '' }}" onclick="addBacktest('{{ ubt.id }}')">
-                    <span class="abt-title">{{ ubt.title or 'Untitled' }}</span>
+                    <div class="abt-info">
+                        <div class="abt-title">{{ ubt.title or 'Untitled' }}</div>
+                        <div class="abt-meta">
+                            {% if ubt._asset %}<span>{{ ubt._asset }}</span>{% endif %}
+                            <span>{{ ubt.created_at[:10] if ubt.created_at else '' }}</span>
+                        </div>
+                    </div>
                     {% if ubt.id in collection_bt_ids %}<span class="abt-check">Added</span>{% endif %}
                 </div>
                 {% endfor %}
@@ -7956,6 +7986,54 @@ document.addEventListener('click', function(e) {
         if (!wrap) list.classList.add('hidden');
     }
 });
+// Drag-and-drop reorder
+(function() {
+    var dragSrc = null;
+    var grid = document.querySelector('.backtest-grid');
+    if (!grid) return;
+    var cards = grid.querySelectorAll('.backtest-card-wrapper[draggable]');
+    if (!cards.length) return;
+    cards.forEach(function(card) {
+        card.addEventListener('dragstart', function(e) {
+            dragSrc = card;
+            card.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', card.dataset.btId);
+        });
+        card.addEventListener('dragend', function() {
+            card.classList.remove('dragging');
+            grid.querySelectorAll('.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
+        });
+        card.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (card !== dragSrc) card.classList.add('drag-over');
+        });
+        card.addEventListener('dragleave', function() {
+            card.classList.remove('drag-over');
+        });
+        card.addEventListener('drop', function(e) {
+            e.preventDefault();
+            card.classList.remove('drag-over');
+            if (dragSrc === card) return;
+            // Reorder DOM
+            var allCards = Array.from(grid.querySelectorAll('.backtest-card-wrapper[data-bt-id]'));
+            var fromIdx = allCards.indexOf(dragSrc);
+            var toIdx = allCards.indexOf(card);
+            if (fromIdx < toIdx) {
+                card.parentNode.insertBefore(dragSrc, card.nextSibling);
+            } else {
+                card.parentNode.insertBefore(dragSrc, card);
+            }
+            // Save new order
+            var newOrder = Array.from(grid.querySelectorAll('.backtest-card-wrapper[data-bt-id]')).map(function(el) { return el.dataset.btId; });
+            fetch('/api/collection/' + collId + '/reorder', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ordered_ids: newOrder})
+            });
+        });
+    });
+})();
 </script>
 
 {% if is_owner or is_admin %}

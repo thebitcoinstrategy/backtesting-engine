@@ -1116,3 +1116,16 @@ def get_collection_first_thumbnail(collection_id):
     ).fetchone()
     conn.close()
     return row['thumbnail'] if row else None
+
+
+def get_backtests_in_published_collections(visibility):
+    """Get set of backtest IDs that belong to collections with given visibility."""
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT DISTINCT cb.backtest_id FROM collection_backtests cb
+           JOIN collections c ON cb.collection_id = c.id
+           WHERE c.visibility=?""",
+        (visibility,)
+    ).fetchall()
+    conn.close()
+    return {r['backtest_id'] for r in rows}
