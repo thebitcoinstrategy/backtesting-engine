@@ -2364,24 +2364,9 @@ function loadLWChart() {
         ind1Series.setData(ind1Data);
     }
 
-    // Default zoom: show last 12 months with right padding
-    if (priceData.length > 0) {
-        var lastPoint = priceData[priceData.length - 1];
-        var lastDate = new Date(lastPoint.time);
-        var fromDate = new Date(lastDate);
-        fromDate.setFullYear(fromDate.getFullYear() - 1);
-        var fromStr = fromDate.toISOString().split('T')[0];
-        // Add 30 days padding to the right so price doesn't overlap y-axis labels
-        var toDate = new Date(lastDate);
-        toDate.setDate(toDate.getDate() + 30);
-        var toStr = toDate.toISOString().split('T')[0];
-        chart.timeScale().setVisibleRange({
-            from: fromStr,
-            to: toStr
-        });
-    } else {
-        chart.timeScale().fitContent();
-    }
+    // Fit content then apply right margin so labels don't overlap last data
+    chart.timeScale().fitContent();
+    chart.timeScale().scrollToPosition(-20, false);
 
     window.addEventListener('resize', function() {
         chart.applyOptions({ width: container.clientWidth });
@@ -5703,17 +5688,8 @@ function loadLWChart() {
         var ind1Series = chart.addSeries(LightweightCharts.LineSeries, { color: '#f7931a', lineWidth: 2, title: ind1Label, priceLineVisible: false });
         ind1Series.setData(ind1Data);
     }
-    if (priceData.length > 0) {
-        var lastPoint = priceData[priceData.length - 1];
-        var lastDate = new Date(lastPoint.time);
-        var fromDate = new Date(lastDate);
-        fromDate.setFullYear(fromDate.getFullYear() - 1);
-        var toDate = new Date(lastDate);
-        toDate.setDate(toDate.getDate() + 30);
-        chart.timeScale().setVisibleRange({ from: fromDate.toISOString().split('T')[0], to: toDate.toISOString().split('T')[0] });
-    } else {
-        chart.timeScale().fitContent();
-    }
+    chart.timeScale().fitContent();
+    chart.timeScale().scrollToPosition(-20, false);
     window.addEventListener('resize', function() { chart.applyOptions({ width: container.clientWidth }); });
 }
 function copyLink(el) {
