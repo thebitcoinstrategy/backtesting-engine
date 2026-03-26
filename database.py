@@ -1060,6 +1060,19 @@ def get_backtest_collection_ids(user_id, backtest_id):
     return {r['collection_id'] for r in rows}
 
 
+def get_backtests_in_any_collection(user_id):
+    """Get set of backtest IDs that belong to any collection owned by the user."""
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT DISTINCT cb.backtest_id FROM collection_backtests cb
+           JOIN collections c ON cb.collection_id = c.id
+           WHERE c.user_id=?""",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    return {r['backtest_id'] for r in rows}
+
+
 def list_collections(visibility=None, sort='newest', page=1, per_page=20):
     """List collections filtered by visibility. Returns (list, total_count)."""
     conn = _get_conn()

@@ -7617,7 +7617,12 @@ def collection_detail(collection_id):
     user_backtests = []
     collection_bt_ids = set()
     if is_owner:
-        user_backtests = db.list_user_backtests(session.get('user_id'))
+        uid = session.get('user_id')
+        user_backtests = db.list_user_backtests(uid)
+        # Filter out backtests already in any collection
+        in_any_coll = db.get_backtests_in_any_collection(uid)
+        collection_bt_ids = {bt['id'] for bt in backtests}
+        user_backtests = [ubt for ubt in user_backtests if ubt['id'] not in in_any_coll or ubt['id'] in collection_bt_ids]
         # Parse asset from params for dropdown display
         for ubt in user_backtests:
             try:
@@ -7625,7 +7630,6 @@ def collection_detail(collection_id):
             except (json.JSONDecodeError, TypeError):
                 p = {}
             ubt['_asset'] = (p.get('asset', '') or '').capitalize()
-        collection_bt_ids = {bt['id'] for bt in backtests}
     return render_template_string(COLLECTION_DETAIL_HTML,
         collection=coll, backtests=backtests,
         youtube_embed_url=youtube_embed_url,
