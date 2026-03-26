@@ -4153,14 +4153,14 @@ COMMUNITY_HTML = """\
         .backtest-card { display: block; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: all 0.2s ease; cursor: pointer; text-decoration: none; color: inherit; }
         .backtest-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
         .backtest-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .backtest-card-asset-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); flex-shrink: 0; }
-        .backtest-card-asset-fallback { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8em; color: var(--text-muted); flex-shrink: 0; }
+        .backtest-card-asset-logo { width: 22px; height: 22px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); flex-shrink: 0; }
+        .backtest-card-asset-fallback { width: 22px; height: 22px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.65em; color: var(--text-muted); flex-shrink: 0; }
         .backtest-card-head-text { flex: 1; min-width: 0; }
         .backtest-card-title { font-size: 1em; font-weight: 600; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
         .backtest-card-asset-name { font-size: 0.75em; color: var(--text-muted); }
         .backtest-card-mode-icon { color: var(--text-dim); flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--bg-deep); }
         .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-        .backtest-card-params { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+        .backtest-card-params { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
         .backtest-card-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: var(--bg-deep); border: 1px solid var(--border); font-size: 0.7em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
         .backtest-card-tag svg { width: 12px; height: 12px; opacity: 0.6; }
         .backtest-card-thumb { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border); }
@@ -4206,6 +4206,8 @@ COMMUNITY_HTML = """\
         .coll-thumb-grid.thumbs-3 img { height: 68px; }
         .coll-thumb-grid.thumbs-3 img:first-child { height: 100%; }
         .coll-thumb-grid.thumbs-4 img { height: 68px; }
+        .coll-top-row { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+        .coll-top-row .backtest-card-badge { position: static; margin: 0; }
         .coll-asset-logos { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
         .coll-asset-logo { width: 22px; height: 22px; border-radius: 50%; object-fit: contain; background: var(--bg-deep); border: 1px solid var(--border); }
         .coll-asset-fallback { width: 22px; height: 22px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.55em; color: var(--text-muted); border: 1px solid var(--border); }
@@ -4347,7 +4349,14 @@ COMMUNITY_HTML = """\
                     <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
                     {% endif %}
                     <a class="collection-card" href="/collection/{{ bt.id }}">
-                        <span class="backtest-card-badge badge-collection">Strategy</span>
+                        <div class="coll-top-row">
+                            <span class="backtest-card-badge badge-collection">Strategy</span>
+                            {% if bt._assets %}
+                            {% for asset_name, asset_logo in bt._assets %}
+                            {% if asset_logo %}<img class="coll-asset-logo" src="/static/logos/{{ asset_logo }}" alt="{{ asset_name }}" title="{{ asset_name|capitalize }}">{% else %}<span class="coll-asset-fallback" title="{{ asset_name|capitalize }}">{{ asset_name[:1]|upper }}</span>{% endif %}
+                            {% endfor %}
+                            {% endif %}
+                        </div>
                         <div class="backtest-card-head">
                             <div class="backtest-card-head-text">
                                 <div class="backtest-card-title">{{ bt.title }}</div>
@@ -4357,13 +4366,6 @@ COMMUNITY_HTML = """\
                         <div class="coll-thumb-grid thumbs-{{ bt._thumbnails|length }}">
                             {% for thumb in bt._thumbnails %}
                             <img src="{{ thumb }}" alt="Preview">
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if bt._assets %}
-                        <div class="coll-asset-logos">
-                            {% for asset_name, asset_logo in bt._assets %}
-                            {% if asset_logo %}<img class="coll-asset-logo" src="/static/logos/{{ asset_logo }}" alt="{{ asset_name }}" title="{{ asset_name|capitalize }}">{% else %}<span class="coll-asset-fallback" title="{{ asset_name|capitalize }}">{{ asset_name[:1]|upper }}</span>{% endif %}
                             {% endfor %}
                         </div>
                         {% endif %}
@@ -4404,8 +4406,15 @@ COMMUNITY_HTML = """\
                 </div>
                 {% endif %}
                 <a class="backtest-card" href="{{ '/backtest/' ~ bt.id if is_authenticated or loop.first else '#' }}">
-                    <div class="backtest-card-head">
+                    <div class="backtest-card-params">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% endif %}
+                        <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
+                        <span class="backtest-card-tag" title="Strategy">{{ bt._strategy }}</span>
+                        {% if bt._leverage %}<span class="backtest-card-tag" title="Leverage (Long/Short)">{{ bt._leverage }}</span>{% endif %}
+                        {% if bt._start_date %}<span class="backtest-card-tag" title="Start date">{{ bt._start_date }}</span>{% endif %}
+                        {% if bt._exposure != 'long-cash' %}<span class="backtest-card-tag" title="Exposure">{{ bt._exposure }}</span>{% endif %}
+                    </div>
+                    <div class="backtest-card-head">
                         <div class="backtest-card-head-text">
                             <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled Backtest' }}</div>
                         </div>
@@ -4413,13 +4422,6 @@ COMMUNITY_HTML = """\
                     </div>
                     {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
                     {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
-                    <div class="backtest-card-params">
-                        <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
-                        <span class="backtest-card-tag" title="Strategy">{{ bt._strategy }}</span>
-                        {% if bt._leverage %}<span class="backtest-card-tag" title="Leverage (Long/Short)">{{ bt._leverage }}</span>{% endif %}
-                        {% if bt._start_date %}<span class="backtest-card-tag" title="Start date">{{ bt._start_date }}</span>{% endif %}
-                        {% if bt._exposure != 'long-cash' %}<span class="backtest-card-tag" title="Exposure">{{ bt._exposure }}</span>{% endif %}
-                    </div>
                     {% if bt._apr %}
                     <div class="backtest-card-metrics">
                         <div class="card-metric">
@@ -4469,7 +4471,14 @@ COMMUNITY_HTML = """\
                 <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
                 {% endif %}
                 <a class="collection-card" href="/collection/{{ bt.id }}">
-                    <span class="backtest-card-badge badge-collection">Strategy</span>
+                    <div class="coll-top-row">
+                        <span class="backtest-card-badge badge-collection">Strategy</span>
+                        {% if bt._assets %}
+                        {% for asset_name, asset_logo in bt._assets %}
+                        {% if asset_logo %}<img class="coll-asset-logo" src="/static/logos/{{ asset_logo }}" alt="{{ asset_name }}" title="{{ asset_name|capitalize }}">{% else %}<span class="coll-asset-fallback" title="{{ asset_name|capitalize }}">{{ asset_name[:1]|upper }}</span>{% endif %}
+                        {% endfor %}
+                        {% endif %}
+                    </div>
                     <div class="backtest-card-head">
                         <div class="backtest-card-head-text">
                             <div class="backtest-card-title">{{ bt.title }}</div>
@@ -4479,13 +4488,6 @@ COMMUNITY_HTML = """\
                     <div class="coll-thumb-grid thumbs-{{ bt._thumbnails|length }}">
                         {% for thumb in bt._thumbnails %}
                         <img src="{{ thumb }}" alt="Preview">
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    {% if bt._assets %}
-                    <div class="coll-asset-logos">
-                        {% for asset_name, asset_logo in bt._assets %}
-                        {% if asset_logo %}<img class="coll-asset-logo" src="/static/logos/{{ asset_logo }}" alt="{{ asset_name }}" title="{{ asset_name|capitalize }}">{% else %}<span class="coll-asset-fallback" title="{{ asset_name|capitalize }}">{{ asset_name[:1]|upper }}</span>{% endif %}
                         {% endfor %}
                     </div>
                     {% endif %}
@@ -4528,8 +4530,15 @@ COMMUNITY_HTML = """\
             <a class="backtest-card" href="{{ '/backtest/' ~ bt.id if is_authenticated or loop.first else '#' }}">
                 {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
                 {% if bt.visibility == 'private' %}<span class="backtest-card-badge badge-private">Private</span>{% endif %}
-                <div class="backtest-card-head">
+                <div class="backtest-card-params">
                     {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
+                    <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
+                    <span class="backtest-card-tag" title="Strategy">{{ bt._strategy }}</span>
+                    {% if bt._leverage %}<span class="backtest-card-tag" title="Leverage (Long/Short)">{{ bt._leverage }}</span>{% endif %}
+                    {% if bt._start_date %}<span class="backtest-card-tag" title="Start date">{{ bt._start_date }}</span>{% endif %}
+                    {% if bt._exposure != 'long-cash' %}<span class="backtest-card-tag" title="Exposure">{{ bt._exposure }}</span>{% endif %}
+                </div>
+                <div class="backtest-card-head">
                     <div class="backtest-card-head-text">
                         <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled Backtest' }}</div>
                         <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
@@ -4538,13 +4547,6 @@ COMMUNITY_HTML = """\
                 </div>
                 {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
                 {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
-                <div class="backtest-card-params">
-                    <span class="backtest-card-tag" title="Mode">{{ bt._mode_label }}</span>
-                    <span class="backtest-card-tag" title="Strategy">{{ bt._strategy }}</span>
-                    {% if bt._leverage %}<span class="backtest-card-tag" title="Leverage (Long/Short)">{{ bt._leverage }}</span>{% endif %}
-                    {% if bt._start_date %}<span class="backtest-card-tag" title="Start date">{{ bt._start_date }}</span>{% endif %}
-                    {% if bt._exposure != 'long-cash' %}<span class="backtest-card-tag" title="Exposure">{{ bt._exposure }}</span>{% endif %}
-                </div>
                 {% if bt._apr %}
                 <div class="backtest-card-metrics">
                     <div class="card-metric">
@@ -5789,12 +5791,12 @@ MY_BACKTESTS_HTML = """\
         .card-author-sep { color: var(--text-dim); }
         .card-author-time { color: var(--text-dim); }
         .backtest-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .backtest-card-asset-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); flex-shrink: 0; }
-        .backtest-card-asset-fallback { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8em; color: var(--text-muted); flex-shrink: 0; }
+        .backtest-card-asset-logo { width: 22px; height: 22px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); flex-shrink: 0; }
+        .backtest-card-asset-fallback { width: 22px; height: 22px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.65em; color: var(--text-muted); flex-shrink: 0; }
         .backtest-card-head-text { flex: 1; min-width: 0; }
         .backtest-card-asset-name { font-size: 0.75em; color: var(--text-muted); }
         .backtest-card-mode-icon { color: var(--text-dim); flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--bg-deep); }
-        .backtest-card-params { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+        .backtest-card-params { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
         .backtest-card-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: var(--bg-deep); border: 1px solid var(--border); font-size: 0.7em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
         .backtest-card-thumb { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border); }
         .backtest-card-metrics { display: flex; gap: 12px; margin-bottom: 10px; }
@@ -5919,8 +5921,14 @@ MY_BACKTESTS_HTML = """\
             <div class="backtest-card">
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
                     {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
-                    <div class="backtest-card-head">
+                    <div class="backtest-card-params">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
+                        <span class="backtest-card-tag">{{ bt._mode_label }}</span>
+                        <span class="backtest-card-tag">{{ bt._strategy }}</span>
+                        {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
+                        {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
+                    </div>
+                    <div class="backtest-card-head">
                         <div class="backtest-card-head-text">
                             <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled' }}</div>
                             <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
@@ -5929,12 +5937,6 @@ MY_BACKTESTS_HTML = """\
                     </div>
                     {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
                     {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
-                    <div class="backtest-card-params">
-                        <span class="backtest-card-tag">{{ bt._mode_label }}</span>
-                        <span class="backtest-card-tag">{{ bt._strategy }}</span>
-                        {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
-                        {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
-                    </div>
                     {% if bt._apr %}
                     <div class="backtest-card-metrics">
                         <div class="card-metric">
@@ -5975,8 +5977,14 @@ MY_BACKTESTS_HTML = """\
             <div class="backtest-card">
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
                     <span class="backtest-card-badge badge-private">Private</span>
-                    <div class="backtest-card-head">
+                    <div class="backtest-card-params">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
+                        <span class="backtest-card-tag">{{ bt._mode_label }}</span>
+                        <span class="backtest-card-tag">{{ bt._strategy }}</span>
+                        {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
+                        {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
+                    </div>
+                    <div class="backtest-card-head">
                         <div class="backtest-card-head-text">
                             <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Saved Backtest' }}</div>
                             <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
@@ -5984,12 +5992,6 @@ MY_BACKTESTS_HTML = """\
                         <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
                     </div>
                     {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
-                    <div class="backtest-card-params">
-                        <span class="backtest-card-tag">{{ bt._mode_label }}</span>
-                        <span class="backtest-card-tag">{{ bt._strategy }}</span>
-                        {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
-                        {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
-                    </div>
                     {% if bt._apr %}
                     <div class="backtest-card-metrics">
                         <div class="card-metric">
@@ -7794,15 +7796,15 @@ COLLECTION_DETAIL_HTML = """\
         .backtest-card { display: block; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: all 0.2s ease; cursor: pointer; text-decoration: none; color: inherit; }
         .backtest-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
         .backtest-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .backtest-card-asset-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); flex-shrink: 0; }
-        .backtest-card-asset-fallback { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8em; color: var(--text-muted); flex-shrink: 0; }
+        .backtest-card-asset-logo { width: 22px; height: 22px; object-fit: contain; border-radius: 50%; background: var(--bg-deep); flex-shrink: 0; }
+        .backtest-card-asset-fallback { width: 22px; height: 22px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.65em; color: var(--text-muted); flex-shrink: 0; }
         .backtest-card-head-text { flex: 1; min-width: 0; }
         .backtest-card-title { font-size: 1em; font-weight: 600; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
         .backtest-card-asset-name { font-size: 0.75em; color: var(--text-muted); }
         .backtest-card-mode-icon { color: var(--text-dim); flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--bg-deep); }
         .backtest-card-thumb { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border); }
         .backtest-card-desc { font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-        .backtest-card-params { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+        .backtest-card-params { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
         .backtest-card-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: var(--bg-deep); border: 1px solid var(--border); font-size: 0.7em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
         .backtest-card-metrics { display: flex; gap: 12px; margin-bottom: 10px; }
         .card-metric { flex: 1; padding: 8px 10px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 8px; text-align: center; }
@@ -7927,8 +7929,14 @@ COLLECTION_DETAIL_HTML = """\
             <button class="remove-bt-btn" onclick="event.preventDefault();removeBacktest('{{ bt.id }}')" title="Remove from collection">&times;</button>
             {% endif %}
             <a class="backtest-card" href="/backtest/{{ bt.id }}">
-                <div class="backtest-card-head">
+                <div class="backtest-card-params">
                     {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
+                    <span class="backtest-card-tag">{{ bt._mode_label }}</span>
+                    <span class="backtest-card-tag">{{ bt._strategy }}</span>
+                    {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
+                    {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
+                </div>
+                <div class="backtest-card-head">
                     <div class="backtest-card-head-text">
                         <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled Backtest' }}</div>
                         <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
@@ -7937,12 +7945,6 @@ COLLECTION_DETAIL_HTML = """\
                 </div>
                 {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
                 {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
-                <div class="backtest-card-params">
-                    <span class="backtest-card-tag">{{ bt._mode_label }}</span>
-                    <span class="backtest-card-tag">{{ bt._strategy }}</span>
-                    {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
-                    {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
-                </div>
                 {% if bt._apr %}
                 <div class="backtest-card-metrics">
                     <div class="card-metric">
