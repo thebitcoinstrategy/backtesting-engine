@@ -4000,15 +4000,15 @@ def _run_post_handler(cancel_event):
         ax.set_yticks(range(n))
         ax.set_yticklabels(periods, fontsize=max(4, min(8, 200 // n)))
 
+        asset_title = asset_display
+        period_unit = "weeks" if is_weekly else "days"
+
         if same_type:
             ax.set_xlabel(f"Slow {ind1_upper} Period ({period_unit})")
             ax.set_ylabel(f"Fast {ind1_upper} Period ({period_unit})")
         else:
             ax.set_xlabel(f"{ind2_upper} Period ({period_unit})")
             ax.set_ylabel(f"{ind1_upper} Period ({period_unit})")
-
-        asset_title = asset_display
-        period_unit = "weeks" if is_weekly else "days"
         ax.set_title(f"{asset_title}{tf_label} {ind1_upper}/{ind2_upper} Crossover \u2014 Annualized Return % (step={p.step})\n"
                      f"Best: {ind1_upper}({best_p1})/{ind2_upper}({best_p2}) = {best_ann:.1f}% | "
                      f"B&H: {bh_ann:.1f}% | {p.exposure}")
