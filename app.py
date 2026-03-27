@@ -177,7 +177,7 @@ def _cache_key(form_params):
         relevant.update(["osc_name", "osc_period", "forward_days", "range_min", "range_max"])
     elif mode == "dca":
         relevant.update(["dca_frequency", "dca_amount", "dca_signal_type", "dca_signal_name",
-                         "dca_signal_period", "dca_max_multiplier", "dca_show_lump_sum"])
+                         "dca_signal_period", "dca_max_multiplier", "dca_show_lump_sum", "dca_reverse"])
     else:  # backtest
         relevant.update(["exposure", "long_leverage", "short_leverage", "lev_mode"])
 
@@ -3896,7 +3896,7 @@ def _run_post_handler(cancel_event):
             signal_type=p.dca_signal_type, signal_name=p.dca_signal_name,
             signal_period=p.dca_signal_period, max_multiplier=p.dca_max_multiplier,
             fee=fee, start_date=warmup_start_date,
-            show_lump_sum=p.dca_show_lump_sum, periods_per_year=periods_per_year
+            show_lump_sum=p.dca_show_lump_sum, reverse=p.dca_reverse, periods_per_year=periods_per_year
         )
 
         if dca_result is None:

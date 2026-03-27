@@ -1091,7 +1091,7 @@ def compute_dca_multipliers(signal_series, max_multiplier=3.0):
 def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator",
                     signal_name=None, signal_period=None, max_multiplier=3.0,
                     fee=0.001, start_date=None, show_lump_sum=True,
-                    periods_per_year=365):
+                    reverse=False, periods_per_year=365):
     """Compare constant DCA vs dynamic (signal-adjusted) DCA.
 
     frequency: 'daily', 'weekly', or 'monthly'
@@ -1156,6 +1156,9 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
 
     # --- Dynamic DCA ---
     signal_series, signal_label = compute_dca_signal(df, signal_type, signal_name, signal_period)
+    if reverse:
+        signal_series = 1.0 - signal_series
+        signal_label = f"{signal_label} (reversed)"
     raw_mult = compute_dca_multipliers(signal_series, max_multiplier)
 
     # Normalize multipliers so total spend matches constant DCA total
