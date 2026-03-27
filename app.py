@@ -1144,7 +1144,9 @@ HTML = """\
         .comment-actions { margin-top: 6px; display: flex; gap: 12px; }
         .comment-action-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.75em; font-family: 'DM Sans', sans-serif; }
         .comment-action-btn:hover { color: var(--text); }
-        .comment-replies { margin-left: 24px; border-left: 2px solid var(--border); padding-left: 14px; }
+        .comment-replies { margin-left: 24px; border-left: 2px solid var(--border); padding-left: 14px; margin-top: 4px; }
+        .reply-to-tag { font-size: 0.75em; color: var(--accent); margin-bottom: 4px; }
+        .reply-to-tag .reply-arrow { opacity: 0.7; margin-right: 3px; }
         .reply-form { margin-top: 8px; }
         .reply-form textarea { min-height: 40px; font-size: 0.8em; }
 
@@ -5293,7 +5295,9 @@ DETAIL_HTML = """\
         .comment-actions { margin-top: 6px; display: flex; gap: 12px; }
         .comment-action-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.75em; font-family: 'DM Sans', sans-serif; }
         .comment-action-btn:hover { color: var(--text); }
-        .comment-replies { margin-left: 24px; border-left: 2px solid var(--border); padding-left: 14px; }
+        .comment-replies { margin-left: 24px; border-left: 2px solid var(--border); padding-left: 14px; margin-top: 4px; }
+        .reply-to-tag { font-size: 0.75em; color: var(--accent); margin-bottom: 4px; }
+        .reply-to-tag .reply-arrow { opacity: 0.7; margin-right: 3px; }
         .reactions-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
         .reaction-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-elevated); cursor: pointer; font-size: 0.78em; transition: all 0.15s ease; user-select: none; }
         .reaction-pill:hover { border-color: var(--border-hover, #3a4060); background: var(--bg-surface); }
@@ -5658,6 +5662,7 @@ DETAIL_HTML = """\
                 <div class="comment-replies">
                     {% for reply in comment.replies %}
                     <div class="comment" id="comment-{{ reply.id }}">
+                        <div class="reply-to-tag"><span class="reply-arrow">↩</span> replying to <strong>{{ comment._display_name }}</strong></div>
                         <div class="comment-header">
                             <span class="comment-author">{{ reply._display_name }}</span>
                             <span class="comment-time">{{ time_ago(reply.created_at) }}{% if reply.edited_at %} <span class="comment-edited">(edited)</span>{% endif %}</span>
