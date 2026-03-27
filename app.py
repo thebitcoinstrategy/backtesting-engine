@@ -1683,7 +1683,7 @@ HTML = """\
                             <input type="number" name="dca_max_multiplier" value="{{ p.dca_max_multiplier }}" step="0.5" min="1">
                         </div>
                     </div>
-                    <div class="form-row" id="dca-sweep-row" class="hidden">
+                    <div class="form-row hidden" id="dca-sweep-row">
                         <div class="form-group">
                             <label>Sweep Parameter</label>
                             <select name="dca_sweep_param" id="dca_sweep_param">
