@@ -1676,7 +1676,7 @@ HTML = """\
                         </div>
                         <div class="form-group" id="dca-signal-period-group">
                             <label id="dca-signal-period-label">Signal Period</label>
-                            <input type="number" name="dca_signal_period" id="dca_signal_period" value="{{ p.dca_signal_period or '' }}" placeholder="14" min="1" step="any">
+                            <input type="number" name="dca_signal_period" id="dca_signal_period" value="{{ p.dca_signal_period if p.dca_signal_period is not none else '' }}" placeholder="14" min="1" step="any">
                         </div>
                         <div class="form-group">
                             <label>Max Multiplier</label>
@@ -2224,6 +2224,7 @@ function toggleFields() {
             dcaSigPeriodInput.disabled = false;
             dcaSigPeriodLabel.textContent = 'Lookback (years)';
             dcaSigPeriodInput.placeholder = '5';
+            if (!dcaSigPeriodInput.value) dcaSigPeriodInput.value = '5';
         } else {
             dcaSigNameGroup.classList.remove('hidden');
             dcaSigNameGroup.querySelectorAll('select')[0].disabled = false;
@@ -3360,7 +3361,7 @@ class Params:
             if dca_sp:
                 self.dca_signal_period = float(dca_sp) if self.dca_signal_type == "ath_drawdown" else int(dca_sp)
             else:
-                self.dca_signal_period = None
+                self.dca_signal_period = 5.0 if self.dca_signal_type == "ath_drawdown" else None
             self.dca_max_multiplier = float(form.get("dca_max_multiplier", 3.0))
             self.dca_show_lump_sum = False
             self.dca_reverse = bool(form.get("dca_reverse"))
