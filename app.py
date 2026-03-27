@@ -1701,7 +1701,7 @@ HTML = """\
                         Compares constant DCA (fixed $ per interval) vs dynamic DCA (signal-adjusted amounts). Budget is always equal &mdash; dynamic DCA just redistributes spend to buy more when the signal says "cheap" and less when "expensive".
                     </div>
                 </div>
-                <div class="form-section">
+                <div class="form-section" id="exposure-section">
                     <div class="section-title">Exposure & Leverage</div>
                     <div class="form-row">
                         <div class="form-group" id="exposure-group">
@@ -2296,6 +2296,7 @@ function toggleFields() {
         ['sizing-group', !isRegression && !isDCA],
         ['lev-min-group', isLevSweep && !isRegression],
         ['lev-max-group', isLevSweep && !isRegression],
+        ['exposure-section', !isDCA],
     ];
     for (var i = 0; i < rules.length; i++) {
         var el = document.getElementById(rules[i][0]);
