@@ -415,6 +415,12 @@ HTML = """\
 <html>
 <head>
     <title>Strategy Analytics</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/site.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4372,6 +4378,12 @@ COMMUNITY_HTML = """\
 <html>
 <head>
     <title>{{ page_title }} — Strategy Analytics</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/site.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4469,7 +4481,7 @@ COMMUNITY_HTML = """\
         .backtest-card-wrapper.locked .backtest-card-metrics { filter: blur(6px); }
         .backtest-card-wrapper.locked .backtest-card-desc { filter: blur(4px); }
         .locked-overlay { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 5; cursor: pointer; border-radius: 14px; background: rgba(22,25,34,0.3); align-items: center; justify-content: center; flex-direction: column; gap: 8px; transition: background 0.2s ease; }
-        .backtest-card-wrapper.locked .locked-overlay { display: flex; }
+        .backtest-card-wrapper.locked .locked-overlay, .collection-card-wrapper.locked .locked-overlay { display: flex; }
         .locked-overlay:hover { background: rgba(22,25,34,0.5); }
         .locked-overlay svg { width: 32px; height: 32px; color: var(--text-muted); transition: transform 0.3s ease; }
         .locked-overlay.shake svg { animation: lockShake 0.5s ease; }
@@ -4667,7 +4679,13 @@ COMMUNITY_HTML = """\
                 {% for bt in section.backtests %}
                 {% if bt._is_collection|default(false) %}
                 {# Collection card inline #}
-                <div class="collection-card-wrapper" data-coll-id="{{ bt.id }}">
+                <div class="collection-card-wrapper{{ ' locked' if not is_authenticated and not loop.first else '' }}" data-coll-id="{{ bt.id }}">
+                    {% if not is_authenticated and not loop.first %}
+                    <div class="locked-overlay" onclick="shakeLock(this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                        <span>Locked</span>
+                    </div>
+                    {% endif %}
                     {% if is_admin|default(false) %}
                     <div class="reorder-controls">
                         <button class="reorder-btn" onclick="event.preventDefault();moveCollection('{{ bt.id }}', -1)" title="Move up">&#9650;</button>
@@ -4677,7 +4695,7 @@ COMMUNITY_HTML = """\
                     {% if bt.youtube_url %}
                     <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
                     {% endif %}
-                    <a class="collection-card" href="/collection/{{ bt.id }}">
+                    <a class="collection-card" href="{{ '/collection/' ~ bt.id if is_authenticated or loop.first else '#' }}">
                         <div class="coll-top-row">
                             <span class="backtest-card-badge badge-collection">Strategy</span>
                             {% if bt._assets %}
@@ -4795,11 +4813,17 @@ COMMUNITY_HTML = """\
             {% for bt in backtests %}
             {% if bt._is_collection|default(false) %}
             {# Collection card inline #}
-            <div class="collection-card-wrapper" data-coll-id="{{ bt.id }}">
+            <div class="collection-card-wrapper{{ ' locked' if not is_authenticated and not loop.first else '' }}" data-coll-id="{{ bt.id }}">
+                {% if not is_authenticated and not loop.first %}
+                <div class="locked-overlay" onclick="shakeLock(this)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                    <span>Locked</span>
+                </div>
+                {% endif %}
                 {% if bt.youtube_url %}
                 <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
                 {% endif %}
-                <a class="collection-card" href="/collection/{{ bt.id }}">
+                <a class="collection-card" href="{{ '/collection/' ~ bt.id if is_authenticated or loop.first else '#' }}">
                     <div class="coll-top-row">
                         <span class="backtest-card-badge badge-collection">Strategy</span>
                         {% if bt._assets %}
@@ -5129,6 +5153,12 @@ DETAIL_HTML = """\
 <html>
 <head>
     <title>{{ backtest.title|title if backtest.title else 'Backtest' }} — Strategy Analytics</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/site.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6139,6 +6169,12 @@ MY_BACKTESTS_HTML = """\
 <html>
 <head>
     <title>My Backtests — Strategy Analytics</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/site.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6709,6 +6745,12 @@ ADMIN_ASSETS_HTML = """\
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Asset Management — Bitcoin Strategy Analytics</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/site.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -8239,6 +8281,12 @@ COLLECTION_DETAIL_HTML = """\
 <html>
 <head>
     <title>{{ collection.title }} — Strategy Analytics</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/site.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8347,10 +8395,39 @@ COLLECTION_DETAIL_HTML = """\
         .add-bt-item .abt-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--text); }
         .add-bt-item .abt-meta { font-size: 0.85em; color: var(--text-dim); margin-top: 2px; display: flex; gap: 8px; }
         .add-bt-item .abt-check { color: #8b5cf6; font-weight: 700; flex-shrink: 0; }
+        /* Auth buttons */
+        .header { text-align: center; margin-bottom: 24px; position: relative; }
+        .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
+        .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; font-weight: 700; }
+        .header h1 .brand-analytics { background: var(--bg-elevated); color: var(--text); padding: 6px 14px; border: 1px solid var(--border); border-left: none; }
+        .auth-buttons { position: absolute; top: 0; right: 0; display: flex; gap: 10px; align-items: center; }
+        .auth-btn { display: inline-block; padding: 10px 24px; border-radius: 8px; font-weight: 700; font-size: 0.9em; text-decoration: none; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; cursor: pointer; }
+        .auth-btn-login { background: var(--accent); color: #fff; border: 2px solid var(--accent); }
+        .auth-btn-login:hover { background: #e08a1a; border-color: #e08a1a; }
+        .auth-btn-signup { background: var(--accent); color: #fff; border: 2px solid var(--accent); }
+        .auth-btn-signup:hover { background: #e08a1a; border-color: #e08a1a; }
+        /* Locked overlay */
+        .locked-overlay { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 5; cursor: pointer; border-radius: 14px; background: rgba(22,25,34,0.3); align-items: center; justify-content: center; flex-direction: column; gap: 8px; transition: background 0.2s ease; }
+        .backtest-card-wrapper.locked .locked-overlay { display: flex; }
+        .locked-overlay:hover { background: rgba(22,25,34,0.5); }
+        .locked-overlay svg { width: 32px; height: 32px; color: var(--text-muted); transition: transform 0.3s ease; }
+        .locked-overlay.shake svg { animation: lockShake 0.5s ease; }
+        .locked-overlay span { font-size: 0.8em; font-weight: 600; color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase; }
+        @keyframes lockShake { 0%,100% { transform: translateX(0) rotate(0); } 15% { transform: translateX(-4px) rotate(-5deg); } 30% { transform: translateX(4px) rotate(5deg); } 45% { transform: translateX(-3px) rotate(-3deg); } 60% { transform: translateX(3px) rotate(3deg); } 75% { transform: translateX(-1px) rotate(-1deg); } }
     </style>
 </head>
 <body>
 <div class="container">
+    <div class="header">
+        {% if not is_authenticated %}
+        <div class="auth-buttons">
+            <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
+            <a href="https://the-bitcoin-strategy.com/subscribe" class="auth-btn auth-btn-signup">Sign Up</a>
+        </div>
+        {% endif %}
+        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
+        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
+    </div>
     <a href="javascript:history.back()" class="back-link">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         Back
@@ -8412,12 +8489,18 @@ COLLECTION_DETAIL_HTML = """\
     {% if backtests %}
     <div class="backtest-grid">
         {% for bt in backtests %}
-        <div class="backtest-card-wrapper" data-bt-id="{{ bt.id }}" {% if is_owner %}draggable="true"{% endif %}>
+        <div class="backtest-card-wrapper{{ ' locked' if not is_authenticated and not loop.first else '' }}" data-bt-id="{{ bt.id }}" {% if is_owner %}draggable="true"{% endif %}>
+            {% if not is_authenticated and not loop.first %}
+            <div class="locked-overlay" onclick="shakeLock(this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                <span>Locked</span>
+            </div>
+            {% endif %}
             {% if is_owner %}
             <div class="drag-handle" title="Drag to reorder">⠿</div>
             <button class="remove-bt-btn" onclick="event.preventDefault();removeBacktest('{{ bt.id }}')" title="Remove from collection">&times;</button>
             {% endif %}
-            <a class="backtest-card" href="/backtest/{{ bt.id }}">
+            <a class="backtest-card" href="{{ '/backtest/' ~ bt.id if is_authenticated or loop.first else '#' }}">
                 <div class="backtest-card-head">
                     {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                     <div class="backtest-card-head-text">
@@ -8505,6 +8588,12 @@ COLLECTION_DETAIL_HTML = """\
 </div>
 
 <script>
+function shakeLock(el) {
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+    setTimeout(function() { el.classList.remove('shake'); }, 600);
+}
 var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#8b5cf6',
     customClass: { popup: 'swal-dark' }
@@ -8658,6 +8747,12 @@ ACCOUNT_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Account Settings - Bitcoin Strategy Analytics</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/site.webmanifest">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
@@ -8968,6 +9063,12 @@ FEEDBACK_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Send Feedback - Bitcoin Strategy Analytics</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/site.webmanifest">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
@@ -9209,6 +9310,12 @@ _ERROR_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>{{ code }} — Strategy Analytics</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/site.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
