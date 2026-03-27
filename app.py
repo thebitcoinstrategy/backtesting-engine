@@ -1994,12 +1994,9 @@ HTML = """\
                     <tr class="section-row"><td colspan="3">Performance</td></tr>
                     <tr><td class="m-label">Total Return</td><td class="m-val {{ 'positive' if best.total_return > 0 else 'negative' }}">{{ "%.2f"|format(best.total_return) }}%</td><td class="m-val {{ 'positive' if best.buyhold_return > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_return) }}%</td></tr>
                     <tr><td class="m-label">Ann. Return</td><td class="m-val {{ 'positive' if best.annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.annualized) }}%</td><td class="m-val {{ 'positive' if best.buyhold_annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_annualized) }}%</td></tr>
-                    <tr><td class="m-label">Sharpe Ratio</td><td class="m-val">{{ "%.2f"|format(best.sharpe) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sharpe) }}</td></tr>
-                    <tr><td class="m-label">Sortino Ratio</td><td class="m-val">{{ "%.2f"|format(best.sortino) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sortino) }}</td></tr>
                     <tr class="section-row"><td colspan="3">Risk</td></tr>
                     <tr><td class="m-label">Max Drawdown</td><td class="m-val negative">{{ "%.2f"|format(best.max_drawdown) }}%</td><td class="m-val negative">{{ "%.2f"|format(best.buyhold_max_drawdown) }}%</td></tr>
                     <tr><td class="m-label">Drawdown Duration</td><td class="m-val">{{ best.max_dd_duration|duration }}</td><td class="m-val">{{ best.buyhold_max_dd_duration|duration }}</td></tr>
-                    <tr><td class="m-label">Volatility</td><td class="m-val">{{ "%.1f"|format(best.volatility) }}%</td><td class="m-val">{{ "%.1f"|format(best.buyhold_volatility) }}%</td></tr>
                     <tr class="section-row"><td colspan="3">Purchase Stats</td></tr>
                     <tr><td class="m-label">Purchases</td><td class="m-val">{{ best.n_purchases }}</td><td class="m-val">{{ best.const_n_purchases }}</td></tr>
                     <tr><td class="m-label">Avg Buy Amount</td><td class="m-val">${{ "{:,.2f}".format(best.avg_buy_amount) }}</td><td class="m-val">${{ "{:,.2f}".format(best.const_avg_buy_amount) }}</td></tr>
