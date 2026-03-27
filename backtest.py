@@ -1058,11 +1058,11 @@ def compute_dca_signal(df, signal_type, signal_name=None, signal_period=None):
     elif signal_type == "ath_drawdown":
         ath = close.cummax()
         drawdown = (close - ath) / ath  # 0 at ATH, negative below
-        # Invert: 0 at ATH (expensive), 1 at max drawdown (cheapest)
-        # Use rolling min of drawdown
-        roll_min_dd = drawdown.rolling(504, min_periods=50).min()
+        # signal=1 at ATH (expensive, buy less), signal=0 at worst drawdown (cheap, buy more)
+        # Use 5-year (1825-day) rolling window for worst drawdown reference
+        roll_min_dd = drawdown.rolling(1825, min_periods=50).min()
         denom = roll_min_dd.replace(0, np.nan)
-        signal = drawdown / denom  # 0 at ATH, 1 at worst drawdown in window
+        signal = 1.0 - (drawdown / denom)  # 1 at ATH, 0 at worst drawdown
         label = "ATH Drawdown"
 
     else:

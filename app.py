@@ -1648,7 +1648,7 @@ HTML = """\
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>Signal Type</label>
+                            <label>Signal Type <span class="m-info" id="ath-info" style="display:none" data-tip="Buys more when price is far below ATH, less when near ATH.&#10;Uses a 5-year rolling window to determine the worst drawdown as reference.&#10;At ATH → minimum buy. At worst 5-year drawdown → maximum buy.">ⓘ</span></label>
                             <select name="dca_signal_type" id="dca_signal_type" onchange="toggleFields()">
                                 <option value="oscillator" {{ 'selected' if p.dca_signal_type=='oscillator' }}>Oscillator (RSI, etc.)</option>
                                 <option value="ma_distance" {{ 'selected' if p.dca_signal_type=='ma_distance' }}>Distance from MA</option>
@@ -2213,6 +2213,8 @@ function toggleFields() {
         var dcaSigType = document.getElementById('dca_signal_type').value;
         var dcaSigNameGroup = document.getElementById('dca-signal-name-group');
         var dcaSigPeriodGroup = document.getElementById('dca-signal-period-group');
+        var athInfo = document.getElementById('ath-info');
+        if (athInfo) athInfo.style.display = (dcaSigType === 'ath_drawdown') ? 'inline' : 'none';
         if (dcaSigType === 'ath_drawdown') {
             dcaSigNameGroup.classList.add('hidden');
             dcaSigNameGroup.querySelectorAll('select')[0].disabled = true;
