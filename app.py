@@ -868,22 +868,7 @@ HTML = """\
             border-color: var(--accent);
             border-bottom-color: var(--bg-elevated);
         }
-        /* Chart toolbar & tools */
-        .lw-toolbar {
-            position: absolute; top: 10px; left: 10px; z-index: 6;
-            display: flex; flex-direction: column; gap: 2px;
-            background: rgba(22,25,34,0.88); border: 1px solid var(--border);
-            border-radius: 8px; padding: 4px;
-            backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-        }
-        .lw-toolbar-btn {
-            width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
-            background: none; border: none; border-radius: 6px; cursor: pointer;
-            color: var(--text-muted); transition: all 0.15s ease;
-        }
-        .lw-toolbar-btn:hover { background: var(--bg-elevated); color: var(--text); }
-        .lw-toolbar-btn.active { background: rgba(247,147,26,0.15); color: var(--accent); }
-        .lw-toolbar-sep { height: 1px; background: var(--border); margin: 2px 4px; }
+        /* Chart tools */
         .lw-measure-label {
             position: absolute; z-index: 5; pointer-events: none;
             background: rgba(22,25,34,0.92); border: 1px solid var(--border-hover);
@@ -1868,7 +1853,14 @@ HTML = """\
                 {% if price_json %}
                 <div id="livechart-tab" style="display:none">
                     <div id="lw-chart-container"
-                         style="position:relative;height:600px;border-radius:12px;overflow:hidden;border:1px solid var(--border);cursor:crosshair"
+                         style="position:relative;height:600px;border-radius:12px;overflow:hidden;border:1px solid var(--border)"
+                    </div>
+                    <div style="display:flex;gap:16px;justify-content:center;margin-top:8px;font-size:0.72em;color:var(--text-muted);font-family:'JetBrains Mono',monospace;letter-spacing:0.02em">
+                        <span><kbd style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:0.95em">M</kbd> Measure</span>
+                        <span><kbd style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:0.95em">D</kbd> Draw line</span>
+                        <span><kbd style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:0.95em">L</kbd> Log/Linear</span>
+                        <span><kbd style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:0.95em">C</kbd> Clear</span>
+                        <span><kbd style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:0.95em">Esc</kbd> Cancel</span>
                     </div>
                 </div>
                 <script>
@@ -2438,64 +2430,32 @@ function loadLWChart() {
         chart.applyOptions({ width: container.clientWidth });
     });
 
-    // ===== Toolbar =====
-    var toolbar = document.createElement('div');
-    toolbar.className = 'lw-toolbar';
-    // Measure button (ruler icon)
-    toolbar.innerHTML =
-        '<button class="lw-toolbar-btn" id="lw-btn-measure" title="Measure (Shift+Click)">' +
-            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-            '<path d="M2 22L22 2"/><path d="M6 18l2-2"/><path d="M10 14l2-2"/><path d="M14 10l2-2"/><path d="M18 6l2-2"/></svg>' +
-        '</button>' +
-        '<button class="lw-toolbar-btn" id="lw-btn-draw" title="Draw Line">' +
-            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-            '<line x1="4" y1="20" x2="20" y2="4"/></svg>' +
-        '</button>' +
-        '<div class="lw-toolbar-sep"></div>' +
-        '<button class="lw-toolbar-btn" id="lw-btn-scale" title="Toggle Log / Linear">' +
-            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-            '<path d="M3 20Q8 18 12 10Q16 2 21 4"/></svg>' +
-        '</button>' +
-        '<div class="lw-toolbar-sep"></div>' +
-        '<button class="lw-toolbar-btn" id="lw-btn-clear" title="Clear All Drawings">' +
-            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-            '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M5 6v14a2 2 0 002 2h10a2 2 0 002-2V6"/></svg>' +
-        '</button>';
-    container.appendChild(toolbar);
-
     var activeTool = null;  // 'measure' | 'draw' | null
     var isLogScale = true;
-    var btnMeasure = document.getElementById('lw-btn-measure');
-    var btnDraw = document.getElementById('lw-btn-draw');
-    var btnScale = document.getElementById('lw-btn-scale');
-    var btnClear = document.getElementById('lw-btn-clear');
 
     function setTool(tool) {
         if (activeTool === tool) { activeTool = null; } else { activeTool = tool; }
-        btnMeasure.classList.toggle('active', activeTool === 'measure');
-        btnDraw.classList.toggle('active', activeTool === 'draw');
         container.style.cursor = activeTool ? 'crosshair' : '';
         // Cancel any in-progress action
         if (activeTool !== 'measure') removeMeasure();
         if (activeTool !== 'draw') cancelDraw();
     }
 
-    btnMeasure.addEventListener('click', function(e) { e.stopPropagation(); setTool('measure'); });
-    btnDraw.addEventListener('click', function(e) { e.stopPropagation(); setTool('draw'); });
-
-    // ===== Log / Linear toggle =====
-    btnScale.addEventListener('click', function(e) {
-        e.stopPropagation();
+    function toggleScale() {
         isLogScale = !isLogScale;
         chart.applyOptions({
             rightPriceScale: {
                 mode: isLogScale ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal
             }
         });
-        // Update icon appearance
-        btnScale.classList.toggle('active', !isLogScale);
-        btnScale.title = isLogScale ? 'Toggle Log / Linear (Log)' : 'Toggle Log / Linear (Linear)';
-    });
+    }
+
+    function clearAll() {
+        removeMeasure();
+        cancelDraw();
+        drawnLines.forEach(function(item) { item.remove(); });
+        drawnLines = [];
+    }
 
     // ===== Shared SVG helpers =====
     function makeSvgOverlay() {
@@ -2558,19 +2518,8 @@ function loadLWChart() {
         drawStart = null; drawActive = false;
     }
 
-    // ===== Clear all =====
-    btnClear.addEventListener('click', function(e) {
-        e.stopPropagation();
-        removeMeasure();
-        cancelDraw();
-        drawnLines.forEach(function(item) { item.remove(); });
-        drawnLines = [];
-    });
-
     // ===== Click handler =====
     container.addEventListener('click', function(e) {
-        // Ignore clicks on toolbar
-        if (e.target.closest('.lw-toolbar')) return;
         var cRect = container.getBoundingClientRect();
         var x = e.clientX - cRect.left;
         var y = e.clientY - cRect.top;
@@ -2629,7 +2578,6 @@ function loadLWChart() {
 
     // ===== Mousemove for live preview =====
     container.addEventListener('mousemove', function(e) {
-        if (e.target.closest('.lw-toolbar')) return;
         var cRect = container.getBoundingClientRect();
         var x = e.clientX - cRect.left;
         var y = e.clientY - cRect.top;
@@ -2659,12 +2607,23 @@ function loadLWChart() {
         }
     });
 
-    // Escape key cancels active drawing
+    // Keyboard shortcuts for chart tools
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
+        // Skip if user is typing in an input/textarea/select
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+        var key = e.key.toLowerCase();
+        if (key === 'escape') {
             if (measureActive) removeMeasure();
             if (drawActive) cancelDraw();
             if (activeTool) setTool(null);
+        } else if (key === 'm') {
+            setTool('measure');
+        } else if (key === 'd') {
+            setTool('draw');
+        } else if (key === 'l') {
+            toggleScale();
+        } else if (key === 'c') {
+            clearAll();
         }
     });
 }
@@ -5446,21 +5405,6 @@ DETAIL_HTML = """\
             font-size: 12px; line-height: 1.5; color: var(--text); white-space: nowrap;
             backdrop-filter: blur(4px); box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         }
-        .lw-toolbar {
-            position: absolute; top: 10px; left: 10px; z-index: 6;
-            display: flex; flex-direction: column; gap: 2px;
-            background: rgba(22,25,34,0.88); border: 1px solid var(--border);
-            border-radius: 8px; padding: 4px;
-            backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-        }
-        .lw-toolbar-btn {
-            width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
-            background: none; border: none; border-radius: 6px; cursor: pointer;
-            color: var(--text-muted); transition: all 0.15s ease;
-        }
-        .lw-toolbar-btn:hover { background: var(--bg-elevated); color: var(--text); }
-        .lw-toolbar-btn.active { background: rgba(247,147,26,0.15); color: var(--accent); }
-        .lw-toolbar-sep { height: 1px; background: var(--border); margin: 2px 4px; }
         .backtest-card-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
         .badge-featured { background: rgba(247,147,26,0.15); color: var(--accent); }
         .badge-community { background: rgba(100,149,237,0.15); color: var(--blue); }
@@ -6091,40 +6035,24 @@ function loadLWChart() {
         chart.timeScale().fitContent();
     }
     window.addEventListener('resize', function() { chart.applyOptions({ width: container.clientWidth }); });
-    // ===== Toolbar =====
-    var toolbar = document.createElement('div'); toolbar.className = 'lw-toolbar';
-    toolbar.innerHTML =
-        '<button class="lw-toolbar-btn" id="lw-btn-measure2" title="Measure (Shift+Click)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22L22 2"/><path d="M6 18l2-2"/><path d="M10 14l2-2"/><path d="M14 10l2-2"/><path d="M18 6l2-2"/></svg></button>' +
-        '<button class="lw-toolbar-btn" id="lw-btn-draw2" title="Draw Line"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="20" y2="4"/></svg></button>' +
-        '<div class="lw-toolbar-sep"></div>' +
-        '<button class="lw-toolbar-btn" id="lw-btn-scale2" title="Toggle Log / Linear"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20Q8 18 12 10Q16 2 21 4"/></svg></button>' +
-        '<div class="lw-toolbar-sep"></div>' +
-        '<button class="lw-toolbar-btn" id="lw-btn-clear2" title="Clear All Drawings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M5 6v14a2 2 0 002 2h10a2 2 0 002-2V6"/></svg></button>';
-    container.appendChild(toolbar);
     var activeTool = null, isLogScale = true;
-    var btnM = document.getElementById('lw-btn-measure2'), btnD = document.getElementById('lw-btn-draw2');
-    var btnS = document.getElementById('lw-btn-scale2'), btnC = document.getElementById('lw-btn-clear2');
     var measureStart = null, measureLabel = null, measureLine = null, measureActive = false;
     var drawStart = null, drawPreview = null, drawActive = false, drawnLines = [];
     function removeMeasure() { if (measureLabel) { measureLabel.remove(); measureLabel = null; } if (measureLine) { measureLine.remove(); measureLine = null; } measureStart = null; measureActive = false; }
     function cancelDraw() { if (drawPreview) { drawPreview.remove(); drawPreview = null; } drawStart = null; drawActive = false; }
     function setTool(tool) {
         if (activeTool === tool) activeTool = null; else activeTool = tool;
-        btnM.classList.toggle('active', activeTool === 'measure'); btnD.classList.toggle('active', activeTool === 'draw');
         container.style.cursor = activeTool ? 'crosshair' : '';
         if (activeTool !== 'measure') removeMeasure(); if (activeTool !== 'draw') cancelDraw();
     }
+    function toggleScale() { isLogScale = !isLogScale; chart.applyOptions({ rightPriceScale: { mode: isLogScale ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal } }); }
+    function clearAll() { removeMeasure(); cancelDraw(); drawnLines.forEach(function(i) { i.remove(); }); drawnLines = []; }
     function makeSvgOverlay() { var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;'; s.setAttribute('width', '100%'); s.setAttribute('height', '100%'); return s; }
     function addDot(s, cx, cy, c) { var d = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); d.setAttribute('cx', cx); d.setAttribute('cy', cy); d.setAttribute('r', '4'); d.setAttribute('fill', c); s.appendChild(d); }
     function addLine(s, x1, y1, x2, y2, c, dash) { var l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l.setAttribute('x1', x1); l.setAttribute('y1', y1); l.setAttribute('x2', x2); l.setAttribute('y2', y2); l.setAttribute('stroke', c); l.setAttribute('stroke-width', '1.5'); if (dash) l.setAttribute('stroke-dasharray', dash); l.setAttribute('opacity', '0.8'); s.appendChild(l); }
     function createLabel(text, x, y) { var el = document.createElement('div'); el.className = 'lw-measure-label'; el.innerHTML = text; el.style.left = x + 'px'; el.style.top = y + 'px'; container.appendChild(el); var r = el.getBoundingClientRect(), cr = container.getBoundingClientRect(); if (r.right > cr.right - 4) el.style.left = (x - r.width - 8) + 'px'; if (r.bottom > cr.bottom - 4) el.style.top = (y - r.height - 8) + 'px'; return el; }
     function fmtMeasure(sp, ep) { if (!sp || sp <= 0) return ''; var pct = ((ep-sp)/sp*100), sign = pct >= 0 ? '+' : '', color = pct >= 0 ? '#34d399' : '#ef4444'; return '<span style="color:'+color+';font-weight:600;font-size:13px">'+sign+pct.toFixed(2)+'%</span><br><span style="color:#8890a4;font-size:11px">'+(ep-sp>=0?'+':'')+(ep-sp).toFixed(priceFmt.precision)+'</span>'; }
-    btnM.addEventListener('click', function(e) { e.stopPropagation(); setTool('measure'); });
-    btnD.addEventListener('click', function(e) { e.stopPropagation(); setTool('draw'); });
-    btnS.addEventListener('click', function(e) { e.stopPropagation(); isLogScale = !isLogScale; chart.applyOptions({ rightPriceScale: { mode: isLogScale ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal } }); btnS.classList.toggle('active', !isLogScale); });
-    btnC.addEventListener('click', function(e) { e.stopPropagation(); removeMeasure(); cancelDraw(); drawnLines.forEach(function(i) { i.remove(); }); drawnLines = []; });
     container.addEventListener('click', function(e) {
-        if (e.target.closest('.lw-toolbar')) return;
         var cr = container.getBoundingClientRect(), x = e.clientX - cr.left, y = e.clientY - cr.top;
         if (e.shiftKey && activeTool !== 'measure') setTool('measure');
         if (activeTool === 'measure') {
@@ -6141,7 +6069,6 @@ function loadLWChart() {
         if (measureStart) removeMeasure();
     });
     container.addEventListener('mousemove', function(e) {
-        if (e.target.closest('.lw-toolbar')) return;
         var cr = container.getBoundingClientRect(), x = e.clientX - cr.left, y = e.clientY - cr.top;
         if (measureActive && measureStart) {
             if (measureLine) measureLine.remove(); if (measureLabel) { measureLabel.remove(); measureLabel = null; }
@@ -6154,7 +6081,15 @@ function loadLWChart() {
             var sv = makeSvgOverlay(); addLine(sv,drawStart.x,drawStart.y,x,y,'#6495ED'); addDot(sv,drawStart.x,drawStart.y,'#6495ED'); addDot(sv,x,y,'#6495ED'); container.appendChild(sv); drawPreview = sv;
         }
     });
-    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { if (measureActive) removeMeasure(); if (drawActive) cancelDraw(); if (activeTool) setTool(null); } });
+    document.addEventListener('keydown', function(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+        var key = e.key.toLowerCase();
+        if (key === 'escape') { if (measureActive) removeMeasure(); if (drawActive) cancelDraw(); if (activeTool) setTool(null); }
+        else if (key === 'm') setTool('measure');
+        else if (key === 'd') setTool('draw');
+        else if (key === 'l') toggleScale();
+        else if (key === 'c') clearAll();
+    });
 }
 function copyLink(el) {
     navigator.clipboard.writeText(location.origin + '/s/{{ backtest.short_code }}');
