@@ -1184,7 +1184,7 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
     dyn_equity = dyn_cum_units * prices
 
     # Metrics helper
-    def _dca_metrics(equity_arr, cum_spent_arr, label):
+    def _dca_metrics(equity_arr, cum_spent_arr, per_purchase_spent, label):
         eq = pd.Series(equity_arr, index=df.index)
         spent = cum_spent_arr[-1]
         final_val = equity_arr[-1]
@@ -1193,6 +1193,7 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
         ann_ret = _annualized_return(total_ret, n_periods, periods_per_year)
         # Max drawdown of portfolio value
         max_dd = _max_drawdown(eq.replace(0, np.nan).dropna()) if eq.max() > 0 else 0
+        dd_duration = _max_drawdown_duration(eq.replace(0, np.nan).dropna()) if eq.max() > 0 else 0
         # Sharpe from period-to-period returns of equity
         eq_clean = eq.replace(0, np.nan).dropna()
         if len(eq_clean) > 2:
@@ -1201,11 +1202,23 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
             std_r = rets.std()
             sharpe = (mean_r / std_r * np.sqrt(periods_per_year)) if std_r > 0 else 0
             sortino = _sortino_ratio(rets, periods_per_year)
+            volatility = std_r * np.sqrt(periods_per_year) * 100
         else:
-            sharpe = sortino = 0
+            sharpe = sortino = volatility = 0
 
-        avg_cost = spent / (equity_arr > 0).sum() if (equity_arr > 0).sum() > 0 else 0
         total_units = equity_arr[-1] / prices[-1] if prices[-1] > 0 else 0
+        avg_cost_per_unit = spent / total_units if total_units > 0 else 0
+
+        # Per-purchase stats (from non-zero entries)
+        buy_amounts = per_purchase_spent[per_purchase_spent > 0]
+        n_purchases = len(buy_amounts)
+        if n_purchases > 0:
+            avg_buy = float(np.mean(buy_amounts))
+            min_buy = float(np.min(buy_amounts))
+            max_buy = float(np.max(buy_amounts))
+            median_buy = float(np.median(buy_amounts))
+        else:
+            avg_buy = min_buy = max_buy = median_buy = 0.0
 
         return {
             "label": label,
@@ -1215,14 +1228,22 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
             "total_return": total_ret,
             "annualized": ann_ret,
             "max_drawdown": max_dd,
+            "max_dd_duration": dd_duration,
             "sharpe": sharpe,
             "sortino": sortino,
+            "volatility": volatility,
             "total_units": total_units,
+            "avg_cost_per_unit": avg_cost_per_unit,
+            "n_purchases": n_purchases,
+            "avg_buy_amount": avg_buy,
+            "min_buy_amount": min_buy,
+            "max_buy_amount": max_buy,
+            "median_buy_amount": median_buy,
         }
 
-    const_metrics = _dca_metrics(const_equity, const_cum_spent, f"Constant DCA (${amount:.0f}/{frequency})")
+    const_metrics = _dca_metrics(const_equity, const_cum_spent, const_spent, f"Constant DCA (${amount:.0f}/{frequency})")
     dyn_label = f"Dynamic DCA ({signal_label}, {max_multiplier:.1f}x)"
-    dyn_metrics = _dca_metrics(dyn_equity, dyn_cum_spent, dyn_label)
+    dyn_metrics = _dca_metrics(dyn_equity, dyn_cum_spent, dyn_spent, dyn_label)
 
     result = {
         "constant": const_metrics,
@@ -1242,7 +1263,9 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
         # Lump sum: invest entire budget on day 1
         lump_units = total_budget / (prices[0] * (1 + fee))
         lump_equity = lump_units * prices
-        lump_metrics = _dca_metrics(lump_equity, np.array([total_budget * (1 + fee)] + [0] * (n - 1)).cumsum(),
+        lump_spent_arr = np.zeros(n)
+        lump_spent_arr[0] = total_budget * (1 + fee)
+        lump_metrics = _dca_metrics(lump_equity, lump_spent_arr.cumsum(), lump_spent_arr,
                                      f"Lump Sum (${total_budget:,.0f})")
         # Override spent for lump sum
         lump_metrics["total_invested"] = total_budget * (1 + fee)

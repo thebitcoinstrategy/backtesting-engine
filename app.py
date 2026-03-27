@@ -1990,10 +1990,7 @@ HTML = """\
                     <tr class="section-row"><td colspan="3">Portfolio</td></tr>
                     <tr><td class="m-label">Total Invested</td><td class="m-val">${{ "{:,.0f}".format(best.total_invested) }}</td><td class="m-val">${{ "{:,.0f}".format(best.total_invested) }}</td></tr>
                     <tr><td class="m-label">Final Value</td><td class="m-val {{ 'positive' if best.final_value > best.total_invested else 'negative' }}">${{ "{:,.2f}".format(best.final_value) }}</td><td class="m-val {{ 'positive' if best.const_final_value > best.total_invested else 'negative' }}">${{ "{:,.2f}".format(best.const_final_value) }}</td></tr>
-                    <tr><td class="m-label">Dynamic Advantage</td><td class="m-val {{ 'positive' if best.advantage > 0 else 'negative' }}" colspan="2">${{ "{:,.2f}".format(best.advantage) }} ({{ "%.2f"|format(best.advantage_pct) }}%)</td></tr>
-                    {% if best.get('lump_sum_final_value') %}
-                    <tr><td class="m-label">Lump Sum Value</td><td class="m-val" colspan="2">${{ "{:,.2f}".format(best.lump_sum_final_value) }} ({{ "%.2f"|format(best.lump_sum_annualized) }}% ann.)</td></tr>
-                    {% endif %}
+                    <tr><td class="m-label">Dynamic Advantage</td><td class="m-val {{ 'positive' if best.advantage > 0 else 'negative' }}" colspan="2">${{ "{:,.2f}".format(best.advantage) }} ({{ "%+.2f"|format(best.advantage_pct) }}%)</td></tr>
                     <tr class="section-row"><td colspan="3">Performance</td></tr>
                     <tr><td class="m-label">Total Return</td><td class="m-val {{ 'positive' if best.total_return > 0 else 'negative' }}">{{ "%.2f"|format(best.total_return) }}%</td><td class="m-val {{ 'positive' if best.buyhold_return > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_return) }}%</td></tr>
                     <tr><td class="m-label">Ann. Return</td><td class="m-val {{ 'positive' if best.annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.annualized) }}%</td><td class="m-val {{ 'positive' if best.buyhold_annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_annualized) }}%</td></tr>
@@ -2001,9 +1998,18 @@ HTML = """\
                     <tr><td class="m-label">Sortino Ratio</td><td class="m-val">{{ "%.2f"|format(best.sortino) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sortino) }}</td></tr>
                     <tr class="section-row"><td colspan="3">Risk</td></tr>
                     <tr><td class="m-label">Max Drawdown</td><td class="m-val negative">{{ "%.2f"|format(best.max_drawdown) }}%</td><td class="m-val negative">{{ "%.2f"|format(best.buyhold_max_drawdown) }}%</td></tr>
+                    <tr><td class="m-label">Drawdown Duration</td><td class="m-val">{{ best.max_dd_duration|duration }}</td><td class="m-val">{{ best.buyhold_max_dd_duration|duration }}</td></tr>
+                    <tr><td class="m-label">Volatility</td><td class="m-val">{{ "%.1f"|format(best.volatility) }}%</td><td class="m-val">{{ "%.1f"|format(best.buyhold_volatility) }}%</td></tr>
+                    <tr class="section-row"><td colspan="3">Purchase Stats</td></tr>
+                    <tr><td class="m-label">Purchases</td><td class="m-val">{{ best.n_purchases }}</td><td class="m-val">{{ best.const_n_purchases }}</td></tr>
+                    <tr><td class="m-label">Avg Buy Amount</td><td class="m-val">${{ "{:,.2f}".format(best.avg_buy_amount) }}</td><td class="m-val">${{ "{:,.2f}".format(best.const_avg_buy_amount) }}</td></tr>
+                    <tr><td class="m-label">Median Buy Amount</td><td class="m-val">${{ "{:,.2f}".format(best.median_buy_amount) }}</td><td class="m-val">${{ "{:,.2f}".format(best.const_median_buy_amount) }}</td></tr>
+                    <tr><td class="m-label">Min Buy</td><td class="m-val">${{ "{:,.2f}".format(best.min_buy_amount) }}</td><td class="m-val">${{ "{:,.2f}".format(best.const_min_buy_amount) }}</td></tr>
+                    <tr><td class="m-label">Max Buy</td><td class="m-val">${{ "{:,.2f}".format(best.max_buy_amount) }}</td><td class="m-val">${{ "{:,.2f}".format(best.const_max_buy_amount) }}</td></tr>
                     <tr class="section-row"><td colspan="3">Accumulation</td></tr>
                     <tr><td class="m-label">Total Units</td><td class="m-val">{{ "%.6f"|format(best.total_units) }}</td><td class="m-val">{{ "%.6f"|format(best.const_total_units) }}</td></tr>
-                    <tr><td class="m-label">Unit Advantage</td><td class="m-val {{ 'positive' if best.total_units > best.const_total_units else 'negative' }}" colspan="2">{{ "%.2f"|format((best.total_units / best.const_total_units - 1) * 100 if best.const_total_units > 0 else 0) }}% more units</td></tr>
+                    <tr><td class="m-label">Avg Cost per Unit</td><td class="m-val">${{ "{:,.2f}".format(best.avg_cost_per_unit) }}</td><td class="m-val">${{ "{:,.2f}".format(best.const_avg_cost_per_unit) }}</td></tr>
+                    <tr><td class="m-label">Unit Advantage</td><td class="m-val {{ 'positive' if best.total_units > best.const_total_units else 'negative' }}" colspan="2">{{ "%+.2f"|format((best.total_units / best.const_total_units - 1) * 100 if best.const_total_units > 0 else 0) }}% more units</td></tr>
                     </tbody>
                 </table>
                 </div>
@@ -4000,14 +4006,30 @@ def _run_post_handler(cancel_event):
             "total_invested": dyn["total_invested"],
             "final_value": dyn["final_value"],
             "total_units": dyn["total_units"],
+            "volatility": dyn["volatility"],
+            "max_dd_duration": dyn["max_dd_duration"],
+            "avg_cost_per_unit": dyn["avg_cost_per_unit"],
+            "n_purchases": dyn["n_purchases"],
+            "avg_buy_amount": dyn["avg_buy_amount"],
+            "min_buy_amount": dyn["min_buy_amount"],
+            "max_buy_amount": dyn["max_buy_amount"],
+            "median_buy_amount": dyn["median_buy_amount"],
             # Constant DCA as "buyhold" comparison
             "buyhold_return": const["total_return"],
             "buyhold_annualized": const["annualized"],
             "buyhold_max_drawdown": const["max_drawdown"],
             "buyhold_sharpe": const["sharpe"],
             "buyhold_sortino": const["sortino"],
+            "buyhold_volatility": const["volatility"],
+            "buyhold_max_dd_duration": const["max_dd_duration"],
             "const_final_value": const["final_value"],
             "const_total_units": const["total_units"],
+            "const_avg_cost_per_unit": const["avg_cost_per_unit"],
+            "const_n_purchases": const["n_purchases"],
+            "const_avg_buy_amount": const["avg_buy_amount"],
+            "const_min_buy_amount": const["min_buy_amount"],
+            "const_max_buy_amount": const["max_buy_amount"],
+            "const_median_buy_amount": const["median_buy_amount"],
             "advantage": advantage,
             "advantage_pct": advantage_pct,
             "dca_mode": True,
@@ -4016,10 +4038,6 @@ def _run_post_handler(cancel_event):
             "ind1_name": "price",
             "ind2_name": p.dca_signal_name,
         }
-        if has_lump:
-            best["lump_sum_return"] = lump["total_return"]
-            best["lump_sum_annualized"] = lump["annualized"]
-            best["lump_sum_final_value"] = lump["final_value"]
 
         price_json = _series_to_lw_json(df_price_all["close"])
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
