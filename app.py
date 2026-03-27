@@ -1530,7 +1530,7 @@ HTML = """\
                         {% endif %}
                     </div>
                 </div>
-                <div class="form-section">
+                <div class="form-section" id="indicators-section">
                     <div class="section-title">Indicators</div>
                     <input type="hidden" name="signal_type" id="signal_type" value="{{ p.signal_type }}">
                     <input type="hidden" name="osc_name" id="osc_name" value="{{ p.osc_name }}">
@@ -2195,6 +2195,10 @@ function toggleFields() {
     }
 
     var isLevSweep = mode === 'sweep-lev';
+
+    // Show/hide Indicators section (hidden in DCA mode)
+    var indSection = document.getElementById('indicators-section');
+    if (isDCA) { indSection.classList.add('hidden'); } else { indSection.classList.remove('hidden'); }
 
     // Show/hide DCA section
     var dcaSection = document.getElementById('dca-section');
