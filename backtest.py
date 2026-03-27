@@ -1009,6 +1009,297 @@ def sweep_sma_periods(df, sma_min, sma_max, initial_cash, mode, fast_sma, fee=0.
     return results
 
 
+# --- DCA Functions ---
+
+DCA_SIGNAL_TYPES = {
+    "oscillator": "Oscillator (RSI, Stochastic, etc.)",
+    "ma_distance": "Distance from Moving Average",
+    "ath_drawdown": "Drawdown from All-Time High",
+}
+
+
+def compute_dca_signal(df, signal_type, signal_name=None, signal_period=None):
+    """Compute a 0-1 signal series for DCA multiplier scaling.
+
+    signal_type: 'oscillator', 'ma_distance', or 'ath_drawdown'
+    Returns: (signal_series, label) where signal_series is 0..1
+             (0 = cheapest/most oversold, 1 = most expensive/overbought)
+    """
+    close = df["close"]
+
+    if signal_type == "oscillator":
+        name = signal_name or "rsi"
+        osc_data = compute_oscillator(df, name, signal_period)
+        primary = osc_data["primary"]
+        spec = osc_data["spec"]
+        osc_range = spec.get("range")
+        if osc_range:
+            lo, hi = osc_range
+            signal = (primary - lo) / (hi - lo)
+        else:
+            # Unbounded oscillators: use rolling percentile rank
+            signal = primary.rolling(252, min_periods=20).apply(
+                lambda x: pd.Series(x).rank(pct=True).iloc[-1], raw=False
+            )
+        label = osc_data["label"]
+
+    elif signal_type == "ma_distance":
+        name = signal_name or "sma"
+        period = signal_period or 200
+        ma_series, _ = compute_indicator_from_spec(df, name, period)
+        pct_distance = (close - ma_series) / ma_series
+        # Normalize using rolling min/max to get 0-1
+        roll_min = pct_distance.rolling(504, min_periods=50).min()
+        roll_max = pct_distance.rolling(504, min_periods=50).max()
+        denom = (roll_max - roll_min).replace(0, np.nan)
+        signal = (pct_distance - roll_min) / denom
+        label = f"Distance from {name.upper()}({period})"
+
+    elif signal_type == "ath_drawdown":
+        ath = close.cummax()
+        drawdown = (close - ath) / ath  # 0 at ATH, negative below
+        # Invert: 0 at ATH (expensive), 1 at max drawdown (cheapest)
+        # Use rolling min of drawdown
+        roll_min_dd = drawdown.rolling(504, min_periods=50).min()
+        denom = roll_min_dd.replace(0, np.nan)
+        signal = drawdown / denom  # 0 at ATH, 1 at worst drawdown in window
+        label = "ATH Drawdown"
+
+    else:
+        raise ValueError(f"Unknown DCA signal type: {signal_type}")
+
+    signal = signal.clip(0, 1)
+    return signal, label
+
+
+def compute_dca_multipliers(signal_series, max_multiplier=3.0):
+    """Convert 0-1 signal into DCA multipliers.
+
+    signal=0 → max_multiplier (cheapest → buy more)
+    signal=1 → 1/max_multiplier (expensive → buy less)
+    Linear interpolation between.
+
+    Multipliers are then normalized so the total spend matches constant DCA.
+    """
+    # signal=0 → max_mult, signal=1 → 1/max_mult
+    low = 1.0 / max_multiplier
+    high = max_multiplier
+    raw_mult = high + (low - high) * signal_series  # linear from high to low
+    return raw_mult
+
+
+def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator",
+                    signal_name=None, signal_period=None, max_multiplier=3.0,
+                    fee=0.001, start_date=None, show_lump_sum=True,
+                    periods_per_year=365):
+    """Compare constant DCA vs dynamic (signal-adjusted) DCA.
+
+    frequency: 'daily', 'weekly', or 'monthly'
+    Returns dict with equity series and metrics for both strategies + optional lump sum.
+    """
+    df = df.copy()
+
+    if start_date is not None:
+        ts = pd.Timestamp(start_date)
+        if df.index.tz is not None:
+            ts = ts.tz_localize(df.index.tz)
+        df = df[df.index >= ts]
+
+    close = df["close"]
+    n = len(close)
+    if n < 2:
+        return None
+
+    # Build buy mask based on frequency
+    if frequency == "daily":
+        buy_mask = np.ones(n, dtype=bool)
+    elif frequency == "weekly":
+        # Buy on Mondays (or first day of each week)
+        buy_mask = np.zeros(n, dtype=bool)
+        last_week = None
+        for i, dt in enumerate(df.index):
+            wk = dt.isocalendar()[1]
+            yr = dt.year
+            key = (yr, wk)
+            if key != last_week:
+                buy_mask[i] = True
+                last_week = key
+        buy_mask = np.array(buy_mask)
+    elif frequency == "monthly":
+        buy_mask = np.zeros(n, dtype=bool)
+        last_month = None
+        for i, dt in enumerate(df.index):
+            key = (dt.year, dt.month)
+            if key != last_month:
+                buy_mask[i] = True
+                last_month = key
+        buy_mask = np.array(buy_mask)
+    else:
+        buy_mask = np.ones(n, dtype=bool)
+
+    n_buys = buy_mask.sum()
+    total_budget = amount * n_buys
+
+    # --- Constant DCA ---
+    const_units = np.zeros(n)
+    const_spent = np.zeros(n)
+    prices = close.values
+    for i in range(n):
+        if buy_mask[i]:
+            cost = amount * (1 + fee)
+            const_units[i] = amount / prices[i]
+            const_spent[i] = cost
+
+    const_cum_units = np.cumsum(const_units)
+    const_cum_spent = np.cumsum(const_spent)
+    const_equity = const_cum_units * prices
+
+    # --- Dynamic DCA ---
+    signal_series, signal_label = compute_dca_signal(df, signal_type, signal_name, signal_period)
+    raw_mult = compute_dca_multipliers(signal_series, max_multiplier)
+
+    # Normalize multipliers so total spend matches constant DCA total
+    buy_mults = raw_mult.values[buy_mask]
+    buy_mults_clean = np.where(np.isnan(buy_mults), 1.0, buy_mults)
+    mult_sum = buy_mults_clean.sum()
+    if mult_sum > 0:
+        scale_factor = n_buys / mult_sum
+    else:
+        scale_factor = 1.0
+
+    dyn_units = np.zeros(n)
+    dyn_spent = np.zeros(n)
+    buy_idx = 0
+    for i in range(n):
+        if buy_mask[i]:
+            m = buy_mults_clean[buy_idx] * scale_factor
+            dyn_amount = amount * m
+            cost = dyn_amount * (1 + fee)
+            dyn_units[i] = dyn_amount / prices[i]
+            dyn_spent[i] = cost
+            buy_idx += 1
+
+    dyn_cum_units = np.cumsum(dyn_units)
+    dyn_cum_spent = np.cumsum(dyn_spent)
+    dyn_equity = dyn_cum_units * prices
+
+    # Metrics helper
+    def _dca_metrics(equity_arr, cum_spent_arr, label):
+        eq = pd.Series(equity_arr, index=df.index)
+        spent = cum_spent_arr[-1]
+        final_val = equity_arr[-1]
+        total_ret = (final_val / spent - 1) * 100 if spent > 0 else 0
+        n_periods = len(equity_arr)
+        ann_ret = _annualized_return(total_ret, n_periods, periods_per_year)
+        # Max drawdown of portfolio value
+        max_dd = _max_drawdown(eq.replace(0, np.nan).dropna()) if eq.max() > 0 else 0
+        # Sharpe from period-to-period returns of equity
+        eq_clean = eq.replace(0, np.nan).dropna()
+        if len(eq_clean) > 2:
+            rets = eq_clean.pct_change().dropna()
+            mean_r = rets.mean()
+            std_r = rets.std()
+            sharpe = (mean_r / std_r * np.sqrt(periods_per_year)) if std_r > 0 else 0
+            sortino = _sortino_ratio(rets, periods_per_year)
+        else:
+            sharpe = sortino = 0
+
+        avg_cost = spent / (equity_arr > 0).sum() if (equity_arr > 0).sum() > 0 else 0
+        total_units = equity_arr[-1] / prices[-1] if prices[-1] > 0 else 0
+
+        return {
+            "label": label,
+            "equity": eq,
+            "total_invested": spent,
+            "final_value": final_val,
+            "total_return": total_ret,
+            "annualized": ann_ret,
+            "max_drawdown": max_dd,
+            "sharpe": sharpe,
+            "sortino": sortino,
+            "total_units": total_units,
+        }
+
+    const_metrics = _dca_metrics(const_equity, const_cum_spent, f"Constant DCA (${amount:.0f}/{frequency})")
+    dyn_label = f"Dynamic DCA ({signal_label}, {max_multiplier:.1f}x)"
+    dyn_metrics = _dca_metrics(dyn_equity, dyn_cum_spent, dyn_label)
+
+    result = {
+        "constant": const_metrics,
+        "dynamic": dyn_metrics,
+        "signal_series": signal_series,
+        "signal_label": signal_label,
+        "frequency": frequency,
+        "amount": amount,
+        "max_multiplier": max_multiplier,
+        "n_buys": int(n_buys),
+        "total_budget": total_budget,
+        "buy_mask": pd.Series(buy_mask, index=df.index),
+        "prices": close,
+    }
+
+    if show_lump_sum:
+        # Lump sum: invest entire budget on day 1
+        lump_units = total_budget / (prices[0] * (1 + fee))
+        lump_equity = lump_units * prices
+        lump_metrics = _dca_metrics(lump_equity, np.array([total_budget * (1 + fee)] + [0] * (n - 1)).cumsum(),
+                                     f"Lump Sum (${total_budget:,.0f})")
+        # Override spent for lump sum
+        lump_metrics["total_invested"] = total_budget * (1 + fee)
+        result["lump_sum"] = lump_metrics
+
+    return result
+
+
+def run_dca_sweep(df, sweep_param="multiplier", frequency="daily", amount=100.0,
+                  signal_type="oscillator", signal_name=None, signal_period=None,
+                  max_multiplier=3.0, fee=0.001, start_date=None,
+                  sweep_min=None, sweep_max=None, sweep_step=None,
+                  show_lump_sum=True, periods_per_year=365):
+    """Sweep one DCA parameter and return results for each value.
+
+    sweep_param: 'multiplier' or 'period'
+    Returns list of result dicts with final_value, annualized, etc.
+    """
+    results = []
+
+    if sweep_param == "multiplier":
+        s_min = sweep_min or 1.0
+        s_max = sweep_max or 10.0
+        s_step = sweep_step or 0.5
+        values = np.arange(s_min, s_max + s_step / 2, s_step)
+        for val in values:
+            r = run_dca_compare(df, frequency, amount, signal_type, signal_name,
+                                signal_period, val, fee, start_date, show_lump_sum=False,
+                                periods_per_year=periods_per_year)
+            if r is None:
+                continue
+            results.append({
+                "param_value": float(val),
+                "param_label": f"{val:.1f}x",
+                "dynamic": r["dynamic"],
+                "constant": r["constant"],
+            })
+    elif sweep_param == "period":
+        s_min = int(sweep_min or 5)
+        s_max = int(sweep_max or 200)
+        s_step = int(sweep_step or 5)
+        for val in range(s_min, s_max + 1, s_step):
+            r = run_dca_compare(df, frequency, amount, signal_type, signal_name,
+                                val, max_multiplier, fee, start_date, show_lump_sum=False,
+                                periods_per_year=periods_per_year)
+            if r is None:
+                continue
+            results.append({
+                "param_value": val,
+                "param_label": str(val),
+                "dynamic": r["dynamic"],
+                "constant": r["constant"],
+            })
+
+    return results
+
+
 # --- Output Functions ---
 
 def print_results_table(results, mode=None):

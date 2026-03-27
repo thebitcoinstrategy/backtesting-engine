@@ -175,6 +175,9 @@ def _cache_key(form_params):
         relevant.update(["range_min", "range_max", "step", "exposure", "long_leverage", "short_leverage", "lev_mode"])
     elif mode == "regression":
         relevant.update(["osc_name", "osc_period", "forward_days", "range_min", "range_max"])
+    elif mode == "dca":
+        relevant.update(["dca_frequency", "dca_amount", "dca_signal_type", "dca_signal_name",
+                         "dca_signal_period", "dca_max_multiplier", "dca_show_lump_sum"])
     else:  # backtest
         relevant.update(["exposure", "long_leverage", "short_leverage", "lev_mode"])
 
@@ -1310,6 +1313,17 @@ HTML = """\
                             </svg>
                             <span class="mode-card-label">Regression Analysis</span>
                         </div>
+                        <div class="mode-card {{ 'active' if p.mode=='dca' }}" data-mode="dca" onclick="selectMode('dca', this)">
+                            <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="6" y1="22" x2="6" y2="16" stroke-width="2.5" opacity="0.5"/>
+                                <line x1="10" y1="22" x2="10" y2="12" stroke-width="2.5" opacity="0.6"/>
+                                <line x1="14" y1="22" x2="14" y2="14" stroke-width="2.5" opacity="0.7"/>
+                                <line x1="18" y1="22" x2="18" y2="9" stroke-width="2.5" opacity="0.8"/>
+                                <line x1="22" y1="22" x2="22" y2="5" stroke-width="2.5" opacity="0.9"/>
+                                <path d="M4 8 Q13 3 24 6" stroke-width="1.5" opacity="0.6"/>
+                            </svg>
+                            <span class="mode-card-label">DCA Optimization</span>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group" id="range-min-group">
@@ -1615,6 +1629,78 @@ HTML = """\
                     <input type="hidden" name="timeframe" id="timeframe" value="{{ p.timeframe }}">
                     </div>
                 </div>
+                <div class="form-section hidden" id="dca-section">
+                    <div class="section-title">DCA Settings</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Frequency</label>
+                            <select name="dca_frequency" id="dca_frequency">
+                                <option value="daily" {{ 'selected' if p.dca_frequency=='daily' }}>Daily</option>
+                                <option value="weekly" {{ 'selected' if p.dca_frequency=='weekly' }}>Weekly</option>
+                                <option value="monthly" {{ 'selected' if p.dca_frequency=='monthly' }}>Monthly</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Amount per interval</label>
+                            <div style="position:relative">
+                                <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:0.9em">$</span>
+                                <input type="number" name="dca_amount" id="dca_amount" value="{{ p.dca_amount }}" min="1" step="any" style="padding-left:22px">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Signal Type</label>
+                            <select name="dca_signal_type" id="dca_signal_type" onchange="toggleFields()">
+                                <option value="oscillator" {{ 'selected' if p.dca_signal_type=='oscillator' }}>Oscillator (RSI, etc.)</option>
+                                <option value="ma_distance" {{ 'selected' if p.dca_signal_type=='ma_distance' }}>Distance from MA</option>
+                                <option value="ath_drawdown" {{ 'selected' if p.dca_signal_type=='ath_drawdown' }}>ATH Drawdown</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row" id="dca-signal-row">
+                        <div class="form-group" id="dca-signal-name-group">
+                            <label id="dca-signal-name-label">Signal Indicator</label>
+                            <select name="dca_signal_name" id="dca_signal_name">
+                                <optgroup label="Oscillators" id="dca-osc-optgroup">
+                                <option value="rsi" {{ 'selected' if p.dca_signal_name=='rsi' }}>RSI</option>
+                                <option value="stochastic" {{ 'selected' if p.dca_signal_name=='stochastic' }}>Stochastic</option>
+                                <option value="cci" {{ 'selected' if p.dca_signal_name=='cci' }}>CCI</option>
+                                <option value="roc" {{ 'selected' if p.dca_signal_name=='roc' }}>ROC</option>
+                                <option value="williams_r" {{ 'selected' if p.dca_signal_name=='williams_r' }}>Williams %R</option>
+                                </optgroup>
+                                <optgroup label="Moving Averages" id="dca-ma-optgroup">
+                                <option value="sma" {{ 'selected' if p.dca_signal_name=='sma' }}>SMA</option>
+                                <option value="ema" {{ 'selected' if p.dca_signal_name=='ema' }}>EMA</option>
+                                <option value="hma" {{ 'selected' if p.dca_signal_name=='hma' }}>HMA</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="form-group" id="dca-signal-period-group">
+                            <label>Signal Period</label>
+                            <input type="number" name="dca_signal_period" id="dca_signal_period" value="{{ p.dca_signal_period or '' }}" placeholder="14" min="2">
+                        </div>
+                        <div class="form-group">
+                            <label>Max Multiplier</label>
+                            <input type="number" name="dca_max_multiplier" value="{{ p.dca_max_multiplier }}" step="0.5" min="1">
+                        </div>
+                    </div>
+                    <div class="form-row" id="dca-sweep-row" class="hidden">
+                        <div class="form-group">
+                            <label>Sweep Parameter</label>
+                            <select name="dca_sweep_param" id="dca_sweep_param">
+                                <option value="multiplier" {{ 'selected' if p.dca_sweep_param=='multiplier' }}>Max Multiplier</option>
+                                <option value="period" {{ 'selected' if p.dca_sweep_param=='period' }}>Signal Period</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="margin-top:6px">
+                        <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:0.82em;color:var(--text-muted)">
+                            <input type="checkbox" name="dca_show_lump_sum" value="1" {{ 'checked' if p.dca_show_lump_sum }} style="accent-color:var(--accent)"> Show lump sum comparison
+                        </label>
+                    </div>
+                    <div id="dca-explainer" style="margin-top:6px;font-size:0.78em;color:var(--text-muted);line-height:1.5;padding:8px 12px;background:var(--bg-deep);border-radius:8px;border-left:2px solid var(--accent)">
+                        Compares constant DCA (fixed $ per interval) vs dynamic DCA (signal-adjusted amounts). Budget is always equal &mdash; dynamic DCA just redistributes spend to buy more when the signal says "cheap" and less when "expensive".
+                    </div>
+                </div>
                 <div class="form-section">
                     <div class="section-title">Exposure & Leverage</div>
                     <div class="form-row">
@@ -1891,7 +1977,37 @@ HTML = """\
                     </button>
                 </div>
                 {% endif %}
-                {% if best and not lev_sweep|default(none) %}
+                {% if best and best.get('dca_mode') %}
+                {# DCA-specific metrics table #}
+                <div class="metrics-panel">
+                <table class="metrics-table">
+                    <thead><tr>
+                        <th class="col-metric">Metric</th>
+                        <th class="col-strategy">Dynamic DCA</th>
+                        <th class="col-buyhold">Constant DCA</th>
+                    </tr></thead>
+                    <tbody>
+                    <tr class="section-row"><td colspan="3">Portfolio</td></tr>
+                    <tr><td class="m-label">Total Invested</td><td class="m-val">${{ "{:,.0f}".format(best.total_invested) }}</td><td class="m-val">${{ "{:,.0f}".format(best.total_invested) }}</td></tr>
+                    <tr><td class="m-label">Final Value</td><td class="m-val {{ 'positive' if best.final_value > best.total_invested else 'negative' }}">${{ "{:,.2f}".format(best.final_value) }}</td><td class="m-val {{ 'positive' if best.const_final_value > best.total_invested else 'negative' }}">${{ "{:,.2f}".format(best.const_final_value) }}</td></tr>
+                    <tr><td class="m-label">Dynamic Advantage</td><td class="m-val {{ 'positive' if best.advantage > 0 else 'negative' }}" colspan="2">${{ "{:,.2f}".format(best.advantage) }} ({{ "%.2f"|format(best.advantage_pct) }}%)</td></tr>
+                    {% if best.get('lump_sum_final_value') %}
+                    <tr><td class="m-label">Lump Sum Value</td><td class="m-val" colspan="2">${{ "{:,.2f}".format(best.lump_sum_final_value) }} ({{ "%.2f"|format(best.lump_sum_annualized) }}% ann.)</td></tr>
+                    {% endif %}
+                    <tr class="section-row"><td colspan="3">Performance</td></tr>
+                    <tr><td class="m-label">Total Return</td><td class="m-val {{ 'positive' if best.total_return > 0 else 'negative' }}">{{ "%.2f"|format(best.total_return) }}%</td><td class="m-val {{ 'positive' if best.buyhold_return > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_return) }}%</td></tr>
+                    <tr><td class="m-label">Ann. Return</td><td class="m-val {{ 'positive' if best.annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.annualized) }}%</td><td class="m-val {{ 'positive' if best.buyhold_annualized > 0 else 'negative' }}">{{ "%.2f"|format(best.buyhold_annualized) }}%</td></tr>
+                    <tr><td class="m-label">Sharpe Ratio</td><td class="m-val">{{ "%.2f"|format(best.sharpe) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sharpe) }}</td></tr>
+                    <tr><td class="m-label">Sortino Ratio</td><td class="m-val">{{ "%.2f"|format(best.sortino) }}</td><td class="m-val">{{ "%.2f"|format(best.buyhold_sortino) }}</td></tr>
+                    <tr class="section-row"><td colspan="3">Risk</td></tr>
+                    <tr><td class="m-label">Max Drawdown</td><td class="m-val negative">{{ "%.2f"|format(best.max_drawdown) }}%</td><td class="m-val negative">{{ "%.2f"|format(best.buyhold_max_drawdown) }}%</td></tr>
+                    <tr class="section-row"><td colspan="3">Accumulation</td></tr>
+                    <tr><td class="m-label">Total Units</td><td class="m-val">{{ "%.6f"|format(best.total_units) }}</td><td class="m-val">{{ "%.6f"|format(best.const_total_units) }}</td></tr>
+                    <tr><td class="m-label">Unit Advantage</td><td class="m-val {{ 'positive' if best.total_units > best.const_total_units else 'negative' }}" colspan="2">{{ "%.2f"|format((best.total_units / best.const_total_units - 1) * 100 if best.const_total_units > 0 else 0) }}% more units</td></tr>
+                    </tbody>
+                </table>
+                </div>
+                {% elif best and not lev_sweep|default(none) %}
                 {# Compact 3-column metrics table: Metric | Strategy | Buy & Hold #}
                 <div class="metrics-panel">
                 <table class="metrics-table">
@@ -2061,6 +2177,7 @@ function _syncOscHidden() {
 function toggleFields() {
     var mode = document.getElementById('mode').value;
     var isRegression = mode === 'regression';
+    var isDCA = mode === 'dca';
     var ind2El = document.getElementById('ind2_name');
 
     // Auto-select RSI for regression mode if not already an oscillator
@@ -2079,10 +2196,60 @@ function toggleFields() {
 
     var isLevSweep = mode === 'sweep-lev';
 
+    // Show/hide DCA section
+    var dcaSection = document.getElementById('dca-section');
+    if (isDCA) {
+        dcaSection.classList.remove('hidden');
+        var dcaInputs = dcaSection.querySelectorAll('input,select');
+        for (var di = 0; di < dcaInputs.length; di++) dcaInputs[di].disabled = false;
+        // Show/hide DCA signal name based on signal type
+        var dcaSigType = document.getElementById('dca_signal_type').value;
+        var dcaSigNameGroup = document.getElementById('dca-signal-name-group');
+        var dcaSigPeriodGroup = document.getElementById('dca-signal-period-group');
+        if (dcaSigType === 'ath_drawdown') {
+            dcaSigNameGroup.classList.add('hidden');
+            dcaSigNameGroup.querySelectorAll('select')[0].disabled = true;
+            dcaSigPeriodGroup.classList.add('hidden');
+            dcaSigPeriodGroup.querySelectorAll('input')[0].disabled = true;
+        } else {
+            dcaSigNameGroup.classList.remove('hidden');
+            dcaSigNameGroup.querySelectorAll('select')[0].disabled = false;
+            dcaSigPeriodGroup.classList.remove('hidden');
+            dcaSigPeriodGroup.querySelectorAll('input')[0].disabled = false;
+            // Update label and options
+            var dcaSigNameLabel = document.getElementById('dca-signal-name-label');
+            var dcaOscOpt = document.getElementById('dca-osc-optgroup');
+            var dcaMaOpt = document.getElementById('dca-ma-optgroup');
+            if (dcaSigType === 'oscillator') {
+                dcaSigNameLabel.textContent = 'Oscillator';
+                dcaOscOpt.style.display = '';
+                dcaMaOpt.style.display = 'none';
+            } else {
+                dcaSigNameLabel.textContent = 'Moving Average';
+                dcaOscOpt.style.display = 'none';
+                dcaMaOpt.style.display = '';
+            }
+        }
+        // Show sweep row for sweep/heatmap sub-modes
+        var dcaSweepRow = document.getElementById('dca-sweep-row');
+        if (document.getElementById('dca-sub-mode')) {
+            var dcaSubMode = document.getElementById('dca-sub-mode').value;
+            if (dcaSubMode === 'sweep') {
+                dcaSweepRow.classList.remove('hidden');
+            } else {
+                dcaSweepRow.classList.add('hidden');
+            }
+        }
+    } else {
+        dcaSection.classList.add('hidden');
+        var dcaInputs2 = dcaSection.querySelectorAll('input,select');
+        for (var di2 = 0; di2 < dcaInputs2.length; di2++) dcaInputs2[di2].disabled = true;
+    }
+
     // Show/hide oscillator param row and description
     var oscParamsRow = document.getElementById('osc-params-row');
     var oscDesc = document.getElementById('osc-description');
-    if (isOsc || isRegression) {
+    if ((isOsc || isRegression) && !isDCA) {
         oscParamsRow.classList.remove('hidden');
         oscDesc.classList.remove('hidden');
         var oInputs = oscParamsRow.querySelectorAll('input');
@@ -2105,18 +2272,18 @@ function toggleFields() {
     }
 
     var rules = [
-        ['ind1-group', !isOsc && !isRegression],
-        ['period1-group', !isOsc && !isRegression && ind1 !== 'price' && mode !== 'heatmap'],
-        ['ind-sep', !isOsc && !isRegression],
-        ['period2-group', !isOsc && !isRegression && (mode === 'backtest' || mode === 'sweep-lev')],
-        ['range-min-group', !isOsc && !isRegression && (mode === 'sweep' || mode === 'heatmap')],
-        ['range-max-group', !isOsc && !isRegression && (mode === 'sweep' || mode === 'heatmap')],
-        ['step-group', !isOsc && !isRegression && mode === 'heatmap'],
-        ['long-lev-group', !isLevSweep && !isRegression],
-        ['short-lev-group', !isLevSweep && !isRegression],
-        ['exposure-group', !isLevSweep && !isRegression],
-        ['lev-mode-group', !isRegression],
-        ['sizing-group', !isRegression],
+        ['ind1-group', !isOsc && !isRegression && !isDCA],
+        ['period1-group', !isOsc && !isRegression && !isDCA && ind1 !== 'price' && mode !== 'heatmap'],
+        ['ind-sep', !isOsc && !isRegression && !isDCA],
+        ['period2-group', !isOsc && !isRegression && !isDCA && (mode === 'backtest' || mode === 'sweep-lev')],
+        ['range-min-group', !isOsc && !isRegression && !isDCA && (mode === 'sweep' || mode === 'heatmap')],
+        ['range-max-group', !isOsc && !isRegression && !isDCA && (mode === 'sweep' || mode === 'heatmap')],
+        ['step-group', !isOsc && !isRegression && !isDCA && mode === 'heatmap'],
+        ['long-lev-group', !isLevSweep && !isRegression && !isDCA],
+        ['short-lev-group', !isLevSweep && !isRegression && !isDCA],
+        ['exposure-group', !isLevSweep && !isRegression && !isDCA],
+        ['lev-mode-group', !isRegression && !isDCA],
+        ['sizing-group', !isRegression && !isDCA],
         ['lev-min-group', isLevSweep && !isRegression],
         ['lev-max-group', isLevSweep && !isRegression],
     ];
@@ -2135,6 +2302,15 @@ function updateExplainer() {
     var el = document.getElementById('explainer-text');
     var ind2Val = document.getElementById('ind2_name').value;
     var mode = document.getElementById('mode').value;
+
+    if (mode === 'dca') {
+        var dcaSigType = document.getElementById('dca_signal_type').value;
+        var dcaFreq = document.getElementById('dca_frequency').value;
+        var dcaAmount = document.getElementById('dca_amount') ? document.getElementById('dca_amount').value : '100';
+        var sigDesc = dcaSigType === 'oscillator' ? 'oscillator signal' : (dcaSigType === 'ma_distance' ? 'MA distance' : 'ATH drawdown');
+        el.innerHTML = 'Compare constant $' + dcaAmount + '/' + dcaFreq + ' DCA vs dynamic DCA adjusted by ' + sigDesc + '. Budget is always equal.';
+        return;
+    }
 
     if (mode === 'regression' && _isOscValue(ind2Val)) {
         var osc = _oscKey(ind2Val);
@@ -3159,6 +3335,16 @@ class Params:
             self.buy_threshold = float(form.get("buy_threshold", bt.OSCILLATORS.get(self.osc_name, {}).get("buy_threshold", 30)))
             self.sell_threshold = float(form.get("sell_threshold", bt.OSCILLATORS.get(self.osc_name, {}).get("sell_threshold", 70)))
             self.forward_days = int(form.get("forward_days", 365))
+            # DCA params
+            self.dca_frequency = form.get("dca_frequency", "daily")
+            self.dca_amount = float(form.get("dca_amount", 100))
+            self.dca_signal_type = form.get("dca_signal_type", "oscillator")
+            self.dca_signal_name = form.get("dca_signal_name", "rsi")
+            dca_sp = form.get("dca_signal_period", "").strip()
+            self.dca_signal_period = int(dca_sp) if dca_sp else None
+            self.dca_max_multiplier = float(form.get("dca_max_multiplier", 3.0))
+            self.dca_show_lump_sum = bool(form.get("dca_show_lump_sum"))
+            self.dca_sweep_param = form.get("dca_sweep_param", "multiplier")
         else:
             self.asset = DEFAULT_ASSET
             self.vs_asset = None
@@ -3191,6 +3377,15 @@ class Params:
             self.buy_threshold = 30
             self.sell_threshold = 70
             self.forward_days = 365
+            # DCA defaults
+            self.dca_frequency = "daily"
+            self.dca_amount = 100
+            self.dca_signal_type = "oscillator"
+            self.dca_signal_name = "rsi"
+            self.dca_signal_period = None
+            self.dca_max_multiplier = 3.0
+            self.dca_show_lump_sum = True
+            self.dca_sweep_param = "multiplier"
 
 
 # Load data once at startup
@@ -3532,7 +3727,7 @@ def index():
 
     if request.method == "GET":
         # If query params present, pre-fill form from them (shareable URL support)
-        if any(k in request.args for k in ('asset', 'mode', 'ind1_name', 'ind2_name', 'period1', 'period2', 'exposure', 'reverse', 'timeframe')):
+        if any(k in request.args for k in ('asset', 'mode', 'ind1_name', 'ind2_name', 'period1', 'period2', 'exposure', 'reverse', 'timeframe', 'dca_frequency')):
             p = Params(request.args)
         else:
             p = Params()
@@ -3627,7 +3822,7 @@ def _run_post_handler(cancel_event):
     fee = p.fee / 100
 
     # Oscillator mode forces backtest (no sweep/heatmap/lev-sweep support), except regression
-    if is_oscillator and p.mode not in ("backtest", "regression"):
+    if is_oscillator and p.mode not in ("backtest", "regression", "dca"):
         p.mode = "backtest"
 
     # --- Regression Analysis Mode ---
@@ -3674,6 +3869,159 @@ def _run_post_handler(cancel_event):
                                       asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
                                       regression=reg_result, regression_sweep_chart=sweep_chart_b64, regression_sweep=sweep_result, thumb_b64=thumb_b64,
                                       price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
+
+    # --- DCA Optimization Mode ---
+    if p.mode == "dca":
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import matplotlib.dates as mdates
+        import numpy as np
+        import math
+
+        dca_result = bt.run_dca_compare(
+            df_full, frequency=p.dca_frequency, amount=p.dca_amount,
+            signal_type=p.dca_signal_type, signal_name=p.dca_signal_name,
+            signal_period=p.dca_signal_period, max_multiplier=p.dca_max_multiplier,
+            fee=fee, start_date=warmup_start_date,
+            show_lump_sum=p.dca_show_lump_sum, periods_per_year=periods_per_year
+        )
+
+        if dca_result is None:
+            return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
+                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                          error="Not enough data for DCA analysis.",
+                                          price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
+
+        const = dca_result["constant"]
+        dyn = dca_result["dynamic"]
+        has_lump = "lump_sum" in dca_result
+
+        tf_label = " (Weekly)" if is_weekly else ""
+        n_panels = 3  # price + signal + equity
+        fig, axes = plt.subplots(n_panels, 1, figsize=(14, 13), dpi=150,
+                                  gridspec_kw={"height_ratios": [4, 2, 4]}, sharex=True)
+        ax_price, ax_signal, ax_equity = axes
+        bt._apply_dark_theme(fig, list(axes))
+
+        # Panel 1: Price
+        prices = dca_result["prices"]
+        ax_price.plot(prices.index, prices, color="#e8eaf0", linewidth=0.8, label=f"{asset_display} Price")
+        ax_price.set_yscale("log")
+        if is_ratio:
+            _fmt_ratio = plt.FuncFormatter(lambda x, _: f"{x:.4f}" if x < 0.01 else (f"{x:.3f}" if x < 1 else f"{x:,.2f}"))
+            ax_price.yaxis.set_major_formatter(_fmt_ratio)
+        else:
+            _fmt_usd = plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}")
+            ax_price.yaxis.set_major_formatter(_fmt_usd)
+        ax_price.set_ylabel(f"{asset_display} Price (log)")
+        ax_price.set_title(f"{asset_display}{tf_label} DCA Optimization — {p.dca_frequency.capitalize()} ${p.dca_amount:.0f}\n"
+                           f"Signal: {dca_result['signal_label']} | Max Multiplier: {p.dca_max_multiplier:.1f}x | "
+                           f"{dca_result['n_buys']} purchases, ${dca_result['total_budget']:,.0f} total")
+        ax_price.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
+        ax_price.grid(True, which="major", alpha=0.3, color="#252a3a")
+
+        # Panel 2: Signal (0-1)
+        signal = dca_result["signal_series"]
+        ax_signal.plot(signal.index, signal, color="#6495ED", linewidth=0.7, alpha=0.8)
+        ax_signal.fill_between(signal.index, 0, signal, alpha=0.1, color="#6495ED")
+        ax_signal.axhline(y=0.5, color="#8890a4", linestyle="--", linewidth=0.6, alpha=0.5)
+        ax_signal.set_ylim(-0.05, 1.05)
+        ax_signal.set_ylabel(dca_result["signal_label"])
+        ax_signal.text(0.01, 0.95, "Buy More", transform=ax_signal.transAxes, fontsize=7, color="#34d399", va="top")
+        ax_signal.text(0.01, 0.05, "Buy Less", transform=ax_signal.transAxes, fontsize=7, color="#ef4444", va="bottom")
+        ax_signal.grid(True, which="major", alpha=0.3, color="#252a3a")
+
+        # Panel 3: Portfolio value
+        ax_equity.plot(const["equity"].index, const["equity"], color="#8890a4", linewidth=1.2,
+                       label=f"Constant DCA (${const['final_value']:,.0f})")
+        ax_equity.plot(dyn["equity"].index, dyn["equity"], color="#f7931a", linewidth=1.2,
+                       label=f"Dynamic DCA (${dyn['final_value']:,.0f})")
+        if has_lump:
+            lump = dca_result["lump_sum"]
+            ax_equity.plot(lump["equity"].index, lump["equity"], color="#a78bfa", linewidth=1,
+                           alpha=0.7, linestyle="--",
+                           label=f"Lump Sum (${lump['final_value']:,.0f})")
+        ax_equity.set_yscale("log")
+        ax_equity.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
+        ax_equity.set_ylabel("Portfolio Value (log)")
+        ax_equity.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
+        ax_equity.grid(True, which="major", alpha=0.3, color="#252a3a")
+        ax_equity.grid(True, which="minor", alpha=0.15, color="#252a3a")
+
+        ax_equity.set_xlabel("Date")
+        ax_equity.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+        date_range_years = (prices.index[-1] - prices.index[0]).days / 365.25
+        year_step = max(1, math.ceil(date_range_years / 18))
+        ax_equity.xaxis.set_major_locator(mdates.YearLocator(year_step))
+        plt.tight_layout()
+
+        buf = BytesIO()
+        plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
+        plt.close()
+        buf.seek(0)
+        chart_b64 = base64.b64encode(buf.read()).decode()
+
+        # Thumbnail
+        thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
+        bt._apply_dark_theme(thumb_fig, [thumb_ax])
+        thumb_ax.plot(const["equity"].index, const["equity"], color="#8890a4", linewidth=1.2)
+        thumb_ax.plot(dyn["equity"].index, dyn["equity"], color="#f7931a", linewidth=1.2)
+        if has_lump:
+            thumb_ax.plot(lump["equity"].index, lump["equity"], color="#a78bfa", linewidth=1, alpha=0.7, linestyle="--")
+        thumb_ax.set_yscale("log")
+        thumb_ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+        thumb_ax.grid(True, which="major", alpha=0.3, color="#252a3a")
+        thumb_ax.tick_params(labelsize=7)
+        thumb_ax.set_xlabel("")
+        thumb_ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+        thumb_ax.xaxis.set_major_locator(mdates.YearLocator(year_step))
+        plt.tight_layout()
+        thumb_buf = BytesIO()
+        plt.savefig(thumb_buf, format="png", facecolor=thumb_fig.get_facecolor())
+        plt.close()
+        thumb_buf.seek(0)
+        thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
+
+        # Build best dict for metrics panel
+        advantage = dyn["final_value"] - const["final_value"]
+        advantage_pct = (dyn["final_value"] / const["final_value"] - 1) * 100 if const["final_value"] > 0 else 0
+        best = {
+            "label": dyn["label"],
+            "total_return": dyn["total_return"],
+            "annualized": dyn["annualized"],
+            "max_drawdown": dyn["max_drawdown"],
+            "sharpe": dyn["sharpe"],
+            "sortino": dyn["sortino"],
+            "total_invested": dyn["total_invested"],
+            "final_value": dyn["final_value"],
+            "total_units": dyn["total_units"],
+            # Constant DCA as "buyhold" comparison
+            "buyhold_return": const["total_return"],
+            "buyhold_annualized": const["annualized"],
+            "buyhold_max_drawdown": const["max_drawdown"],
+            "buyhold_sharpe": const["sharpe"],
+            "buyhold_sortino": const["sortino"],
+            "const_final_value": const["final_value"],
+            "const_total_units": const["total_units"],
+            "advantage": advantage,
+            "advantage_pct": advantage_pct,
+            "dca_mode": True,
+            "ind1_label": "Dynamic DCA",
+            "ind2_label": dca_result["signal_label"],
+            "ind1_name": "price",
+            "ind2_name": p.dca_signal_name,
+        }
+        if has_lump:
+            best["lump_sum_return"] = lump["total_return"]
+            best["lump_sum_annualized"] = lump["annualized"]
+            best["lump_sum_final_value"] = lump["final_value"]
+
+        price_json = _series_to_lw_json(df_price_all["close"])
+        return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                      thumb_b64=thumb_b64,
+                                      price_json=price_json, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
     # --- Leverage Sweep Mode ---
     if p.mode == "sweep-lev":
