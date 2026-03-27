@@ -5700,9 +5700,9 @@ DETAIL_HTML = """\
                     </button>
                     {% endfor %}
                     {% if is_authenticated %}
-                    <button class="reaction-add" onclick="togglePicker(this)">+<div class="emoji-picker" onclick="event.stopPropagation()">
-                        {% for e in ['👍','❤️','😂','🎯','🚀','👎'] %}<button class="emoji-pick" onclick="toggleReaction('{{ comment.id }}', '{{ e }}', null, this)">{{ e }}</button>{% endfor %}
-                    </div></button>
+                    <span class="reaction-add" onclick="togglePicker(this)">+<div class="emoji-picker" onclick="event.stopPropagation()">
+                        {% for e in ['👍','❤️','😂','🎯','🚀','👎'] %}<span class="emoji-pick" onclick="toggleReaction('{{ comment.id }}', '{{ e }}', null, this)">{{ e }}</span>{% endfor %}
+                    </div></span>
                     {% endif %}
                 </div>
                 {% endif %}
@@ -5745,9 +5745,9 @@ DETAIL_HTML = """\
                             </button>
                             {% endfor %}
                             {% if is_authenticated %}
-                            <button class="reaction-add" onclick="togglePicker(this)">+<div class="emoji-picker" onclick="event.stopPropagation()">
-                                {% for e in ['👍','❤️','😂','🎯','🚀','👎'] %}<button class="emoji-pick" onclick="toggleReaction('{{ reply.id }}', '{{ e }}', null, this)">{{ e }}</button>{% endfor %}
-                            </div></button>
+                            <span class="reaction-add" onclick="togglePicker(this)">+<div class="emoji-picker" onclick="event.stopPropagation()">
+                                {% for e in ['👍','❤️','😂','🎯','🚀','👎'] %}<span class="emoji-pick" onclick="toggleReaction('{{ reply.id }}', '{{ e }}', null, this)">{{ e }}</span>{% endfor %}
+                            </div></span>
                             {% endif %}
                         </div>
                         {% endif %}
