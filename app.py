@@ -3910,10 +3910,10 @@ def _run_post_handler(cancel_event):
         has_lump = "lump_sum" in dca_result
 
         tf_label = " (Weekly)" if is_weekly else ""
-        n_panels = 4  # price + signal + equity + units
-        fig, axes = plt.subplots(n_panels, 1, figsize=(14, 16), dpi=150,
-                                  gridspec_kw={"height_ratios": [4, 2, 4, 3]}, sharex=True)
-        ax_price, ax_signal, ax_equity, ax_units = axes
+        n_panels = 5  # price + signal + equity + units + ratio
+        fig, axes = plt.subplots(n_panels, 1, figsize=(14, 19), dpi=150,
+                                  gridspec_kw={"height_ratios": [4, 2, 4, 3, 2]}, sharex=True)
+        ax_price, ax_signal, ax_equity, ax_units, ax_ratio = axes
         bt._apply_dark_theme(fig, list(axes))
 
         # Panel 1: Price
@@ -3976,11 +3976,24 @@ def _run_post_handler(cancel_event):
         ax_units.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
         ax_units.grid(True, which="major", alpha=0.3, color="#252a3a")
 
-        ax_units.set_xlabel("Date")
-        ax_units.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+        # Panel 5: Dynamic / Constant units ratio
+        ratio = dyn["cum_units"] / const["cum_units"].replace(0, np.nan)
+        final_ratio = ratio.dropna().iloc[-1] if len(ratio.dropna()) > 0 else 1.0
+        ratio_color = "#34d399" if final_ratio >= 1.0 else "#ef4444"
+        ax_ratio.plot(ratio.index, ratio, color=ratio_color, linewidth=1.2,
+                      label=f"Dynamic / Constant ({final_ratio:.4f}x)")
+        ax_ratio.axhline(y=1.0, color="#8890a4", linestyle="--", linewidth=0.6, alpha=0.5)
+        ax_ratio.fill_between(ratio.index, 1.0, ratio, where=ratio >= 1.0, alpha=0.1, color="#34d399")
+        ax_ratio.fill_between(ratio.index, 1.0, ratio, where=ratio < 1.0, alpha=0.1, color="#ef4444")
+        ax_ratio.set_ylabel("Dynamic / Constant Ratio")
+        ax_ratio.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
+        ax_ratio.grid(True, which="major", alpha=0.3, color="#252a3a")
+
+        ax_ratio.set_xlabel("Date")
+        ax_ratio.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
         date_range_years = (prices.index[-1] - prices.index[0]).days / 365.25
         year_step = max(1, math.ceil(date_range_years / 18))
-        ax_units.xaxis.set_major_locator(mdates.YearLocator(year_step))
+        ax_ratio.xaxis.set_major_locator(mdates.YearLocator(year_step))
         plt.tight_layout()
 
         buf = BytesIO()
