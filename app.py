@@ -3960,12 +3960,10 @@ def _run_post_handler(cancel_event):
             ax_equity.plot(lump["equity"].index, lump["equity"], color="#a78bfa", linewidth=1,
                            alpha=0.7, linestyle="--",
                            label=f"Lump Sum (${lump['final_value']:,.0f})")
-        ax_equity.set_yscale("log")
         ax_equity.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
-        ax_equity.set_ylabel("Portfolio Value (log)")
+        ax_equity.set_ylabel("Portfolio Value")
         ax_equity.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
         ax_equity.grid(True, which="major", alpha=0.3, color="#252a3a")
-        ax_equity.grid(True, which="minor", alpha=0.15, color="#252a3a")
 
         ax_equity.set_xlabel("Date")
         ax_equity.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
@@ -3987,7 +3985,6 @@ def _run_post_handler(cancel_event):
         thumb_ax.plot(dyn["equity"].index, dyn["equity"], color="#f7931a", linewidth=1.2)
         if has_lump:
             thumb_ax.plot(lump["equity"].index, lump["equity"], color="#a78bfa", linewidth=1, alpha=0.7, linestyle="--")
-        thumb_ax.set_yscale("log")
         thumb_ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
         thumb_ax.grid(True, which="major", alpha=0.3, color="#252a3a")
         thumb_ax.tick_params(labelsize=7)
