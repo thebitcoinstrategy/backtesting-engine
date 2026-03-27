@@ -3910,10 +3910,10 @@ def _run_post_handler(cancel_event):
         has_lump = "lump_sum" in dca_result
 
         tf_label = " (Weekly)" if is_weekly else ""
-        n_panels = 3  # price + signal + equity
-        fig, axes = plt.subplots(n_panels, 1, figsize=(14, 13), dpi=150,
-                                  gridspec_kw={"height_ratios": [4, 2, 4]}, sharex=True)
-        ax_price, ax_signal, ax_equity = axes
+        n_panels = 4  # price + signal + equity + units
+        fig, axes = plt.subplots(n_panels, 1, figsize=(14, 16), dpi=150,
+                                  gridspec_kw={"height_ratios": [4, 2, 4, 3]}, sharex=True)
+        ax_price, ax_signal, ax_equity, ax_units = axes
         bt._apply_dark_theme(fig, list(axes))
 
         # Panel 1: Price
@@ -3940,8 +3940,8 @@ def _run_post_handler(cancel_event):
         ax_signal.axhline(y=0.5, color="#8890a4", linestyle="--", linewidth=0.6, alpha=0.5)
         ax_signal.set_ylim(-0.05, 1.05)
         ax_signal.set_ylabel(dca_result["signal_label"])
-        ax_signal.text(0.01, 0.95, "Buy More", transform=ax_signal.transAxes, fontsize=7, color="#34d399", va="top")
-        ax_signal.text(0.01, 0.05, "Buy Less", transform=ax_signal.transAxes, fontsize=7, color="#ef4444", va="bottom")
+        ax_signal.text(0.01, 0.95, "Buy Less", transform=ax_signal.transAxes, fontsize=7, color="#ef4444", va="top")
+        ax_signal.text(0.01, 0.05, "Buy More", transform=ax_signal.transAxes, fontsize=7, color="#34d399", va="bottom")
         ax_signal.grid(True, which="major", alpha=0.3, color="#252a3a")
 
         # Panel 3: Portfolio value
@@ -3965,11 +3965,22 @@ def _run_post_handler(cancel_event):
         ax_equity.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
         ax_equity.grid(True, which="major", alpha=0.3, color="#252a3a")
 
-        ax_equity.set_xlabel("Date")
-        ax_equity.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+        # Panel 4: Units accumulated (base currency)
+        const_final_units = const["cum_units"].iloc[-1]
+        dyn_final_units = dyn["cum_units"].iloc[-1]
+        ax_units.plot(const["cum_units"].index, const["cum_units"], color="#8890a4", linewidth=1.2,
+                      label=f"Constant DCA ({const_final_units:,.4f} {asset_display})")
+        ax_units.plot(dyn["cum_units"].index, dyn["cum_units"], color="#f7931a", linewidth=1.2,
+                      label=f"Dynamic DCA ({dyn_final_units:,.4f} {asset_display})")
+        ax_units.set_ylabel(f"{asset_display} Accumulated")
+        ax_units.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
+        ax_units.grid(True, which="major", alpha=0.3, color="#252a3a")
+
+        ax_units.set_xlabel("Date")
+        ax_units.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
         date_range_years = (prices.index[-1] - prices.index[0]).days / 365.25
         year_step = max(1, math.ceil(date_range_years / 18))
-        ax_equity.xaxis.set_major_locator(mdates.YearLocator(year_step))
+        ax_units.xaxis.set_major_locator(mdates.YearLocator(year_step))
         plt.tight_layout()
 
         buf = BytesIO()

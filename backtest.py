@@ -1187,9 +1187,10 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
     dyn_equity = dyn_cum_units * prices
 
     # Metrics helper
-    def _dca_metrics(equity_arr, cum_spent_arr, per_purchase_spent, label):
+    def _dca_metrics(equity_arr, cum_spent_arr, cum_units_arr, per_purchase_spent, label):
         eq = pd.Series(equity_arr, index=df.index)
         cum_invested = pd.Series(cum_spent_arr, index=df.index)
+        cum_units = pd.Series(cum_units_arr, index=df.index)
         spent = cum_spent_arr[-1]
         final_val = equity_arr[-1]
         total_ret = (final_val / spent - 1) * 100 if spent > 0 else 0
@@ -1228,6 +1229,7 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
             "label": label,
             "equity": eq,
             "cum_invested": cum_invested,
+            "cum_units": cum_units,
             "total_invested": spent,
             "final_value": final_val,
             "total_return": total_ret,
@@ -1246,9 +1248,9 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
             "median_buy_amount": median_buy,
         }
 
-    const_metrics = _dca_metrics(const_equity, const_cum_spent, const_spent, f"Constant DCA (${amount:.0f}/{frequency})")
+    const_metrics = _dca_metrics(const_equity, const_cum_spent, const_cum_units, const_spent, f"Constant DCA (${amount:.0f}/{frequency})")
     dyn_label = f"Dynamic DCA ({signal_label}, {max_multiplier:.1f}x)"
-    dyn_metrics = _dca_metrics(dyn_equity, dyn_cum_spent, dyn_spent, dyn_label)
+    dyn_metrics = _dca_metrics(dyn_equity, dyn_cum_spent, dyn_cum_units, dyn_spent, dyn_label)
 
     result = {
         "constant": const_metrics,
@@ -1270,7 +1272,8 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
         lump_equity = lump_units * prices
         lump_spent_arr = np.zeros(n)
         lump_spent_arr[0] = total_budget * (1 + fee)
-        lump_metrics = _dca_metrics(lump_equity, lump_spent_arr.cumsum(), lump_spent_arr,
+        lump_cum_units = np.full(n, lump_units)
+        lump_metrics = _dca_metrics(lump_equity, lump_spent_arr.cumsum(), lump_cum_units, lump_spent_arr,
                                      f"Lump Sum (${total_budget:,.0f})")
         # Override spent for lump sum
         lump_metrics["total_invested"] = total_budget * (1 + fee)
