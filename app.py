@@ -152,7 +152,7 @@ def _cache_key(form_params):
     cache fragmentation from irrelevant hidden fields.
     """
     # Core params always relevant
-    core = {"mode", "asset", "vs_asset", "start_date", "end_date", "initial_cash", "fee", "sizing", "reverse"}
+    core = {"mode", "asset", "vs_asset", "start_date", "end_date", "initial_cash", "fee", "sizing", "reverse", "timeframe"}
     mode = form_params.get("mode", "backtest")
     signal_type = form_params.get("signal_type", "crossover")
 
@@ -1618,9 +1618,15 @@ HTML = """\
                     <div class="signal-explainer" id="signal-explainer">
                         <span id="explainer-text">Buy when <span id="explainer-ind1">Price</span> crosses above <span id="explainer-ind2">SMA</span>. Sell when it crosses below.</span>
                     </div>
-                    <label style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:0.82em;color:var(--text-muted)">
+                    <div style="display:flex;gap:18px;margin-top:6px;flex-wrap:wrap">
+                    <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:0.82em;color:var(--text-muted)">
                         <input type="checkbox" name="reverse" id="reverse" value="1" {{ 'checked' if p.reverse }} onchange="updateExplainer(); enableBtn();" style="accent-color:var(--accent)"> Reverse signal logic
                     </label>
+                    <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:0.82em;color:var(--text-muted)">
+                        <input type="checkbox" id="weekly-toggle" onchange="toggleTimeframe(); enableBtn();" {{ 'checked' if p.timeframe=='weekly' }} style="accent-color:var(--accent)"> Weekly data
+                    </label>
+                    <input type="hidden" name="timeframe" id="timeframe" value="{{ p.timeframe }}">
+                    </div>
                 </div>
                 <div class="form-section">
                     <div class="section-title">Exposure & Leverage</div>
@@ -2704,6 +2710,11 @@ function resetBtn() {
 }
 function enableBtn() {}
 
+function toggleTimeframe() {
+    var cb = document.getElementById('weekly-toggle');
+    document.getElementById('timeframe').value = cb.checked ? 'weekly' : 'daily';
+}
+
 document.getElementById('btn').addEventListener('click', function(e) {
     if (currentAbort) {
         e.preventDefault();
@@ -3179,6 +3190,7 @@ class Params:
             self.end_date = form.get("end_date", "").strip()
             self.reverse = bool(form.get("reverse"))
             self.sizing = form.get("sizing", "compound")
+            self.timeframe = form.get("timeframe", "daily")
             # Oscillator params
             self.osc_name = form.get("osc_name", "rsi")
             osc_p = form.get("osc_period", "").strip()
@@ -3211,6 +3223,7 @@ class Params:
             self.end_date = str(ASSETS[DEFAULT_ASSET].index[-1].date())
             self.reverse = False
             self.sizing = "compound"
+            self.timeframe = "daily"
             # Oscillator defaults
             self.osc_name = "rsi"
             self.osc_period = None
@@ -3487,27 +3500,33 @@ def _series_to_lw_json(series):
     ])
 
 
-def _enrich_best(result, df):
+def _enrich_best(result, df, periods_per_year=365):
     """Add annualized return and buy-and-hold metrics to a result dict."""
     import numpy as np
     import pandas as pd_mod
-    n_days = len(df)
-    result["annualized"] = bt._annualized_return(result["total_return"], n_days)
-    result["buyhold_annualized"] = bt._annualized_return(result["buyhold_return"], n_days)
+    _ppy = periods_per_year
+    n_periods = len(df)
+    result["annualized"] = bt._annualized_return(result["total_return"], n_periods, _ppy)
+    result["buyhold_annualized"] = bt._annualized_return(result["buyhold_return"], n_periods, _ppy)
     result["buyhold_max_drawdown"] = bt._max_drawdown(result["buyhold"])
-    daily_return = df["close"].pct_change().fillna(0)
-    mean_d = daily_return.mean()
-    std_d = daily_return.std()
-    result["buyhold_sharpe"] = (mean_d / std_d * np.sqrt(365)) if std_d > 0 else 0.0
+    period_return = df["close"].pct_change().fillna(0)
+    mean_d = period_return.mean()
+    std_d = period_return.std()
+    result["buyhold_sharpe"] = (mean_d / std_d * np.sqrt(_ppy)) if std_d > 0 else 0.0
     # Buy-and-hold additional metrics
     bh_returns = pd_mod.Series(result["buyhold"].values).pct_change().fillna(0)
-    result["buyhold_volatility"] = std_d * np.sqrt(365) * 100
-    result["buyhold_sortino"] = bt._sortino_ratio(bh_returns)
+    result["buyhold_volatility"] = std_d * np.sqrt(_ppy) * 100
+    result["buyhold_sortino"] = bt._sortino_ratio(bh_returns, _ppy)
     result["buyhold_calmar"] = abs(result["buyhold_annualized"] / result["buyhold_max_drawdown"]) if result["buyhold_max_drawdown"] != 0 else 0.0
     result["buyhold_max_dd_duration"] = bt._max_drawdown_duration(result["buyhold"])
     bh_yearly = bt._yearly_returns(result["buyhold"])
     result["buyhold_best_year"] = max(bh_yearly.items(), key=lambda x: x[1]) if bh_yearly else (None, 0)
     result["buyhold_worst_year"] = min(bh_yearly.items(), key=lambda x: x[1]) if bh_yearly else (None, 0)
+    # Convert period-based durations to days for weekly data
+    if _ppy == 52:
+        result["max_dd_duration"] = result["max_dd_duration"] * 7
+        result["avg_trade_duration"] = result["avg_trade_duration"] * 7
+        result["buyhold_max_dd_duration"] = result["buyhold_max_dd_duration"] * 7
     return result
 
 
@@ -3552,7 +3571,7 @@ def index():
 
     if request.method == "GET":
         # If query params present, pre-fill form from them (shareable URL support)
-        if any(k in request.args for k in ('asset', 'mode', 'ind1_name', 'ind2_name', 'period1', 'period2', 'exposure', 'reverse')):
+        if any(k in request.args for k in ('asset', 'mode', 'ind1_name', 'ind2_name', 'period1', 'period2', 'exposure', 'reverse', 'timeframe')):
             p = Params(request.args)
         else:
             p = Params()
@@ -3623,6 +3642,12 @@ def _run_post_handler(cancel_event):
     else:
         _cap = lambda s: s.capitalize() if s == s.lower() else s
         asset_display = _cap(p.asset)
+
+    # Resample to weekly if requested
+    is_weekly = p.timeframe == "weekly"
+    periods_per_year = 52 if is_weekly else 365
+    if is_weekly:
+        df_full = bt.resample_to_weekly(df_full)
 
     # df_price_all = full price data from start_date to newest available (for chart price line)
     if not p.start_date:
@@ -3749,7 +3774,7 @@ def _run_post_handler(cancel_event):
                 equity_arr, _ = bt._compute_equity_with_liquidation(strat_ret, p.initial_cash)
             equity_final = equity_arr[-1] if len(equity_arr) > 0 else p.initial_cash
             total_ret = (equity_final / p.initial_cash - 1) * 100
-            return bt._annualized_return(total_ret, n_days)
+            return bt._annualized_return(total_ret, n_days, periods_per_year)
 
         long_sweep_full = []
         for lv in lev_values:
@@ -3779,9 +3804,10 @@ def _run_post_handler(cancel_event):
         best_short_ann = short_sweep[best_short_idx]
 
         bh_total = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
-        bh_ann = bt._annualized_return(bh_total, n_days)
+        bh_ann = bt._annualized_return(bh_total, n_days, periods_per_year)
 
         asset_title = asset_display
+        tf_label = " (Weekly)" if is_weekly else ""
         fig, ax = plt.subplots(figsize=(14, 7), dpi=150)
         bt._apply_dark_theme(fig, ax)
         show_long = p.exposure in ("long-cash", "long-short")
@@ -3809,7 +3835,7 @@ def _run_post_handler(cancel_event):
             title_parts.append(f"Best Long: {best_long_lev:.2f}x ({best_long_ann:.1f}%)")
         if show_short:
             title_parts.append(f"Best Short: {best_short_lev:.2f}x ({best_short_ann:.1f}%)")
-        ax.set_title(f"{asset_title} {title_label} \u2014 Leverage Sweep | {p.exposure}\n"
+        ax.set_title(f"{asset_title}{tf_label} {title_label} \u2014 Leverage Sweep | {p.exposure}\n"
                      f"{' | '.join(title_parts)}")
         ax.legend(loc="best", fontsize=9, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
         ax.grid(True, alpha=0.3, color="#252a3a")
@@ -3843,8 +3869,8 @@ def _run_post_handler(cancel_event):
         thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
 
         best_result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, ind2_period_val,
-                                       p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
-        best = _enrich_best(best_result, df)
+                                       p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+        best = _enrich_best(best_result, df, periods_per_year)
 
         combined_ann = _sweep_ann(best_long_lev, best_short_lev)
         lev_sweep_info = {
@@ -3953,7 +3979,7 @@ def _run_post_handler(cancel_event):
                     equity_arr, _ = bt._compute_equity_with_liquidation(strat_return.values, p.initial_cash)
                 equity_final = equity_arr[-1] if len(equity_arr) > 0 else p.initial_cash
                 total_ret = (equity_final / p.initial_cash - 1) * 100
-                ann = bt._annualized_return(total_ret, n_days)
+                ann = bt._annualized_return(total_ret, n_days, periods_per_year)
                 matrix[i, j] = ann
                 if ann > best_ann:
                     best_ann = ann
@@ -3962,8 +3988,9 @@ def _run_post_handler(cancel_event):
 
         # df is already trimmed to start_date; use it for buy-and-hold and chart display
         bh_total = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
-        bh_ann = bt._annualized_return(bh_total, n_days)
+        bh_ann = bt._annualized_return(bh_total, n_days, periods_per_year)
 
+        tf_label = " (Weekly)" if is_weekly else ""
         fig, ax = plt.subplots(figsize=(14, 12), dpi=150)
         bt._apply_dark_theme(fig, ax)
         im = ax.imshow(matrix, cmap="RdYlGn", aspect="auto", origin="lower",
@@ -3974,14 +4001,15 @@ def _run_post_handler(cancel_event):
         ax.set_yticklabels(periods, fontsize=max(4, min(8, 200 // n)))
 
         if same_type:
-            ax.set_xlabel(f"Slow {ind1_upper} Period")
-            ax.set_ylabel(f"Fast {ind1_upper} Period")
+            ax.set_xlabel(f"Slow {ind1_upper} Period ({period_unit})")
+            ax.set_ylabel(f"Fast {ind1_upper} Period ({period_unit})")
         else:
-            ax.set_xlabel(f"{ind2_upper} Period")
-            ax.set_ylabel(f"{ind1_upper} Period")
+            ax.set_xlabel(f"{ind2_upper} Period ({period_unit})")
+            ax.set_ylabel(f"{ind1_upper} Period ({period_unit})")
 
         asset_title = asset_display
-        ax.set_title(f"{asset_title} {ind1_upper}/{ind2_upper} Crossover \u2014 Annualized Return % (step={p.step})\n"
+        period_unit = "weeks" if is_weekly else "days"
+        ax.set_title(f"{asset_title}{tf_label} {ind1_upper}/{ind2_upper} Crossover \u2014 Annualized Return % (step={p.step})\n"
                      f"Best: {ind1_upper}({best_p1})/{ind2_upper}({best_p2}) = {best_ann:.1f}% | "
                      f"B&H: {bh_ann:.1f}% | {p.exposure}")
         cbar = fig.colorbar(im, ax=ax, shrink=0.8)
@@ -4020,8 +4048,8 @@ def _run_post_handler(cancel_event):
         thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
 
         best_result = bt.run_strategy(df_full, ind1_name, best_p1, ind2_name, best_p2,
-                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
-        best = _enrich_best(best_result, df)
+                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+        best = _enrich_best(best_result, df, periods_per_year)
 
         price_json = _series_to_lw_json(df_price_all["close"])
         _lc2, _ = bt.compute_indicator_from_spec(df_price_all, best["ind2_name"], best.get("ind2_period"))
@@ -4053,12 +4081,12 @@ def _run_post_handler(cancel_event):
         for period in periods:
             check_cancelled(cancel_event)
             result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, period,
-                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
-            ann = bt._annualized_return(result["total_return"], n_days)
+                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+            ann = bt._annualized_return(result["total_return"], n_days, periods_per_year)
             annualized_returns.append(ann)
 
         bh_total = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
-        bh_annualized = bt._annualized_return(bh_total, n_days)
+        bh_annualized = bt._annualized_return(bh_total, n_days, periods_per_year)
         best_idx = np.argmax(annualized_returns)
         best_period = periods[best_idx]
         best_ann = annualized_returns[best_idx]
@@ -4078,11 +4106,13 @@ def _run_post_handler(cancel_event):
                         label=f"Buy & Hold ({bh_annualized:.1f}%)")
         ax.scatter([best_period], [best_ann], color="#f7931a", s=60, zorder=5,
                     label=f"Best: {best_label} ({best_ann:.1f}%)")
-        ax.set_xlabel(f"{ind2_upper} Period (days)")
+        period_unit = "weeks" if is_weekly else "days"
+        ax.set_xlabel(f"{ind2_upper} Period ({period_unit})")
         ax.set_ylabel("Annualized Return (%)")
         asset_title = asset_display
+        tf_label = " (Weekly)" if is_weekly else ""
         title_prefix = f"{ind1_label_str} vs " if p.ind1_name != "price" else ""
-        ax.set_title(f"{asset_title} \u2014 Annualized Return by {title_prefix}{ind2_upper} Period ({p.range_min}-{p.range_max}) | {p.exposure}")
+        ax.set_title(f"{asset_title}{tf_label} \u2014 Annualized Return by {title_prefix}{ind2_upper} Period ({p.range_min}-{p.range_max}) | {p.exposure}")
         ax.legend(loc="best", fontsize=9, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
         ax.grid(True, alpha=0.3, color="#252a3a")
         plt.tight_layout()
@@ -4111,8 +4141,8 @@ def _run_post_handler(cancel_event):
         thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
 
         best_result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, best_period,
-                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
-        best = _enrich_best(best_result, df)
+                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+        best = _enrich_best(best_result, df, periods_per_year)
 
     # --- Backtest Mode ---
     else:
@@ -4120,26 +4150,26 @@ def _run_post_handler(cancel_event):
         if is_oscillator:
             # Oscillator strategy
             result = bt.run_oscillator_strategy(df_full, p.osc_name, p.osc_period, p.buy_threshold, p.sell_threshold,
-                                                 p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
+                                                 p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
             results = [result]
         elif p.ind2_period is not None:
             # Single run with fixed period
             result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
+                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
             results = [result]
         else:
             # Sweep ind2 period and show table
             results = bt.sweep_periods(df_full, p.ind1_name, p.ind1_period, p.ind2_name, None,
                                         "ind2", p.range_min, p.range_max,
                                         p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode,
-                                        sizing=p.sizing, start_date=warmup_start_date)
+                                        sizing=p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
             # For same-type crossover, filter invalid combos
             if p.ind1_name != "price" and p.ind1_name == p.ind2_name and p.ind1_period is not None:
                 results = [r for r in results if r["ind2_period"] > p.ind1_period]
                 results.sort(key=lambda r: r["total_return"], reverse=True)
 
         if results:
-            best = _enrich_best(results[0], df)
+            best = _enrich_best(results[0], df, periods_per_year)
             if len(results) > 1:
                 table_rows = [{"label": r["label"], **r} for r in results]
 
@@ -4147,11 +4177,11 @@ def _run_post_handler(cancel_event):
             long_short_breakdown = None
             if not is_oscillator and p.exposure == "long-short" and p.ind2_period is not None:
                 long_only = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                             p.initial_cash, fee, "long-cash", p.long_leverage, 1, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
+                                             p.initial_cash, fee, "long-cash", p.long_leverage, 1, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
                 short_only = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                              p.initial_cash, fee, "short-cash", 1, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date)
-                long_only = _enrich_best(long_only, df)
-                short_only = _enrich_best(short_only, df)
+                                              p.initial_cash, fee, "short-cash", 1, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+                long_only = _enrich_best(long_only, df, periods_per_year)
+                short_only = _enrich_best(short_only, df, periods_per_year)
                 long_short_breakdown = {"long": long_only, "short": short_only}
 
             # Generate chart
@@ -4217,7 +4247,8 @@ def _run_post_handler(cancel_event):
                 ax1.yaxis.set_minor_formatter(_minor_usd_formatter())
             ax1.tick_params(axis='y', which='minor', labelsize=6)
             ax1.set_ylabel(f"{asset_name} Ratio (log scale)" if is_ratio else f"{asset_name} Price (log scale)")
-            ax1.set_title(f"{asset_name} Backtest \u2014 {best['label']} "
+            tf_label = " (Weekly)" if is_weekly else ""
+            ax1.set_title(f"{asset_name}{tf_label} Backtest \u2014 {best['label']} "
                           f"({best['total_return']:.1f}% return) | {p.exposure}")
             ax1.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
             ax1.grid(True, which="major", alpha=0.3, color="#252a3a")

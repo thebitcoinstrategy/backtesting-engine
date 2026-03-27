@@ -11,6 +11,12 @@ import sys
 RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
 
 
+def resample_to_weekly(df):
+    """Resample daily OHLCV data to weekly (Monday start). Takes last close per week."""
+    weekly = df["close"].resample("W-MON", label="left", closed="left").last().dropna()
+    return pd.DataFrame({"close": weekly}, index=weekly.index)
+
+
 def load_data(path):
     """Read CSV with unix timestamp + close price, return DataFrame with datetime index."""
     df = pd.read_csv(path)
@@ -446,7 +452,8 @@ def _oscillator_signal(osc_data, buy_threshold, sell_threshold):
 def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_threshold,
                             initial_cash, fee=0.001, exposure="long-cash",
                             long_leverage=1, short_leverage=1, lev_mode="rebalance",
-                            reverse=False, sizing="compound", start_date=None):
+                            reverse=False, sizing="compound", start_date=None,
+                            periods_per_year=365):
     """Run strategy based on oscillator threshold signals.
     Returns dict compatible with run_strategy output.
     If start_date is given, indicators are computed on the full df for warmup,
@@ -515,13 +522,14 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
     equity_returns = pd.Series(df["equity"].values).pct_change().fillna(0)
     mean_daily = equity_returns.mean()
     std_daily = equity_returns.std()
-    sharpe = (mean_daily / std_daily * np.sqrt(365)) if std_daily > 0 else 0.0
+    _ppy = periods_per_year
+    sharpe = (mean_daily / std_daily * np.sqrt(_ppy)) if std_daily > 0 else 0.0
 
-    volatility = std_daily * np.sqrt(365) * 100
-    sortino = _sortino_ratio(equity_returns)
+    volatility = std_daily * np.sqrt(_ppy) * 100
+    sortino = _sortino_ratio(equity_returns, _ppy)
     beta_val = _beta(equity_returns.values, daily_return.values)
     n_days = len(df)
-    ann_ret = _annualized_return(total_return, n_days)
+    ann_ret = _annualized_return(total_return, n_days, _ppy)
     calmar = abs(ann_ret / max_drawdown_val) if max_drawdown_val != 0 else 0.0
     dd_duration = _max_drawdown_duration(df["equity"])
     yearly = _yearly_returns(df["equity"])
@@ -704,20 +712,21 @@ def _max_drawdown(equity_series):
     return drawdown.min() * 100 if not drawdown.isna().all() else -100.0
 
 
-def _annualized_return(total_return_pct, n_days):
-    """Convert total return % over n_days into annualized return %."""
+def _annualized_return(total_return_pct, n_periods, periods_per_year=365):
+    """Convert total return % over n_periods into annualized return %.
+    periods_per_year: 365 for daily data, 52 for weekly data."""
     growth = 1 + total_return_pct / 100
-    if growth <= 0 or n_days <= 0:
+    if growth <= 0 or n_periods <= 0:
         return -100.0
-    return (growth ** (365 / n_days) - 1) * 100
+    return (growth ** (periods_per_year / n_periods) - 1) * 100
 
 
-def _sortino_ratio(daily_returns):
-    """Sortino ratio: mean / downside deviation, annualized with sqrt(365)."""
-    mean_d = daily_returns.mean()
-    downside = daily_returns[daily_returns < 0]
+def _sortino_ratio(returns, periods_per_year=365):
+    """Sortino ratio: mean / downside deviation, annualized."""
+    mean_d = returns.mean()
+    downside = returns[returns < 0]
     down_std = downside.std() if len(downside) > 1 else 0.0
-    return (mean_d / down_std * np.sqrt(365)) if down_std > 0 else 0.0
+    return (mean_d / down_std * np.sqrt(periods_per_year)) if down_std > 0 else 0.0
 
 
 def _beta(strategy_returns, market_returns):
@@ -798,7 +807,8 @@ def _trade_stats(equity_series, position_series):
 def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
                  initial_cash, fee=0.001, exposure="long-cash",
                  long_leverage=1, short_leverage=1, lev_mode="rebalance",
-                 reverse=False, sizing="compound", start_date=None):
+                 reverse=False, sizing="compound", start_date=None,
+                 periods_per_year=365):
     """Unified strategy: go long when ind1 > ind2, apply exposure mode.
     Returns dict with ind1/ind2 series, labels, and all metrics.
     If start_date is given, indicators are computed on the full df for warmup,
@@ -869,14 +879,15 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
     equity_returns = pd.Series(df["equity"].values).pct_change().fillna(0)
     mean_daily = equity_returns.mean()
     std_daily = equity_returns.std()
-    sharpe = (mean_daily / std_daily * np.sqrt(365)) if std_daily > 0 else 0.0
+    _ppy = periods_per_year
+    sharpe = (mean_daily / std_daily * np.sqrt(_ppy)) if std_daily > 0 else 0.0
 
     # Additional metrics
-    volatility = std_daily * np.sqrt(365) * 100
-    sortino = _sortino_ratio(equity_returns)
+    volatility = std_daily * np.sqrt(_ppy) * 100
+    sortino = _sortino_ratio(equity_returns, _ppy)
     beta_val = _beta(equity_returns.values, daily_return.values)
     n_days = len(df)
-    ann_ret = _annualized_return(total_return, n_days)
+    ann_ret = _annualized_return(total_return, n_days, _ppy)
     calmar = abs(ann_ret / max_drawdown) if max_drawdown != 0 else 0.0
     dd_duration = _max_drawdown_duration(df["equity"])
     yearly = _yearly_returns(df["equity"])
@@ -958,7 +969,7 @@ def sweep_periods(df, ind1_name, ind1_period, ind2_name, ind2_period,
                   sweep_target, sweep_min, sweep_max,
                   initial_cash, fee=0.001, exposure="long-cash",
                   long_leverage=1, short_leverage=1, lev_mode="rebalance",
-                  sizing="compound", start_date=None):
+                  sizing="compound", start_date=None, periods_per_year=365):
     """Sweep one indicator's period across a range. sweep_target: 'ind1' or 'ind2'."""
     results = []
     for period in range(sweep_min, sweep_max + 1):
@@ -966,7 +977,7 @@ def sweep_periods(df, ind1_name, ind1_period, ind2_name, ind2_period,
         p2 = period if sweep_target == "ind2" else ind2_period
         r = run_strategy(df, ind1_name, p1, ind2_name, p2,
                          initial_cash, fee, exposure, long_leverage, short_leverage, lev_mode,
-                         sizing=sizing, start_date=start_date)
+                         sizing=sizing, start_date=start_date, periods_per_year=periods_per_year)
         results.append(r)
     results.sort(key=lambda r: r["total_return"], reverse=True)
     return results
