@@ -1648,7 +1648,7 @@ HTML = """\
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>Signal Type <span class="m-info" id="ath-info" style="display:none" data-tip="Buys more when price is far below ATH, less when near ATH.&#10;Uses a 5-year rolling window to determine the worst drawdown as reference.&#10;At ATH → minimum buy. At worst 5-year drawdown → maximum buy.">ⓘ</span></label>
+                            <label>Signal Type <span class="m-info" id="ath-info" style="display:none" data-tip="Buys more when price is far below ATH, less when near ATH.&#10;Uses a rolling window (default 5 years) to determine the worst drawdown as reference.&#10;At ATH → minimum buy. At worst drawdown in the lookback window → maximum buy.">ⓘ</span></label>
                             <select name="dca_signal_type" id="dca_signal_type" onchange="toggleFields()">
                                 <option value="oscillator" {{ 'selected' if p.dca_signal_type=='oscillator' }}>Oscillator (RSI, etc.)</option>
                                 <option value="ma_distance" {{ 'selected' if p.dca_signal_type=='ma_distance' }}>Distance from MA</option>
@@ -1675,8 +1675,8 @@ HTML = """\
                             </select>
                         </div>
                         <div class="form-group" id="dca-signal-period-group">
-                            <label>Signal Period</label>
-                            <input type="number" name="dca_signal_period" id="dca_signal_period" value="{{ p.dca_signal_period or '' }}" placeholder="14" min="2">
+                            <label id="dca-signal-period-label">Signal Period</label>
+                            <input type="number" name="dca_signal_period" id="dca_signal_period" value="{{ p.dca_signal_period or '' }}" placeholder="14" min="1" step="any">
                         </div>
                         <div class="form-group">
                             <label>Max Multiplier</label>
@@ -2215,16 +2215,22 @@ function toggleFields() {
         var dcaSigPeriodGroup = document.getElementById('dca-signal-period-group');
         var athInfo = document.getElementById('ath-info');
         if (athInfo) athInfo.style.display = (dcaSigType === 'ath_drawdown') ? 'inline' : 'none';
+        var dcaSigPeriodLabel = document.getElementById('dca-signal-period-label');
+        var dcaSigPeriodInput = dcaSigPeriodGroup.querySelectorAll('input')[0];
         if (dcaSigType === 'ath_drawdown') {
             dcaSigNameGroup.classList.add('hidden');
             dcaSigNameGroup.querySelectorAll('select')[0].disabled = true;
-            dcaSigPeriodGroup.classList.add('hidden');
-            dcaSigPeriodGroup.querySelectorAll('input')[0].disabled = true;
+            dcaSigPeriodGroup.classList.remove('hidden');
+            dcaSigPeriodInput.disabled = false;
+            dcaSigPeriodLabel.textContent = 'Lookback (years)';
+            dcaSigPeriodInput.placeholder = '5';
         } else {
             dcaSigNameGroup.classList.remove('hidden');
             dcaSigNameGroup.querySelectorAll('select')[0].disabled = false;
             dcaSigPeriodGroup.classList.remove('hidden');
-            dcaSigPeriodGroup.querySelectorAll('input')[0].disabled = false;
+            dcaSigPeriodInput.disabled = false;
+            dcaSigPeriodLabel.textContent = 'Signal Period';
+            dcaSigPeriodInput.placeholder = '14';
             // Update label and options
             var dcaSigNameLabel = document.getElementById('dca-signal-name-label');
             var dcaOscOpt = document.getElementById('dca-osc-optgroup');
@@ -3351,7 +3357,10 @@ class Params:
             self.dca_signal_type = form.get("dca_signal_type", "oscillator")
             self.dca_signal_name = form.get("dca_signal_name", "rsi")
             dca_sp = form.get("dca_signal_period", "").strip()
-            self.dca_signal_period = int(dca_sp) if dca_sp else None
+            if dca_sp:
+                self.dca_signal_period = float(dca_sp) if self.dca_signal_type == "ath_drawdown" else int(dca_sp)
+            else:
+                self.dca_signal_period = None
             self.dca_max_multiplier = float(form.get("dca_max_multiplier", 3.0))
             self.dca_show_lump_sum = False
             self.dca_reverse = bool(form.get("dca_reverse"))

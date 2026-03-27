@@ -1056,14 +1056,15 @@ def compute_dca_signal(df, signal_type, signal_name=None, signal_period=None):
         label = f"Distance from {name.upper()}({period})"
 
     elif signal_type == "ath_drawdown":
+        lookback_years = signal_period or 5
+        lookback_days = int(lookback_years * 365)
         ath = close.cummax()
         drawdown = (close - ath) / ath  # 0 at ATH, negative below
         # signal=1 at ATH (expensive, buy less), signal=0 at worst drawdown (cheap, buy more)
-        # Use 5-year (1825-day) rolling window for worst drawdown reference
-        roll_min_dd = drawdown.rolling(1825, min_periods=50).min()
+        roll_min_dd = drawdown.rolling(lookback_days, min_periods=50).min()
         denom = roll_min_dd.replace(0, np.nan)
         signal = 1.0 - (drawdown / denom)  # 1 at ATH, 0 at worst drawdown
-        label = "ATH Drawdown"
+        label = f"ATH Drawdown ({lookback_years}y)"
 
     else:
         raise ValueError(f"Unknown DCA signal type: {signal_type}")
