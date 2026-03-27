@@ -1189,6 +1189,7 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
     # Metrics helper
     def _dca_metrics(equity_arr, cum_spent_arr, per_purchase_spent, label):
         eq = pd.Series(equity_arr, index=df.index)
+        cum_invested = pd.Series(cum_spent_arr, index=df.index)
         spent = cum_spent_arr[-1]
         final_val = equity_arr[-1]
         total_ret = (final_val / spent - 1) * 100 if spent > 0 else 0
@@ -1226,6 +1227,7 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
         return {
             "label": label,
             "equity": eq,
+            "cum_invested": cum_invested,
             "total_invested": spent,
             "final_value": final_val,
             "total_return": total_ret,

@@ -3950,6 +3950,9 @@ def _run_post_handler(cancel_event):
                        label=f"Constant DCA (${const['final_value']:,.0f})")
         ax_equity.plot(dyn["equity"].index, dyn["equity"], color="#f7931a", linewidth=1.2,
                        label=f"Dynamic DCA (${dyn['final_value']:,.0f})")
+        ax_equity.plot(const["cum_invested"].index, const["cum_invested"], color="#4ade80", linewidth=1,
+                       alpha=0.6, linestyle="--",
+                       label=f"Amount Invested (${const['total_invested']:,.0f})")
         if has_lump:
             lump = dca_result["lump_sum"]
             ax_equity.plot(lump["equity"].index, lump["equity"], color="#a78bfa", linewidth=1,
