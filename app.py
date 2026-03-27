@@ -1692,9 +1692,9 @@ HTML = """\
                             </select>
                         </div>
                     </div>
-                    <div style="margin-top:6px">
+                    <div style="margin-top:6px;display:flex;gap:18px;flex-wrap:wrap">
                         <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:0.82em;color:var(--text-muted)">
-                            <input type="checkbox" name="dca_show_lump_sum" value="1" {{ 'checked' if p.dca_show_lump_sum }} style="accent-color:var(--accent)"> Show lump sum comparison
+                            <input type="checkbox" name="dca_reverse" id="dca_reverse" value="1" {{ 'checked' if p.dca_reverse|default(false) }} style="accent-color:var(--accent)"> Reverse signal (buy more when high)
                         </label>
                     </div>
                     <div id="dca-explainer" style="margin-top:6px;font-size:0.78em;color:var(--text-muted);line-height:1.5;padding:8px 12px;background:var(--bg-deep);border-radius:8px;border-left:2px solid var(--accent)">
@@ -1941,7 +1941,7 @@ HTML = """\
                 {% if price_json %}
                 <div id="livechart-tab" style="display:none">
                     <div id="lw-chart-container"
-                         style="position:relative;height:600px;border-radius:12px;overflow:hidden;border:1px solid var(--border)"
+                         style="position:relative;height:600px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
                     </div>
                     <div style="display:flex;gap:16px;justify-content:center;margin-top:8px;font-size:0.72em;color:var(--text-muted);font-family:'JetBrains Mono',monospace;letter-spacing:0.02em">
                         <span><kbd style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:0.95em">M</kbd> Measure</span>
@@ -1977,7 +1977,7 @@ HTML = """\
                     </button>
                 </div>
                 {% endif %}
-                {% if best and best.get('dca_mode') %}
+                {% if best and best.dca_mode|default(false) %}
                 {# DCA-specific metrics table #}
                 <div class="metrics-panel">
                 <table class="metrics-table">
@@ -3353,7 +3353,8 @@ class Params:
             dca_sp = form.get("dca_signal_period", "").strip()
             self.dca_signal_period = int(dca_sp) if dca_sp else None
             self.dca_max_multiplier = float(form.get("dca_max_multiplier", 3.0))
-            self.dca_show_lump_sum = bool(form.get("dca_show_lump_sum"))
+            self.dca_show_lump_sum = False
+            self.dca_reverse = bool(form.get("dca_reverse"))
             self.dca_sweep_param = form.get("dca_sweep_param", "multiplier")
         else:
             self.asset = DEFAULT_ASSET
@@ -3394,7 +3395,8 @@ class Params:
             self.dca_signal_name = "rsi"
             self.dca_signal_period = None
             self.dca_max_multiplier = 3.0
-            self.dca_show_lump_sum = True
+            self.dca_show_lump_sum = False
+            self.dca_reverse = False
             self.dca_sweep_param = "multiplier"
 
 
