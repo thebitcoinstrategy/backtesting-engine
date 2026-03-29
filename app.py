@@ -6378,13 +6378,28 @@ function toggleTelegram(btId, currentlyEnabled) {
         });
     } else {
         var currentTemplate = '{{ backtest.telegram_message_template|default("", true)|e }}'.replace(/&#39;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"');
+        var _tgExample = {
+            asset: '{{ bt_params.get("asset", "bitcoin")|replace("'", "")|capitalize }}',
+            signal: 'BUY',
+            ind1: '{{ bt_params.get("ind1_name", "price")|upper }}{% if bt_params.get("period1") %}({{ bt_params.period1 }}){% endif %}',
+            ind2: '{{ bt_params.get("ind2_name", "sma")|upper }}{% if bt_params.get("period2") %}({{ bt_params.period2 }}){% endif %}',
+            link: '{{ "https://analytics.the-bitcoin-strategy.com/backtest/" ~ backtest.id ~ "?view=livechart" }}'
+        };
+        function _renderTgPreview() {
+            var tpl = (document.getElementById('tg-template') || {}).value || '';
+            var rendered = tpl.replace(/\\n/g, '<br>').replace(/\{asset\}/g, _tgExample.asset).replace(/\{signal\}/g, _tgExample.signal).replace(/\{ind1\}/g, _tgExample.ind1).replace(/\{ind2\}/g, _tgExample.ind2).replace(/\{link\}/g, _tgExample.link);
+            var el = document.getElementById('tg-preview');
+            if (el) el.innerHTML = rendered;
+        }
         _swal.fire({
             title: 'Enable Telegram Signals',
-            html: '<textarea id="tg-template" rows="8" style="width:100%;font-family:monospace;font-size:13px;background:var(--bg-deep);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;resize:vertical">' +
+            html: '<textarea id="tg-template" rows="6" style="width:100%;font-family:monospace;font-size:13px;background:var(--bg-deep);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;resize:vertical" oninput="_renderTgPreview()">' +
                   (currentTemplate || _defaultTgTemplate) +
                   '</textarea>' +
-                  '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:left">Placeholders: <code>{asset}</code> <code>{signal}</code> <code>{ind1}</code> <code>{ind2}</code> <code>{link}</code></p>',
+                  '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:left">Placeholders: <code>{asset}</code> <code>{signal}</code> <code>{ind1}</code> <code>{ind2}</code> <code>{link}</code></p>' +
+                  '<div style="margin-top:12px;text-align:left"><p style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600">Preview:</p><div id="tg-preview" style="background:var(--bg-deep);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;line-height:1.5"></div></div>',
             showCancelButton: true, confirmButtonText: 'Enable',
+            didOpen: function() { _renderTgPreview(); },
             preConfirm: function() { return document.getElementById('tg-template').value; }
         }).then(function(result) {
             if (!result.isConfirmed) return;
