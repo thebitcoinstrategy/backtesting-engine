@@ -37,6 +37,7 @@ ADMIN_FEEDBACK_EMAIL = 'kuschnik.gerhard@gmail.com'
 # --- Telegram bot config (for moderator notifications) ---
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '')
+TELEGRAM_SIGNAL_CHAT_ID = os.environ.get('TELEGRAM_SIGNAL_CHAT_ID', '')
 SITE_URL = 'https://analytics.the-bitcoin-strategy.com'
 
 
@@ -5969,6 +5970,7 @@ DETAIL_HTML = """\
             {% if backtest.visibility != 'featured' %}
             <button class="action-btn primary" onclick="featureBacktest('{{ backtest.id }}')">Feature</button>
             {% endif %}
+            <button class="action-btn {{ 'primary' if backtest.telegram_enabled else '' }}" onclick="toggleTelegram('{{ backtest.id }}', {{ 'true' if backtest.telegram_enabled else 'false' }})">Telegram {{ 'ON' if backtest.telegram_enabled else 'OFF' }}</button>
             {% endif %}
         </div>
         {% endif %}
@@ -6360,6 +6362,38 @@ document.addEventListener('click', function(e) {
 })();
 function featureBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' }).then(function() { location.reload(); });
+}
+var _defaultTgTemplate = '\ud83d\udcca <b>{signal} Signal: {asset}</b>\n\nStrategy: {ind1} / {ind2}\n\n<a href=\"{link}\">View Live Chart</a>';
+function toggleTelegram(btId, currentlyEnabled) {
+    if (currentlyEnabled) {
+        _swal.fire({
+            title: 'Disable Telegram signals?',
+            icon: 'warning', showCancelButton: true, confirmButtonText: 'Disable'
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+            fetch('/api/backtest/' + btId + '/telegram', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: false, template: ''})
+            }).then(function() { location.reload(); });
+        });
+    } else {
+        var currentTemplate = '{{ backtest.telegram_message_template|default("", true)|e }}'.replace(/&#39;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"');
+        _swal.fire({
+            title: 'Enable Telegram Signals',
+            html: '<textarea id="tg-template" rows="8" style="width:100%;font-family:monospace;font-size:13px;background:var(--bg-deep);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;resize:vertical">' +
+                  (currentTemplate || _defaultTgTemplate) +
+                  '</textarea>' +
+                  '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:left">Placeholders: <code>{asset}</code> <code>{signal}</code> <code>{ind1}</code> <code>{ind2}</code> <code>{link}</code></p>',
+            showCancelButton: true, confirmButtonText: 'Enable',
+            preConfirm: function() { return document.getElementById('tg-template').value; }
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+            fetch('/api/backtest/' + btId + '/telegram', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: true, template: result.value})
+            }).then(function() { location.reload(); });
+        });
+    }
 }
 function downloadChart() {
     var img = document.querySelector('.chart-img');
@@ -7704,6 +7738,19 @@ def api_feature_backtest(bt_id):
         abort(403)
     db.update_visibility(bt_id, 'featured')
     return jsonify({'ok': True})
+
+
+@app.route('/api/backtest/<bt_id>/telegram', methods=['POST'])
+def api_toggle_telegram(bt_id):
+    """Admin: toggle telegram signal notifications for a backtest."""
+    user_id, email = _require_auth_api()
+    if email != db.ADMIN_EMAIL:
+        abort(403)
+    data = request.get_json(force=True)
+    enabled = bool(data.get('enabled', False))
+    template = data.get('template', '').strip() or None
+    db.set_telegram_config(bt_id, enabled, template)
+    return jsonify({'ok': True, 'telegram_enabled': enabled})
 
 
 @app.route('/api/reorder-mixed', methods=['POST'])

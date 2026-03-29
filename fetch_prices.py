@@ -186,8 +186,143 @@ def main():
 
     log.info("Done. Updated %d assets, %d errors.", updated, errors)
 
+    # --- Signal check: send Telegram notifications for position changes ---
+    try:
+        check_and_send_signals()
+    except Exception:
+        log.exception("Signal check failed")
+
     if errors:
         sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Telegram Signal Notifications
+# ---------------------------------------------------------------------------
+
+def check_and_send_signals():
+    """Check all telegram-enabled backtests for position changes and send signals."""
+    import json as _json
+    import urllib.request
+
+    TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    TELEGRAM_SIGNAL_CHAT_ID = os.environ.get('TELEGRAM_SIGNAL_CHAT_ID', '')
+    SITE_URL = 'https://analytics.the-bitcoin-strategy.com'
+
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_SIGNAL_CHAT_ID:
+        log.info("TELEGRAM_BOT_TOKEN or TELEGRAM_SIGNAL_CHAT_ID not set, skipping signal check")
+        return
+
+    # Import backtest engine and database
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, script_dir)
+    import backtest as bt
+    import database as db
+
+    db.init_db()
+    rows = db.list_telegram_enabled_backtests()
+
+    if not rows:
+        log.info("No telegram-enabled backtests found")
+        return
+
+    log.info("Checking %d telegram-enabled backtests for signals...", len(rows))
+
+    for row in rows:
+        try:
+            params = _json.loads(row.get('params', '{}') or '{}')
+            asset = params.get('asset', 'bitcoin')
+            vs_asset = params.get('vs_asset', '')
+
+            # Load price data from PostgreSQL
+            df = price_db.get_asset_df(asset)
+            if df.empty or len(df) < 2:
+                log.warning("Insufficient data for %s, skipping", asset)
+                continue
+
+            # Handle vs_asset (ratio mode)
+            if vs_asset:
+                df_vs = price_db.get_asset_df(vs_asset)
+                if not df_vs.empty:
+                    df.index = df.index.normalize()
+                    df_vs.index = df_vs.index.normalize()
+                    df = df[~df.index.duplicated(keep='first')]
+                    df_vs = df_vs[~df_vs.index.duplicated(keep='first')]
+                    common = df.index.intersection(df_vs.index)
+                    df = df.loc[common]
+                    df["close"] = df["close"] / df_vs.loc[common, "close"]
+
+            # Extract strategy params
+            ind1_name = params.get('ind1_name', 'price')
+            ind2_name = params.get('ind2_name', 'sma')
+            ind1_period = int(params.get('period1', 0) or 0) or None
+            ind2_period = int(params.get('period2', 0) or 0) or None
+            exposure = params.get('exposure', 'long-cash')
+            reverse = params.get('reverse', '') in ('true', 'True', '1', True)
+            start_date = params.get('start_date', None)
+
+            # Run strategy
+            result = bt.run_strategy(
+                df, ind1_name, ind1_period, ind2_name, ind2_period,
+                initial_cash=10000, exposure=exposure, reverse=reverse,
+                start_date=start_date
+            )
+
+            # Recompute position to compare last two days
+            ind1_s = result['ind1_series']
+            ind2_s = result['ind2_series']
+            above = ind1_s > ind2_s
+            if reverse:
+                above = ~above
+            position = bt._apply_exposure(above, exposure).shift(1).fillna(0)
+            nan_mask = ind1_s.isna() | ind2_s.isna()
+            position[nan_mask] = 0
+
+            if len(position) < 2:
+                continue
+
+            pos_today = position.iloc[-1]
+            pos_yesterday = position.iloc[-2]
+
+            if pos_today == pos_yesterday:
+                continue  # No signal change
+
+            signal = "BUY" if pos_today > pos_yesterday else "SELL"
+
+            # Build link to live chart
+            link = f"{SITE_URL}/backtest/{row['id']}?view=livechart"
+
+            # Format message from template
+            default_template = (
+                '\U0001f4ca <b>{signal} Signal: {asset}</b>\n'
+                '\n'
+                'Strategy: {ind1} / {ind2}\n'
+                '\n'
+                '<a href="{link}">View Live Chart</a>'
+            )
+            template = row.get('telegram_message_template') or default_template
+            message = template.format(
+                asset=asset.replace('-', ' ').title(),
+                signal=signal,
+                ind1=result['ind1_label'],
+                ind2=result['ind2_label'],
+                link=link
+            )
+
+            # Send via Telegram
+            url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
+            payload = _json.dumps({
+                'chat_id': TELEGRAM_SIGNAL_CHAT_ID,
+                'text': message,
+                'parse_mode': 'HTML',
+                'disable_web_page_preview': False
+            }).encode('utf-8')
+            req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+            urllib.request.urlopen(req, timeout=15)
+            log.info("Sent %s signal for backtest %s (%s)", signal, row['id'], asset)
+
+        except Exception:
+            log.exception("Failed to check signals for backtest %s", row.get('id', '?'))
 
 
 if __name__ == "__main__":

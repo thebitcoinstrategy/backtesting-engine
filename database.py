@@ -177,6 +177,15 @@ def init_db():
     conn.execute("CREATE INDEX IF NOT EXISTS idx_collections_short_code ON collections(short_code)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_collection_backtests_collection ON collection_backtests(collection_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_collection_backtests_backtest ON collection_backtests(backtest_id)")
+    # Telegram signal notifications columns
+    try:
+        conn.execute("ALTER TABLE backtests ADD COLUMN telegram_enabled INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE backtests ADD COLUMN telegram_message_template TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.close()
 
 
@@ -368,6 +377,26 @@ def update_visibility(bt_id, new_visibility):
     conn.commit()
     conn.close()
     return True
+
+
+def set_telegram_config(bt_id, enabled, template=None):
+    """Admin: enable/disable telegram signal notifications and set message template."""
+    conn = _get_conn()
+    now = datetime.utcnow().isoformat()
+    conn.execute(
+        "UPDATE backtests SET telegram_enabled=?, telegram_message_template=?, updated_at=? WHERE id=?",
+        (1 if enabled else 0, template, now, bt_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_telegram_enabled_backtests():
+    """Return all backtests with telegram_enabled=1."""
+    conn = _get_conn()
+    rows = conn.execute("SELECT * FROM backtests WHERE telegram_enabled=1").fetchall()
+    conn.close()
+    return [_row_to_dict(r) for r in rows]
 
 
 def update_backtest(bt_id, user_id, title=None, description=None):
