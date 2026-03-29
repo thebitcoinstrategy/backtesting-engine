@@ -6363,7 +6363,7 @@ document.addEventListener('click', function(e) {
 function featureBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' }).then(function() { location.reload(); });
 }
-var _defaultTgTemplate = '\ud83d\udcca <b>{signal} Signal: {asset}</b>\n\nStrategy: {ind1} / {ind2}\n\n<a href=\"{link}\">View Live Chart</a>';
+var _defaultTgTemplate = '📊 <b>{signal} Signal: {asset}</b>\n\nStrategy: {ind1} / {ind2}\n\n<a href=\"{link}\">View Live Chart</a>';
 function toggleTelegram(btId, currentlyEnabled) {
     if (currentlyEnabled) {
         _swal.fire({
