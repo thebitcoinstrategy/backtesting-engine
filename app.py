@@ -6191,6 +6191,7 @@ function fetchNotifications() {
 function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('notif-badge')) fetchNotifications();
+    activateViewFromURL();
 });
 function toggleLike(backtestId, btn) {
     fetch('/api/backtest/' + backtestId + '/like', { method: 'POST' })
@@ -6379,6 +6380,20 @@ function switchChartTab(tab, btn) {
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
     btn.classList.add('active');
     if (tab === 'livechart' && !lwChartLoaded) { loadLWChart(); }
+    var url = new URL(window.location);
+    if (tab === 'livechart') {
+        url.searchParams.set('view', 'livechart');
+    } else {
+        url.searchParams.delete('view');
+    }
+    history.replaceState(null, '', url.toString());
+}
+function activateViewFromURL() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'livechart') {
+        var tabs = document.querySelectorAll('.chart-tab');
+        if (tabs.length >= 2) switchChartTab('livechart', tabs[1]);
+    }
 }
 function loadLWChart() {
     var container = document.getElementById('lw-chart-container');
