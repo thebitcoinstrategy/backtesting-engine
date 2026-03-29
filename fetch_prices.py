@@ -75,7 +75,8 @@ def fetch_coingecko(coin_id, days=2):
         return pd.DataFrame(columns=["close"])
 
     df = pd.DataFrame(prices, columns=["time_ms", "close"])
-    df["date"] = pd.to_datetime(df["time_ms"], unit="ms", utc=True).dt.normalize()
+    # CoinGecko daily snapshots are at 00:00 UTC = opening price of that day = previous day's close
+    df["date"] = pd.to_datetime(df["time_ms"], unit="ms", utc=True).dt.normalize() - pd.Timedelta(days=1)
     df = df.drop_duplicates(subset="date", keep="last")
     df = df.set_index("date")[["close"]].sort_index()
     # Exclude today — the day hasn't closed yet
