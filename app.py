@@ -6390,16 +6390,18 @@ function toggleTelegram(btId, currentlyEnabled) {
             }).then(function() { location.reload(); });
         });
     } else {
-        var currentTemplate = '{{ backtest.telegram_message_template|default("", true)|e }}'.replace(/&#39;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"');
+        var currentTemplate = '{{ backtest.telegram_message_template|default("", true)|replace("\n", "\\\\n")|replace("\r", "")|e }}'.replace(/&#39;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"');
         _swal.fire({
             title: 'Enable Telegram Signals',
-            html: '<textarea id="tg-template" rows="6" style="width:100%;font-family:monospace;font-size:13px;background:var(--bg-deep);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;resize:vertical" oninput="_renderTgPreview()">' +
-                  (currentTemplate || _defaultTgTemplate) +
-                  '</textarea>' +
+            html: '<textarea id="tg-template" rows="6" style="width:100%;font-family:monospace;font-size:13px;background:var(--bg-deep);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;resize:vertical" oninput="_renderTgPreview()"></textarea>' +
                   '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:left">Placeholders: <code>{asset}</code> <code>{signal}</code> <code>{ind1}</code> <code>{ind2}</code> <code>{link}</code></p>' +
                   '<div style="margin-top:12px;text-align:left"><p style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600">Preview:</p><div id="tg-preview" style="background:var(--bg-deep);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;line-height:1.5"></div></div>',
             showCancelButton: true, confirmButtonText: 'Enable',
-            didOpen: function() { _renderTgPreview(); },
+            didOpen: function() {
+                var ta = document.getElementById('tg-template');
+                ta.value = (currentTemplate || _defaultTgTemplate).replace(/\\\\n/g, '\\n');
+                _renderTgPreview();
+            },
             preConfirm: function() { return document.getElementById('tg-template').value; }
         }).then(function(result) {
             if (!result.isConfirmed) return;
