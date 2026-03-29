@@ -1281,8 +1281,8 @@ HTML = """\
         {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active|default('')=='admin-assets' }}">Assets</a>{% endif %}
         <div class="nav-right-group">
             <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
@@ -5100,8 +5100,8 @@ COMMUNITY_HTML = """\
         {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active=='admin-assets' }}">Assets</a>{% endif %}
         <div class="nav-right-group">
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
@@ -5985,8 +5985,8 @@ DETAIL_HTML = """\
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         <div class="nav-right-group">
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
@@ -6959,8 +6959,8 @@ MY_BACKTESTS_HTML = """\
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         <div class="nav-right-group">
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
@@ -7588,8 +7588,8 @@ ADMIN_ASSETS_HTML = """\
         <a href="/admin/assets" class="nav-link active">Assets</a>
         <div class="nav-right-group">
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
@@ -9607,8 +9607,8 @@ ACCOUNT_HTML = """<!DOCTYPE html>
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         <div class="nav-right-group">
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
@@ -9945,8 +9945,8 @@ FEEDBACK_HTML = """<!DOCTYPE html>
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         <div class="nav-right-group">
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
