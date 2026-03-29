@@ -294,18 +294,35 @@ def check_and_send_signals():
 
             # Format message from template
             default_template = (
-                '\U0001f4ca <b>{signal} Signal: {asset}</b>\n'
+                '\u26a0\ufe0f This is a <b>{signal}</b> Signal for {asset}.\n'
                 '\n'
-                'Strategy: {ind1} / {ind2}\n'
+                'We are changing our position for {asset} since the moving averages have crossed: {ind1} / {ind2}\n'
+                '\n'
+                '{if_buy}For long signals, we use {long_lev}x leverage in {asset}.{/if_buy}'
+                '{if_sell}For short signals, we use {short_lev}x leverage in {asset}.{/if_sell}\n'
                 '\n'
                 '<a href="{link}">View Live Chart</a>'
             )
             template = row.get('telegram_message_template') or default_template
+            long_lev = params.get('long_leverage', '1')
+            short_lev = params.get('short_leverage', '1')
+
+            # Process conditionals
+            import re as _re
+            if signal == 'BUY':
+                template = _re.sub(r'\{if_buy\}(.*?)\{/if_buy\}', r'\1', template, flags=_re.DOTALL)
+                template = _re.sub(r'\{if_sell\}.*?\{/if_sell\}', '', template, flags=_re.DOTALL)
+            else:
+                template = _re.sub(r'\{if_sell\}(.*?)\{/if_sell\}', r'\1', template, flags=_re.DOTALL)
+                template = _re.sub(r'\{if_buy\}.*?\{/if_buy\}', '', template, flags=_re.DOTALL)
+
             message = template.format(
                 asset=asset.replace('-', ' ').title(),
                 signal=signal,
                 ind1=result['ind1_label'],
                 ind2=result['ind2_label'],
+                long_lev=long_lev,
+                short_lev=short_lev,
                 link=link
             )
 

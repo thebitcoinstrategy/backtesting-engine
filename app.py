@@ -6363,19 +6363,35 @@ document.addEventListener('click', function(e) {
 function featureBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' }).then(function() { location.reload(); });
 }
-var _defaultTgTemplate = '📊 <b>{signal} Signal: {asset}</b>\\n\\nStrategy: {ind1} / {ind2}\\n\\n<a href=\\"{link}\\">View Live Chart</a>';
+var _defaultTgTemplate = '\\u26a0\\ufe0f This is a <b>{signal}</b> Signal for {asset}.\\n\\nWe are changing our position for {asset} since the moving averages have crossed: {ind1} / {ind2}\\n\\n{if_buy}For long signals, we use {long_lev}x leverage in {asset}.{/if_buy}{if_sell}For short signals, we use {short_lev}x leverage in {asset}.{/if_sell}\\n\\n<a href=\\"{link}\\">View Live Chart</a>';
 var _tgExample = {
     asset: '{{ bt_params.get("asset", "bitcoin")|replace("'", "")|capitalize }}',
     signal: 'BUY',
     ind1: '{{ bt_params.get("ind1_name", "price")|upper }}{% if bt_params.get("period1") %}({{ bt_params.period1 }}){% endif %}',
     ind2: '{{ bt_params.get("ind2_name", "sma")|upper }}{% if bt_params.get("period2") %}({{ bt_params.period2 }}){% endif %}',
+    long_lev: '{{ bt_params.get("long_leverage", "1") }}',
+    short_lev: '{{ bt_params.get("short_leverage", "1") }}',
     link: '{{ "https://analytics.the-bitcoin-strategy.com/backtest/" ~ backtest.id ~ "?view=livechart" }}'
 };
+var _tgPreviewSignal = 'BUY';
 function _renderTgPreview() {
     var tpl = (document.getElementById('tg-template') || {}).value || '';
-    var rendered = tpl.replace(/\\n/g, '<br>').replace(/\{asset\}/g, _tgExample.asset).replace(/\{signal\}/g, _tgExample.signal).replace(/\{ind1\}/g, _tgExample.ind1).replace(/\{ind2\}/g, _tgExample.ind2).replace(/\{link\}/g, _tgExample.link);
+    var isBuy = _tgPreviewSignal === 'BUY';
+    var rendered = isBuy
+        ? tpl.replace(/\{if_buy\}([\s\S]*?)\{\/if_buy\}/g, '$1').replace(/\{if_sell\}([\s\S]*?)\{\/if_sell\}/g, '')
+        : tpl.replace(/\{if_sell\}([\s\S]*?)\{\/if_sell\}/g, '$1').replace(/\{if_buy\}([\s\S]*?)\{\/if_buy\}/g, '');
+    rendered = rendered.replace(/\\n/g, '<br>').replace(/\{asset\}/g, _tgExample.asset).replace(/\{signal\}/g, _tgPreviewSignal).replace(/\{ind1\}/g, _tgExample.ind1).replace(/\{ind2\}/g, _tgExample.ind2).replace(/\{long_lev\}/g, _tgExample.long_lev).replace(/\{short_lev\}/g, _tgExample.short_lev).replace(/\{link\}/g, _tgExample.link);
     var el = document.getElementById('tg-preview');
     if (el) el.innerHTML = rendered;
+    // Update toggle button states
+    var buyBtn = document.getElementById('tg-preview-buy');
+    var sellBtn = document.getElementById('tg-preview-sell');
+    if (buyBtn) buyBtn.style.opacity = isBuy ? '1' : '0.5';
+    if (sellBtn) sellBtn.style.opacity = isBuy ? '0.5' : '1';
+}
+function _toggleTgPreviewSignal(sig) {
+    _tgPreviewSignal = sig;
+    _renderTgPreview();
 }
 function toggleTelegram(btId, currentlyEnabled) {
     if (currentlyEnabled) {
@@ -6394,8 +6410,8 @@ function toggleTelegram(btId, currentlyEnabled) {
         _swal.fire({
             title: 'Enable Telegram Signals',
             html: '<textarea id="tg-template" rows="6" style="width:100%;font-family:monospace;font-size:13px;background:var(--bg-deep);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;resize:vertical" oninput="_renderTgPreview()"></textarea>' +
-                  '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:left">Placeholders: <code>{asset}</code> <code>{signal}</code> <code>{ind1}</code> <code>{ind2}</code> <code>{link}</code></p>' +
-                  '<div style="margin-top:12px;text-align:left"><p style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600">Preview:</p><div id="tg-preview" style="background:var(--bg-deep);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;line-height:1.5"></div></div>',
+                  '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:left">Placeholders: <code>{asset}</code> <code>{signal}</code> <code>{ind1}</code> <code>{ind2}</code> <code>{long_lev}</code> <code>{short_lev}</code> <code>{link}</code><br>Conditionals: <code>{if_buy}...{/if_buy}</code> <code>{if_sell}...{/if_sell}</code></p>' +
+                  '<div style="margin-top:12px;text-align:left"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:11px;color:var(--text-muted);font-weight:600">Preview:</span><button type="button" id="tg-preview-buy" onclick="_toggleTgPreviewSignal(\'BUY\')" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text);cursor:pointer">BUY</button><button type="button" id="tg-preview-sell" onclick="_toggleTgPreviewSignal(\'SELL\')" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text);cursor:pointer;opacity:0.5">SELL</button></div><div id="tg-preview" style="background:var(--bg-deep);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;line-height:1.5"></div></div>',
             showCancelButton: true, confirmButtonText: 'Enable',
             didOpen: function() {
                 var ta = document.getElementById('tg-template');
