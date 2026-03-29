@@ -6364,6 +6364,19 @@ function featureBacktest(backtestId) {
     fetch('/api/backtest/' + backtestId + '/feature', { method: 'POST' }).then(function() { location.reload(); });
 }
 var _defaultTgTemplate = '📊 <b>{signal} Signal: {asset}</b>\\n\\nStrategy: {ind1} / {ind2}\\n\\n<a href=\\"{link}\\">View Live Chart</a>';
+var _tgExample = {
+    asset: '{{ bt_params.get("asset", "bitcoin")|replace("'", "")|capitalize }}',
+    signal: 'BUY',
+    ind1: '{{ bt_params.get("ind1_name", "price")|upper }}{% if bt_params.get("period1") %}({{ bt_params.period1 }}){% endif %}',
+    ind2: '{{ bt_params.get("ind2_name", "sma")|upper }}{% if bt_params.get("period2") %}({{ bt_params.period2 }}){% endif %}',
+    link: '{{ "https://analytics.the-bitcoin-strategy.com/backtest/" ~ backtest.id ~ "?view=livechart" }}'
+};
+function _renderTgPreview() {
+    var tpl = (document.getElementById('tg-template') || {}).value || '';
+    var rendered = tpl.replace(/\\n/g, '<br>').replace(/\{asset\}/g, _tgExample.asset).replace(/\{signal\}/g, _tgExample.signal).replace(/\{ind1\}/g, _tgExample.ind1).replace(/\{ind2\}/g, _tgExample.ind2).replace(/\{link\}/g, _tgExample.link);
+    var el = document.getElementById('tg-preview');
+    if (el) el.innerHTML = rendered;
+}
 function toggleTelegram(btId, currentlyEnabled) {
     if (currentlyEnabled) {
         _swal.fire({
@@ -6378,19 +6391,6 @@ function toggleTelegram(btId, currentlyEnabled) {
         });
     } else {
         var currentTemplate = '{{ backtest.telegram_message_template|default("", true)|e }}'.replace(/&#39;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"');
-        var _tgExample = {
-            asset: '{{ bt_params.get("asset", "bitcoin")|replace("'", "")|capitalize }}',
-            signal: 'BUY',
-            ind1: '{{ bt_params.get("ind1_name", "price")|upper }}{% if bt_params.get("period1") %}({{ bt_params.period1 }}){% endif %}',
-            ind2: '{{ bt_params.get("ind2_name", "sma")|upper }}{% if bt_params.get("period2") %}({{ bt_params.period2 }}){% endif %}',
-            link: '{{ "https://analytics.the-bitcoin-strategy.com/backtest/" ~ backtest.id ~ "?view=livechart" }}'
-        };
-        function _renderTgPreview() {
-            var tpl = (document.getElementById('tg-template') || {}).value || '';
-            var rendered = tpl.replace(/\\n/g, '<br>').replace(/\{asset\}/g, _tgExample.asset).replace(/\{signal\}/g, _tgExample.signal).replace(/\{ind1\}/g, _tgExample.ind1).replace(/\{ind2\}/g, _tgExample.ind2).replace(/\{link\}/g, _tgExample.link);
-            var el = document.getElementById('tg-preview');
-            if (el) el.innerHTML = rendered;
-        }
         _swal.fire({
             title: 'Enable Telegram Signals',
             html: '<textarea id="tg-template" rows="6" style="width:100%;font-family:monospace;font-size:13px;background:var(--bg-deep);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;resize:vertical" oninput="_renderTgPreview()">' +
