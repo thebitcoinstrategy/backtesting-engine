@@ -15,6 +15,7 @@ from flask import Flask, render_template_string, request, session, redirect, jso
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import requests as req_lib
 import backtest as bt
 import threading
 import uuid
@@ -2010,6 +2011,7 @@ HTML = """\
                     </div>
                 </div>
                 <script>
+                var __lwAsset = {{ p.asset|tojson }};
                 var __lwData = {
                     price: {{ price_json|safe }},
                     ind1: {{ ind1_json|safe }},
@@ -2552,6 +2554,43 @@ toggleFields();
 
 // Lightweight Charts tab switching
 var lwChartLoaded = false;
+var _livePriceInterval = null;
+var _liveChartActive = false;
+
+function startLivePolling() {
+    if (_livePriceInterval) return;
+    if (typeof __lwAsset === 'undefined') return;
+    _liveChartActive = true;
+    fetchLivePrice();
+    _livePriceInterval = setInterval(fetchLivePrice, 60000);
+}
+function stopLivePolling() {
+    _liveChartActive = false;
+    if (_livePriceInterval) { clearInterval(_livePriceInterval); _livePriceInterval = null; }
+}
+function fetchLivePrice() {
+    if (document.hidden) return;
+    if (!window._lwPriceSeries) return;
+    if (typeof __lwAsset === 'undefined') return;
+    fetch('/api/price-now/' + encodeURIComponent(__lwAsset))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.price && data.time) {
+                window._lwPriceSeries.update({time: data.time, value: data.price});
+            }
+            if (data.error === 'quota') stopLivePolling();
+        })
+        .catch(function(){});
+}
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        if (_livePriceInterval) { clearInterval(_livePriceInterval); _livePriceInterval = null; }
+    } else if (_liveChartActive) {
+        fetchLivePrice();
+        _livePriceInterval = setInterval(fetchLivePrice, 60000);
+    }
+});
+
 function switchChartTab(tab, btn) {
     var bt = document.getElementById('backtest-chart-tab');
     var lw = document.getElementById('livechart-tab');
@@ -2563,6 +2602,11 @@ function switchChartTab(tab, btn) {
     btn.classList.add('active');
     if (tab === 'livechart' && !lwChartLoaded) {
         loadLWChart();
+    }
+    if (tab === 'livechart') {
+        startLivePolling();
+    } else {
+        stopLivePolling();
     }
     // Update URL with view parameter
     var url = new URL(window.location);
@@ -2655,6 +2699,7 @@ function loadLWChart() {
         priceFormat: { type: 'price', precision: priceFmt.precision, minMove: priceFmt.minMove }
     });
     priceSeries.setData(priceData);
+    window._lwPriceSeries = priceSeries;
 
     if (ind2Data.length > 0) {
         var ind2Fmt = calcPriceFormat(ind2Data);
@@ -3556,6 +3601,113 @@ _LOGOS_FILE = os.path.join(DATA_DIR, "_logos.json")
 if os.path.exists(_LOGOS_FILE):
     with open(_LOGOS_FILE) as _f:
         ASSET_LOGOS.update(json.load(_f))
+
+# ---------------------------------------------------------------------------
+# Live price: API usage tracking + in-memory price cache
+# ---------------------------------------------------------------------------
+_API_USAGE_FILE = os.path.join(DATA_DIR, "_api_usage.json")
+_API_USAGE_LIMIT = 2500  # 25% of CoinGecko free tier (10,000/month)
+_api_usage = {"month": "", "calls": 0}
+_api_usage_lock = threading.Lock()
+_api_usage_dirty = 0  # flush to disk every 10 increments
+
+if os.path.exists(_API_USAGE_FILE):
+    try:
+        with open(_API_USAGE_FILE) as _f:
+            _api_usage.update(json.load(_f))
+    except Exception:
+        pass
+
+
+def _api_usage_flush():
+    """Write usage to disk."""
+    try:
+        with open(_API_USAGE_FILE, "w") as f:
+            json.dump(_api_usage, f)
+    except Exception:
+        pass
+
+
+def _api_usage_increment():
+    """Bump the API call counter, reset if month changed."""
+    global _api_usage_dirty
+    cur_month = time.strftime("%Y-%m")
+    with _api_usage_lock:
+        if _api_usage["month"] != cur_month:
+            _api_usage["month"] = cur_month
+            _api_usage["calls"] = 0
+        _api_usage["calls"] += 1
+        _api_usage_dirty += 1
+        if _api_usage_dirty >= 10:
+            _api_usage_dirty = 0
+            _api_usage_flush()
+
+
+def _api_usage_get():
+    """Return usage stats dict."""
+    cur_month = time.strftime("%Y-%m")
+    with _api_usage_lock:
+        if _api_usage["month"] != cur_month:
+            _api_usage["month"] = cur_month
+            _api_usage["calls"] = 0
+        calls = _api_usage["calls"]
+    pct = round(calls / _API_USAGE_LIMIT * 100, 1) if _API_USAGE_LIMIT else 0
+    return {"month": cur_month, "calls": calls, "limit": _API_USAGE_LIMIT, "pct": pct}
+
+
+def _api_usage_ok():
+    """Return True if we haven't exceeded the usage limit."""
+    return _api_usage_get()["calls"] < _API_USAGE_LIMIT
+
+
+# In-memory live price cache: {asset_name: {"price": float, "time": str, "ts": float}}
+_price_now_cache = {}
+_PRICE_CACHE_TTL = 60  # seconds
+
+# Asset metadata lookup (source + source_id) — built from DB or hardcoded
+_ASSET_META = {}
+if _USE_PRICE_DB:
+    try:
+        for _m in price_db.get_all_asset_metadata():
+            _ASSET_META[_m["name"]] = {"source": _m["source"], "source_id": _m["source_id"]}
+    except Exception:
+        pass
+
+COINGECKO_API_KEY = os.environ.get("COINGECKO_API_KEY", "")
+
+
+def _fetch_live_price(asset_name):
+    """Fetch current price for an asset. Returns {"price": float, "time": str} or None."""
+    meta = _ASSET_META.get(asset_name)
+    if not meta or not meta.get("source") or not meta.get("source_id"):
+        return None
+
+    source = meta["source"]
+    source_id = meta["source_id"]
+
+    try:
+        if source == "coingecko":
+            url = "https://api.coingecko.com/api/v3/simple/price"
+            params = {"ids": source_id, "vs_currencies": "usd"}
+            headers = {"User-Agent": "BacktestingEngine/1.0"}
+            if COINGECKO_API_KEY:
+                headers["x-cg-demo-api-key"] = COINGECKO_API_KEY
+            resp = req_lib.get(url, params=params, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                price = data.get(source_id, {}).get("usd")
+                if price is not None:
+                    _api_usage_increment()
+                    return {"price": float(price), "time": time.strftime("%Y-%m-%d")}
+        elif source == "yfinance":
+            import yfinance as yf
+            ticker = yf.Ticker(source_id)
+            price = ticker.fast_info.get("lastPrice")
+            if price is not None:
+                return {"price": float(price), "time": time.strftime("%Y-%m-%d")}
+    except Exception:
+        pass
+    return None
 
 
 def _rebuild_asset_lists():
@@ -6604,6 +6756,39 @@ function downloadChart() {
     a.click();
 }
 var lwChartLoaded = false;
+var _livePriceInterval = null;
+var _liveChartActive = false;
+function startLivePolling() {
+    if (_livePriceInterval) return;
+    if (typeof __lwAsset === 'undefined') return;
+    _liveChartActive = true;
+    fetchLivePrice();
+    _livePriceInterval = setInterval(fetchLivePrice, 60000);
+}
+function stopLivePolling() {
+    _liveChartActive = false;
+    if (_livePriceInterval) { clearInterval(_livePriceInterval); _livePriceInterval = null; }
+}
+function fetchLivePrice() {
+    if (document.hidden) return;
+    if (!window._lwPriceSeries) return;
+    if (typeof __lwAsset === 'undefined') return;
+    fetch('/api/price-now/' + encodeURIComponent(__lwAsset))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.price && data.time) window._lwPriceSeries.update({time: data.time, value: data.price});
+            if (data.error === 'quota') stopLivePolling();
+        })
+        .catch(function(){});
+}
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        if (_livePriceInterval) { clearInterval(_livePriceInterval); _livePriceInterval = null; }
+    } else if (_liveChartActive) {
+        fetchLivePrice();
+        _livePriceInterval = setInterval(fetchLivePrice, 60000);
+    }
+});
 function switchChartTab(tab, btn) {
     var bt = document.getElementById('backtest-chart-tab');
     var lw = document.getElementById('livechart-tab');
@@ -6614,6 +6799,7 @@ function switchChartTab(tab, btn) {
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
     btn.classList.add('active');
     if (tab === 'livechart' && !lwChartLoaded) { loadLWChart(); }
+    if (tab === 'livechart') { startLivePolling(); } else { stopLivePolling(); }
     var url = new URL(window.location);
     if (tab === 'livechart') {
         url.searchParams.set('view', 'livechart');
@@ -6665,6 +6851,7 @@ function loadLWChart() {
     });
     var priceSeries = chart.addSeries(LightweightCharts.LineSeries, { color: '#e8eaf0', lineWidth: 2, title: 'Price', priceLineVisible: false, priceFormat: { type: 'price', precision: priceFmt.precision, minMove: priceFmt.minMove } });
     priceSeries.setData(priceData);
+    window._lwPriceSeries = priceSeries;
     if (ind2Data.length > 0) {
         var ind2Fmt = calcPriceFormat(ind2Data);
         var ind2Series = chart.addSeries(LightweightCharts.LineSeries, { color: '#6495ED', lineWidth: 2, title: ind2Label, priceLineVisible: false, priceFormat: { type: 'price', precision: ind2Fmt.precision, minMove: ind2Fmt.minMove } });
@@ -7626,6 +7813,36 @@ ADMIN_ASSETS_HTML = """\
     <div class="panel">
         <h2 class="page-title">Asset Management</h2>
 
+        <!-- API Usage -->
+        <div id="api-usage-panel" style="margin-bottom:24px;padding:16px 20px;background:var(--bg-surface);border:1px solid var(--border);border-radius:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <span style="font-weight:600;font-size:0.9em">CoinGecko API Usage</span>
+                <span id="api-usage-text" style="font-family:'JetBrains Mono',monospace;font-size:0.85em;color:var(--text-muted)">Loading...</span>
+            </div>
+            <div style="height:8px;background:var(--bg-elevated);border-radius:4px;overflow:hidden">
+                <div id="api-usage-bar" style="height:100%;width:0%;border-radius:4px;transition:width 0.5s ease,background 0.3s ease;background:var(--green)"></div>
+            </div>
+            <div id="api-usage-status" style="margin-top:6px;font-size:0.78em;color:var(--text-dim)"></div>
+        </div>
+        <script>
+        (function() {
+            fetch('/api/admin/api-usage').then(function(r){return r.json()}).then(function(d){
+                var pct = d.pct || 0;
+                document.getElementById('api-usage-text').textContent = d.calls + ' / ' + d.limit + ' calls (' + pct + '%)';
+                var bar = document.getElementById('api-usage-bar');
+                bar.style.width = Math.min(pct, 100) + '%';
+                if (pct >= 80) bar.style.background = 'var(--red)';
+                else if (pct >= 50) bar.style.background = 'var(--accent)';
+                var status = document.getElementById('api-usage-status');
+                if (pct >= 100) status.textContent = 'Live price updates DISABLED — quota exceeded';
+                else status.textContent = 'Live price updates active — resets monthly';
+                status.style.color = pct >= 100 ? 'var(--red)' : 'var(--text-dim)';
+            }).catch(function(){
+                document.getElementById('api-usage-text').textContent = 'Unavailable';
+            });
+        })();
+        </script>
+
         <!-- Upload -->
         <div class="upload-section">
             <h3>Add New Asset</h3>
@@ -8463,6 +8680,41 @@ def _enrich_backtest_cards(backtests):
     return backtests
 
 
+# --- Live Price API ---
+
+@app.route('/api/price-now/<asset_name>')
+def api_price_now(asset_name):
+    """Return current price for an asset (cached 60s, quota-aware)."""
+    if asset_name not in ASSETS:
+        return jsonify(error="not_found"), 404
+    if not _api_usage_ok():
+        return jsonify(error="quota", price=None)
+
+    now = time.time()
+    cached = _price_now_cache.get(asset_name)
+    if cached and (now - cached["ts"]) < _PRICE_CACHE_TTL:
+        return jsonify(price=cached["price"], time=cached["time"])
+
+    result = _fetch_live_price(asset_name)
+    if result:
+        _price_now_cache[asset_name] = {"price": result["price"], "time": result["time"], "ts": now}
+        return jsonify(price=result["price"], time=result["time"])
+
+    # Return stale cache if fresh fetch failed
+    if cached:
+        return jsonify(price=cached["price"], time=cached["time"])
+    return jsonify(error="unavailable", price=None)
+
+
+@app.route('/api/admin/api-usage')
+@require_auth
+def api_admin_usage():
+    """Admin-only: return CoinGecko API usage stats."""
+    if not _is_admin():
+        abort(403)
+    return jsonify(_api_usage_get())
+
+
 # --- Admin ---
 
 @app.route('/admin/assets')
@@ -8793,15 +9045,16 @@ def backtest_detail(bt_id):
             # Build labels
             _ind1_lbl = f"{_ind1_name.upper()}({_p1})" if _ind1_name != "price" and _p1 else ("Price" if _ind1_name == "price" else _ind1_name.upper())
             _ind2_lbl = f"{_ind2_name.upper()}({_p2})" if _p2 else _ind2_name.upper()
-            # Replace the __lwData block in cached HTML
-            _new_lw = (f'<script>\nvar __lwData = {{\n'
+            # Replace the __lwData block in cached HTML (includes __lwAsset for live polling)
+            _new_lw = (f'<script>\nvar __lwAsset = {json_mod.dumps(_asset)};\n'
+                       f'var __lwData = {{\n'
                        f'    price: {_fresh_price},\n'
                        f'    ind1: {_fresh_ind1},\n'
                        f'    ind2: {_fresh_ind2},\n'
                        f'    ind1Label: {json_mod.dumps(_ind1_lbl)},\n'
                        f'    ind2Label: {json_mod.dumps(_ind2_lbl)}\n'
                        f'}};\n</script>')
-            cached = re.sub(r'<script>\s*var __lwData\s*=\s*\{.*?\};\s*</script>', _new_lw, cached, flags=re.DOTALL)
+            cached = re.sub(r'<script>\s*var __lwAsset\s*=.*?var __lwData\s*=\s*\{.*?\};\s*</script>', _new_lw, cached, flags=re.DOTALL)
     except Exception:
         pass  # If fresh data injection fails, keep original cached HTML
 
