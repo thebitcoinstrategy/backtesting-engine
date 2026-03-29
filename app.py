@@ -9054,7 +9054,7 @@ def backtest_detail(bt_id):
                        f'    ind1Label: {json_mod.dumps(_ind1_lbl)},\n'
                        f'    ind2Label: {json_mod.dumps(_ind2_lbl)}\n'
                        f'}};\n</script>')
-            cached = re.sub(r'<script>\s*var __lwAsset\s*=.*?var __lwData\s*=\s*\{.*?\};\s*</script>', _new_lw, cached, flags=re.DOTALL)
+            cached = re.sub(r'<script>\s*(?:var __lwAsset\s*=.*?)?var __lwData\s*=\s*\{.*?\};\s*</script>', _new_lw, cached, flags=re.DOTALL)
     except Exception:
         pass  # If fresh data injection fails, keep original cached HTML
 
