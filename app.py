@@ -153,7 +153,7 @@ def _cache_key(form_params):
     cache fragmentation from irrelevant hidden fields.
     """
     # Core params always relevant
-    core = {"mode", "asset", "vs_asset", "start_date", "end_date", "initial_cash", "fee", "sizing", "reverse", "timeframe"}
+    core = {"mode", "asset", "vs_asset", "start_date", "end_date", "initial_cash", "fee", "sizing", "reverse", "timeframe", "theme"}
     mode = form_params.get("mode", "backtest")
     signal_type = form_params.get("signal_type", "crossover")
 
@@ -418,6 +418,7 @@ HTML = """\
 <!DOCTYPE html>
 <html>
 <head>
+    <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("theme")||"dark")</script>
     <title>Strategy Analytics</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
@@ -448,6 +449,23 @@ HTML = """\
             --green-dim: rgba(52, 211, 153, 0.12);
             --blue: #6495ED;
         }
+        [data-theme="light"] {
+            --bg-deep: #f5f6fa;
+            --bg-base: #ebedf5;
+            --bg-surface: #ffffff;
+            --bg-elevated: #f0f2f5;
+            --border: #d0d4e0;
+            --border-hover: #a0a8c0;
+            --text: #1a1a2e;
+            --text-muted: #5a6078;
+            --text-dim: #8890a4;
+            --accent: #d97706;
+            --accent-hover: #b45309;
+            --accent-glow: rgba(217, 119, 6, 0.15);
+            --green: #059669;
+            --green-dim: rgba(5, 150, 105, 0.12);
+            --blue: #3a6fd8;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'DM Sans', sans-serif;
@@ -465,6 +483,11 @@ HTML = """\
                 radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100, 149, 237, 0.04), transparent);
             pointer-events: none;
             z-index: 0;
+        }
+        [data-theme="light"] body::before {
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(217, 119, 6, 0.04), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 100%, rgba(58, 111, 216, 0.03), transparent);
         }
         .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
 
@@ -997,6 +1020,14 @@ HTML = """\
         }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        /* Theme toggle */
+        .theme-toggle { background: none; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); padding: 7px; border-radius: 8px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+        .theme-toggle:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border-hover); }
+        .theme-toggle svg { width: 16px; height: 16px; }
+        .theme-toggle .icon-sun { display: none; }
+        .theme-toggle .icon-moon { display: block; }
+        [data-theme="light"] .theme-toggle .icon-sun { display: block; }
+        [data-theme="light"] .theme-toggle .icon-moon { display: none; }
         /* Notification bell */
         .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; z-index: 9999; }
         .notif-bell-wrap { position: relative; }
@@ -1248,8 +1279,12 @@ HTML = """\
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active|default('')=='my-backtests' }}">My Backtests</a>
         {% endif %}
         {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active|default('')=='admin-assets' }}">Assets</a>{% endif %}
-        {% if is_authenticated %}
         <div class="nav-right-group">
+            <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+            {% if is_authenticated %}
             <div class="notif-bell-wrap">
                 <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -1277,8 +1312,8 @@ HTML = """\
                     <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
                 </div>
             </div>
-        </div>
         {% endif %}
+        </div>
     </nav>
     <div class="layout">
         <div class="panel">
@@ -1286,6 +1321,7 @@ HTML = """\
                 <div class="form-section">
                     <div class="section-title">Mode</div>
                     <input type="hidden" name="mode" id="mode" value="{{ p.mode }}">
+                    <input type="hidden" name="theme" id="theme-input" value="dark">
                     <div class="mode-selector">
                         <div class="mode-card {{ 'active' if p.mode=='backtest' }}" data-mode="backtest" onclick="selectMode('backtest', this)">
                             <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -2075,6 +2111,21 @@ HTML = """\
     </div>
 </div>
 <script>
+// Theme toggle
+(function() {
+    var saved = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+    var inp = document.getElementById('theme-input');
+    if (inp) inp.value = saved;
+})();
+function toggleTheme() {
+    var current = document.documentElement.getAttribute('data-theme') || 'dark';
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+    var inp = document.getElementById('theme-input');
+    if (inp) inp.value = next;
+}
 var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
     customClass: { popup: 'swal-dark' }
@@ -3388,6 +3439,9 @@ class Params:
             self.dca_show_lump_sum = False
             self.dca_reverse = bool(form.get("dca_reverse"))
             self.dca_sweep_param = form.get("dca_sweep_param", "multiplier")
+            self.theme = form.get("theme", "dark")
+            if self.theme not in ("dark", "light"):
+                self.theme = "dark"
         else:
             self.asset = DEFAULT_ASSET
             self.vs_asset = None
@@ -3815,6 +3869,7 @@ def _run_post_handler(cancel_event):
     equity_bottom = 1.0
 
     p = Params(request.form)
+    t = bt._get_theme(p.theme)
     is_oscillator = p.signal_type == "oscillator"
     is_ratio = bool(p.vs_asset and p.vs_asset in ASSETS)
     import pandas as pd_mod
@@ -3879,11 +3934,11 @@ def _run_post_handler(cancel_event):
 
         reg_result = bt.run_regression_analysis(df, p.osc_name, p.osc_period, p.forward_days,
                                                  p.buy_threshold, p.sell_threshold)
-        chart_b64 = bt.generate_regression_chart(reg_result)
+        chart_b64 = bt.generate_regression_chart(reg_result, theme=p.theme)
 
         sweep_result = bt.sweep_regression_r_squared(df, p.osc_name, p.osc_period,
                                                       p.buy_threshold, p.sell_threshold)
-        sweep_chart_b64 = bt.generate_regression_sweep_chart(sweep_result)
+        sweep_chart_b64 = bt.generate_regression_sweep_chart(sweep_result, theme=p.theme)
 
         # Generate small regression thumbnail (scatter plot)
         import matplotlib
@@ -3891,15 +3946,15 @@ def _run_post_handler(cancel_event):
         import matplotlib.pyplot as plt
         import numpy as np
         thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
-        bt._apply_dark_theme(thumb_fig, [thumb_ax])
+        bt._apply_dark_theme(thumb_fig, [thumb_ax], p.theme)
         osc_vals = reg_result["osc_values"]
         fwd_rets = reg_result["forward_returns"]
-        thumb_ax.scatter(osc_vals, fwd_rets, c="#8890a4", alpha=0.15, s=3, rasterized=True)
+        thumb_ax.scatter(osc_vals, fwd_rets, c=t["muted"], alpha=0.15, s=3, rasterized=True)
         x_range = np.linspace(osc_vals.min(), osc_vals.max(), 100)
         y_pred = reg_result["slope"] * x_range + reg_result["intercept"]
-        thumb_ax.plot(x_range, y_pred, color="#f7931a", linewidth=1.5)
-        thumb_ax.axhline(y=0, color="#8890a4", linestyle="--", linewidth=0.5, alpha=0.5)
-        thumb_ax.grid(True, which="major", alpha=0.3, color="#252a3a")
+        thumb_ax.plot(x_range, y_pred, color=t["accent"], linewidth=1.5)
+        thumb_ax.axhline(y=0, color=t["muted"], linestyle="--", linewidth=0.5, alpha=0.5)
+        thumb_ax.grid(True, which="major", alpha=0.3, color=t["grid"])
         thumb_ax.tick_params(labelsize=7)
         thumb_ax.set_xlabel("")
         plt.tight_layout()
@@ -3946,11 +4001,11 @@ def _run_post_handler(cancel_event):
         fig, axes = plt.subplots(n_panels, 1, figsize=(14, 16), dpi=150,
                                   gridspec_kw={"height_ratios": [4, 2, 4, 3]}, sharex=True)
         ax_price, ax_signal, ax_equity, ax_units = axes
-        bt._apply_dark_theme(fig, list(axes))
+        bt._apply_dark_theme(fig, list(axes), p.theme)
 
         # Panel 1: Price
         prices = dca_result["prices"]
-        ax_price.plot(prices.index, prices, color="#e8eaf0", linewidth=0.8, label=f"{asset_display} Price")
+        ax_price.plot(prices.index, prices, color=t["price"], linewidth=0.8, label=f"{asset_display} Price")
         ax_price.set_yscale("log")
         if is_ratio:
             _fmt_ratio = plt.FuncFormatter(lambda x, _: f"{x:.4f}" if x < 0.01 else (f"{x:.3f}" if x < 1 else f"{x:,.2f}"))
@@ -3962,24 +4017,24 @@ def _run_post_handler(cancel_event):
         ax_price.set_title(f"{asset_display}{tf_label} DCA Optimization — {p.dca_frequency.capitalize()} ${p.dca_amount:.0f}\n"
                            f"Signal: {dca_result['signal_label']} | Max Multiplier: {p.dca_max_multiplier:.1f}x | "
                            f"{dca_result['n_buys']} purchases, ${dca_result['total_budget']:,.0f} total")
-        ax_price.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
-        ax_price.grid(True, which="major", alpha=0.3, color="#252a3a")
+        ax_price.legend(loc="upper left", fontsize=8, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["price"])
+        ax_price.grid(True, which="major", alpha=0.3, color=t["grid"])
 
         # Panel 2: Signal (0-1)
         signal = dca_result["signal_series"]
-        ax_signal.plot(signal.index, signal, color="#6495ED", linewidth=0.7, alpha=0.8)
-        ax_signal.fill_between(signal.index, 0, signal, alpha=0.1, color="#6495ED")
-        ax_signal.axhline(y=0.5, color="#8890a4", linestyle="--", linewidth=0.6, alpha=0.5)
+        ax_signal.plot(signal.index, signal, color=t["blue"], linewidth=0.7, alpha=0.8)
+        ax_signal.fill_between(signal.index, 0, signal, alpha=0.1, color=t["blue"])
+        ax_signal.axhline(y=0.5, color=t["muted"], linestyle="--", linewidth=0.6, alpha=0.5)
         ax_signal.set_ylim(-0.05, 1.05)
         ax_signal.set_ylabel(dca_result["signal_label"])
-        ax_signal.text(0.01, 0.95, "Buy Less", transform=ax_signal.transAxes, fontsize=7, color="#ef4444", va="top")
-        ax_signal.text(0.01, 0.05, "Buy More", transform=ax_signal.transAxes, fontsize=7, color="#34d399", va="bottom")
-        ax_signal.grid(True, which="major", alpha=0.3, color="#252a3a")
+        ax_signal.text(0.01, 0.95, "Buy Less", transform=ax_signal.transAxes, fontsize=7, color=t["red"], va="top")
+        ax_signal.text(0.01, 0.05, "Buy More", transform=ax_signal.transAxes, fontsize=7, color=t["green"], va="bottom")
+        ax_signal.grid(True, which="major", alpha=0.3, color=t["grid"])
 
         # Panel 3: Portfolio value
-        ax_equity.plot(const["equity"].index, const["equity"], color="#8890a4", linewidth=1.2,
+        ax_equity.plot(const["equity"].index, const["equity"], color=t["muted"], linewidth=1.2,
                        label=f"Constant DCA (${const['final_value']:,.0f})")
-        ax_equity.plot(dyn["equity"].index, dyn["equity"], color="#f7931a", linewidth=1.2,
+        ax_equity.plot(dyn["equity"].index, dyn["equity"], color=t["accent"], linewidth=1.2,
                        label=f"Dynamic DCA (${dyn['final_value']:,.0f})")
         ax_equity.plot(const["cum_invested"].index, const["cum_invested"], color="#4ade80", linewidth=1,
                        alpha=0.6, linestyle="--",
@@ -3994,19 +4049,19 @@ def _run_post_handler(cancel_event):
                            label=f"Lump Sum (${lump['final_value']:,.0f})")
         ax_equity.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
         ax_equity.set_ylabel("Portfolio Value")
-        ax_equity.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
-        ax_equity.grid(True, which="major", alpha=0.3, color="#252a3a")
+        ax_equity.legend(loc="upper left", fontsize=8, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["price"])
+        ax_equity.grid(True, which="major", alpha=0.3, color=t["grid"])
 
         # Panel 4: Units accumulated (base currency)
         const_final_units = const["cum_units"].iloc[-1]
         dyn_final_units = dyn["cum_units"].iloc[-1]
-        ax_units.plot(const["cum_units"].index, const["cum_units"], color="#8890a4", linewidth=1.2,
+        ax_units.plot(const["cum_units"].index, const["cum_units"], color=t["muted"], linewidth=1.2,
                       label=f"Constant DCA ({const_final_units:,.4f} {asset_display})")
-        ax_units.plot(dyn["cum_units"].index, dyn["cum_units"], color="#f7931a", linewidth=1.2,
+        ax_units.plot(dyn["cum_units"].index, dyn["cum_units"], color=t["accent"], linewidth=1.2,
                       label=f"Dynamic DCA ({dyn_final_units:,.4f} {asset_display})")
         ax_units.set_ylabel(f"{asset_display} Accumulated")
-        ax_units.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
-        ax_units.grid(True, which="major", alpha=0.3, color="#252a3a")
+        ax_units.legend(loc="upper left", fontsize=8, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["price"])
+        ax_units.grid(True, which="major", alpha=0.3, color=t["grid"])
 
         ax_units.set_xlabel("Date")
         ax_units.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
@@ -4023,13 +4078,13 @@ def _run_post_handler(cancel_event):
 
         # Thumbnail
         thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
-        bt._apply_dark_theme(thumb_fig, [thumb_ax])
-        thumb_ax.plot(const["equity"].index, const["equity"], color="#8890a4", linewidth=1.2)
-        thumb_ax.plot(dyn["equity"].index, dyn["equity"], color="#f7931a", linewidth=1.2)
+        bt._apply_dark_theme(thumb_fig, [thumb_ax], p.theme)
+        thumb_ax.plot(const["equity"].index, const["equity"], color=t["muted"], linewidth=1.2)
+        thumb_ax.plot(dyn["equity"].index, dyn["equity"], color=t["accent"], linewidth=1.2)
         if has_lump:
             thumb_ax.plot(lump["equity"].index, lump["equity"], color="#a78bfa", linewidth=1, alpha=0.7, linestyle="--")
         thumb_ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
-        thumb_ax.grid(True, which="major", alpha=0.3, color="#252a3a")
+        thumb_ax.grid(True, which="major", alpha=0.3, color=t["grid"])
         thumb_ax.tick_params(labelsize=7)
         thumb_ax.set_xlabel("")
         thumb_ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
@@ -4188,21 +4243,21 @@ def _run_post_handler(cancel_event):
         asset_title = asset_display
         tf_label = " (Weekly)" if is_weekly else ""
         fig, ax = plt.subplots(figsize=(14, 7), dpi=150)
-        bt._apply_dark_theme(fig, ax)
+        bt._apply_dark_theme(fig, ax, p.theme)
         show_long = p.exposure in ("long-cash", "long-short")
         show_short = p.exposure in ("short-cash", "long-short")
         all_levs = []
         if show_long:
-            ax.plot(long_levs, long_sweep, color="#6495ED", linewidth=1.5, label="Long Leverage")
-            ax.scatter([best_long_lev], [best_long_ann], color="#6495ED", s=60, zorder=5)
+            ax.plot(long_levs, long_sweep, color=t["blue"], linewidth=1.5, label="Long Leverage")
+            ax.scatter([best_long_lev], [best_long_ann], color=t["blue"], s=60, zorder=5)
             all_levs.extend(long_levs)
         if show_short:
-            ax.plot(short_levs, short_sweep, color="#f7931a", linewidth=1.5, label="Short Leverage")
-            ax.scatter([best_short_lev], [best_short_ann], color="#f7931a", s=60, zorder=5)
+            ax.plot(short_levs, short_sweep, color=t["accent"], linewidth=1.5, label="Short Leverage")
+            ax.scatter([best_short_lev], [best_short_ann], color=t["accent"], s=60, zorder=5)
             all_levs.extend(short_levs)
         x_min, x_max = min(all_levs), max(all_levs)
         if p.exposure != "short-cash":
-            ax.plot([x_min, x_max], [bh_ann, bh_ann], color="#8890a4", linestyle="--", linewidth=1,
+            ax.plot([x_min, x_max], [bh_ann, bh_ann], color=t["muted"], linestyle="--", linewidth=1,
                     label=f"Buy & Hold ({bh_ann:.1f}%)")
         ax.set_xlim(x_min, x_max)
         from matplotlib.ticker import MultipleLocator
@@ -4216,8 +4271,8 @@ def _run_post_handler(cancel_event):
             title_parts.append(f"Best Short: {best_short_lev:.2f}x ({best_short_ann:.1f}%)")
         ax.set_title(f"{asset_title}{tf_label} {title_label} \u2014 Leverage Sweep | {p.exposure}\n"
                      f"{' | '.join(title_parts)}")
-        ax.legend(loc="best", fontsize=9, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
-        ax.grid(True, alpha=0.3, color="#252a3a")
+        ax.legend(loc="best", fontsize=9, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["price"])
+        ax.grid(True, alpha=0.3, color=t["grid"])
         plt.tight_layout()
 
         buf = BytesIO()
@@ -4228,17 +4283,17 @@ def _run_post_handler(cancel_event):
 
         # Generate small leverage-sweep thumbnail
         thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
-        bt._apply_dark_theme(thumb_fig, [thumb_ax])
+        bt._apply_dark_theme(thumb_fig, [thumb_ax], p.theme)
         if show_long:
-            thumb_ax.plot(long_levs, long_sweep, color="#6495ED", linewidth=1.5)
-            thumb_ax.scatter([best_long_lev], [best_long_ann], color="#6495ED", s=40, zorder=5)
+            thumb_ax.plot(long_levs, long_sweep, color=t["blue"], linewidth=1.5)
+            thumb_ax.scatter([best_long_lev], [best_long_ann], color=t["blue"], s=40, zorder=5)
         if show_short:
-            thumb_ax.plot(short_levs, short_sweep, color="#f7931a", linewidth=1.5)
-            thumb_ax.scatter([best_short_lev], [best_short_ann], color="#f7931a", s=40, zorder=5)
+            thumb_ax.plot(short_levs, short_sweep, color=t["accent"], linewidth=1.5)
+            thumb_ax.scatter([best_short_lev], [best_short_ann], color=t["accent"], s=40, zorder=5)
         if p.exposure != "short-cash":
-            thumb_ax.axhline(y=bh_ann, color="#8890a4", linestyle="--", linewidth=1, alpha=0.7)
+            thumb_ax.axhline(y=bh_ann, color=t["muted"], linestyle="--", linewidth=1, alpha=0.7)
         thumb_ax.set_xlabel("")
-        thumb_ax.grid(True, which="major", alpha=0.3, color="#252a3a")
+        thumb_ax.grid(True, which="major", alpha=0.3, color=t["grid"])
         thumb_ax.tick_params(labelsize=7)
         plt.tight_layout()
         thumb_buf = BytesIO()
@@ -4371,7 +4426,7 @@ def _run_post_handler(cancel_event):
 
         tf_label = " (Weekly)" if is_weekly else ""
         fig, ax = plt.subplots(figsize=(14, 12), dpi=150)
-        bt._apply_dark_theme(fig, ax)
+        bt._apply_dark_theme(fig, ax, p.theme)
         im = ax.imshow(matrix, cmap="RdYlGn", aspect="auto", origin="lower",
                        interpolation="nearest")
         ax.set_xticks(range(n))
@@ -4392,9 +4447,9 @@ def _run_post_handler(cancel_event):
                      f"Best: {ind1_upper}({best_p1})/{ind2_upper}({best_p2}) = {best_ann:.1f}% | "
                      f"B&H: {bh_ann:.1f}% | {p.exposure}")
         cbar = fig.colorbar(im, ax=ax, shrink=0.8)
-        cbar.set_label("Annualized Return (%)", color="#8890a4")
-        cbar.ax.yaxis.set_tick_params(color="#8890a4")
-        cbar.outline.set_edgecolor("#2a2d3a")
+        cbar.set_label("Annualized Return (%)", color=t["muted"])
+        cbar.ax.yaxis.set_tick_params(color=t["muted"])
+        cbar.outline.set_edgecolor(t["grid"])
         for label in cbar.ax.get_yticklabels():
             label.set_color("#9ca3af")
         if n <= 30:
@@ -4415,7 +4470,7 @@ def _run_post_handler(cancel_event):
 
         # Generate small heatmap thumbnail
         thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
-        bt._apply_dark_theme(thumb_fig, [thumb_ax])
+        bt._apply_dark_theme(thumb_fig, [thumb_ax], p.theme)
         thumb_im = thumb_ax.imshow(matrix, cmap="RdYlGn", aspect="auto", origin="lower", interpolation="nearest")
         thumb_ax.set_xticks([])
         thumb_ax.set_yticks([])
@@ -4478,12 +4533,12 @@ def _run_post_handler(cancel_event):
             best_label = f"{ind2_upper}({best_period})"
 
         fig, ax = plt.subplots(figsize=(14, 7), dpi=150)
-        bt._apply_dark_theme(fig, ax)
-        ax.plot(periods, annualized_returns, color="#6495ED", linewidth=1)
+        bt._apply_dark_theme(fig, ax, p.theme)
+        ax.plot(periods, annualized_returns, color=t["blue"], linewidth=1)
         if p.exposure != "short-cash":
-            ax.axhline(y=bh_annualized, color="#8890a4", linestyle="--", linewidth=1,
+            ax.axhline(y=bh_annualized, color=t["muted"], linestyle="--", linewidth=1,
                         label=f"Buy & Hold ({bh_annualized:.1f}%)")
-        ax.scatter([best_period], [best_ann], color="#f7931a", s=60, zorder=5,
+        ax.scatter([best_period], [best_ann], color=t["accent"], s=60, zorder=5,
                     label=f"Best: {best_label} ({best_ann:.1f}%)")
         period_unit = "weeks" if is_weekly else "days"
         ax.set_xlabel(f"{ind2_upper} Period ({period_unit})")
@@ -4492,8 +4547,8 @@ def _run_post_handler(cancel_event):
         tf_label = " (Weekly)" if is_weekly else ""
         title_prefix = f"{ind1_label_str} vs " if p.ind1_name != "price" else ""
         ax.set_title(f"{asset_title}{tf_label} \u2014 Annualized Return by {title_prefix}{ind2_upper} Period ({p.range_min}-{p.range_max}) | {p.exposure}")
-        ax.legend(loc="best", fontsize=9, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
-        ax.grid(True, alpha=0.3, color="#252a3a")
+        ax.legend(loc="best", fontsize=9, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["price"])
+        ax.grid(True, alpha=0.3, color=t["grid"])
         plt.tight_layout()
 
         buf = BytesIO()
@@ -4504,12 +4559,12 @@ def _run_post_handler(cancel_event):
 
         # Generate small sweep thumbnail
         thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
-        bt._apply_dark_theme(thumb_fig, [thumb_ax])
-        thumb_ax.plot(periods, annualized_returns, color="#6495ED", linewidth=1.5)
-        thumb_ax.scatter([best_period], [best_ann], color="#f7931a", s=40, zorder=5)
+        bt._apply_dark_theme(thumb_fig, [thumb_ax], p.theme)
+        thumb_ax.plot(periods, annualized_returns, color=t["blue"], linewidth=1.5)
+        thumb_ax.scatter([best_period], [best_ann], color=t["accent"], s=40, zorder=5)
         if p.exposure != "short-cash":
-            thumb_ax.axhline(y=bh_annualized, color="#8890a4", linestyle="--", linewidth=1, alpha=0.7)
-        thumb_ax.grid(True, which="major", alpha=0.3, color="#252a3a")
+            thumb_ax.axhline(y=bh_annualized, color=t["muted"], linestyle="--", linewidth=1, alpha=0.7)
+        thumb_ax.grid(True, which="major", alpha=0.3, color=t["grid"])
         thumb_ax.tick_params(labelsize=7)
         thumb_ax.set_xlabel("")
         plt.tight_layout()
@@ -4578,42 +4633,42 @@ def _run_post_handler(cancel_event):
                 if show_ratio:
                     fig, (ax1, ax_osc, ax2, ax3) = plt.subplots(4, 1, figsize=(14, 16), dpi=150,
                                                                   gridspec_kw={"height_ratios": [4, 2, 2.5, 2.5]}, sharex=True)
-                    bt._apply_dark_theme(fig, [ax1, ax_osc, ax2, ax3])
+                    bt._apply_dark_theme(fig, [ax1, ax_osc, ax2, ax3], p.theme)
                     equity_top = (4 + 2) / (4 + 2 + 2.5 + 2.5)
                     equity_bottom = (4 + 2 + 2.5) / (4 + 2 + 2.5 + 2.5)
                 else:
                     fig, (ax1, ax_osc, ax2) = plt.subplots(3, 1, figsize=(14, 13), dpi=150,
                                                              gridspec_kw={"height_ratios": [5, 2, 3]}, sharex=True)
-                    bt._apply_dark_theme(fig, [ax1, ax_osc, ax2])
+                    bt._apply_dark_theme(fig, [ax1, ax_osc, ax2], p.theme)
                     equity_top = (5 + 2) / (5 + 2 + 3)
                     equity_bottom = 1.0
             else:
                 if show_ratio:
                     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 13), dpi=150,
                                                          gridspec_kw={"height_ratios": [5, 2.5, 2.5]}, sharex=True)
-                    bt._apply_dark_theme(fig, [ax1, ax2, ax3])
+                    bt._apply_dark_theme(fig, [ax1, ax2, ax3], p.theme)
                     equity_top = 5 / (5 + 2.5 + 2.5)
                     equity_bottom = (5 + 2.5) / (5 + 2.5 + 2.5)
                 else:
                     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), dpi=150,
                                                     gridspec_kw={"height_ratios": [7, 3]}, sharex=True)
-                    bt._apply_dark_theme(fig, [ax1, ax2])
+                    bt._apply_dark_theme(fig, [ax1, ax2], p.theme)
                     equity_top = 7 / (7 + 3)
                     equity_bottom = 1.0
 
-            ax1.plot(df_price_all.index, df_price_all["close"], label=f"{asset_name} {'Ratio' if is_ratio else 'Price'}", color="#e8eaf0", linewidth=0.8)
+            ax1.plot(df_price_all.index, df_price_all["close"], label=f"{asset_name} {'Ratio' if is_ratio else 'Price'}", color=t["price"], linewidth=0.8)
 
             if not is_oscillator:
                 # Compute indicators on full price data (extends beyond backtest end_date)
                 _ext_ind2, _ = bt.compute_indicator_from_spec(df_price_all, best["ind2_name"], best.get("ind2_period"))
                 _ext_ind2 = _ext_ind2[_ext_ind2.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
                 ax1.plot(_ext_ind2.index, _ext_ind2,
-                         label=best["ind2_label"], color="#6495ED", linewidth=0.8, alpha=0.8)
+                         label=best["ind2_label"], color=t["blue"], linewidth=0.8, alpha=0.8)
                 if best.get("ind1_name") != "price":
                     _ext_ind1, _ = bt.compute_indicator_from_spec(df_price_all, best["ind1_name"], best.get("ind1_period"))
                     _ext_ind1 = _ext_ind1[_ext_ind1.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
                     ax1.plot(_ext_ind1.index, _ext_ind1,
-                             label=best["ind1_label"], color="#f7931a", linewidth=0.8, alpha=0.8)
+                             label=best["ind1_label"], color=t["accent"], linewidth=0.8, alpha=0.8)
 
             ax1.set_yscale("log")
             if is_ratio:
@@ -4629,29 +4684,29 @@ def _run_post_handler(cancel_event):
             tf_label = " (Weekly)" if is_weekly else ""
             ax1.set_title(f"{asset_name}{tf_label} Backtest \u2014 {best['label']} "
                           f"({best['total_return']:.1f}% return) | {p.exposure}")
-            ax1.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
-            ax1.grid(True, which="major", alpha=0.3, color="#252a3a")
-            ax1.grid(True, which="minor", alpha=0.15, color="#252a3a")
+            ax1.legend(loc="upper left", fontsize=8, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["price"])
+            ax1.grid(True, which="major", alpha=0.3, color=t["grid"])
+            ax1.grid(True, which="minor", alpha=0.15, color=t["grid"])
 
             # --- Oscillator panel ---
             if is_oscillator:
                 osc_data = best.get("osc_data")
                 osc_spec = osc_data["spec"]
-                osc_colors = ["#6495ED", "#f7931a", "#34d399"]
+                osc_colors = [t["blue"], t["accent"], t["green"]]
 
                 if p.osc_name == "macd":
                     # MACD: line + signal + histogram bars
                     macd_s = osc_data["series"]["MACD"]
                     sig_s = osc_data["series"]["Signal"]
                     hist_s = osc_data["series"]["Histogram"]
-                    ax_osc.plot(macd_s.index, macd_s, color="#6495ED", linewidth=0.9, label="MACD")
-                    ax_osc.plot(sig_s.index, sig_s, color="#f7931a", linewidth=0.9, label="Signal")
+                    ax_osc.plot(macd_s.index, macd_s, color=t["blue"], linewidth=0.9, label="MACD")
+                    ax_osc.plot(sig_s.index, sig_s, color=t["accent"], linewidth=0.9, label="Signal")
                     # Histogram as bars
                     pos_hist = hist_s.where(hist_s >= 0, 0)
                     neg_hist = hist_s.where(hist_s < 0, 0)
-                    ax_osc.fill_between(hist_s.index, 0, pos_hist, alpha=0.3, color="#34d399", step="mid")
-                    ax_osc.fill_between(hist_s.index, 0, neg_hist, alpha=0.3, color="#ef4444", step="mid")
-                    ax_osc.axhline(y=0, color="#8890a4", linestyle="--", linewidth=0.6, alpha=0.5)
+                    ax_osc.fill_between(hist_s.index, 0, pos_hist, alpha=0.3, color=t["green"], step="mid")
+                    ax_osc.fill_between(hist_s.index, 0, neg_hist, alpha=0.3, color=t["red"], step="mid")
+                    ax_osc.axhline(y=0, color=t["muted"], linestyle="--", linewidth=0.6, alpha=0.5)
                 else:
                     # Single or dual line oscillators
                     for idx, (line_name, line_series) in enumerate(osc_data["series"].items()):
@@ -4659,19 +4714,19 @@ def _run_post_handler(cancel_event):
                                     linewidth=0.9, label=line_name)
 
                     # Draw threshold lines
-                    ax_osc.axhline(y=p.buy_threshold, color="#34d399", linestyle="--", linewidth=0.7, alpha=0.7,
+                    ax_osc.axhline(y=p.buy_threshold, color=t["green"], linestyle="--", linewidth=0.7, alpha=0.7,
                                    label=f"Buy ({p.buy_threshold})")
-                    ax_osc.axhline(y=p.sell_threshold, color="#ef4444", linestyle="--", linewidth=0.7, alpha=0.7,
+                    ax_osc.axhline(y=p.sell_threshold, color=t["red"], linestyle="--", linewidth=0.7, alpha=0.7,
                                    label=f"Sell ({p.sell_threshold})")
 
                     # Shade overbought/oversold zones
                     osc_range = osc_spec.get("range")
                     if osc_range:
-                        ax_osc.fill_between(df.index, osc_range[0], p.buy_threshold, alpha=0.04, color="#34d399")
-                        ax_osc.fill_between(df.index, p.sell_threshold, osc_range[1], alpha=0.04, color="#ef4444")
+                        ax_osc.fill_between(df.index, osc_range[0], p.buy_threshold, alpha=0.04, color=t["green"])
+                        ax_osc.fill_between(df.index, p.sell_threshold, osc_range[1], alpha=0.04, color=t["red"])
                     else:
                         # For unbounded oscillators, just shade between threshold lines
-                        ax_osc.axhline(y=0, color="#8890a4", linestyle="--", linewidth=0.5, alpha=0.3)
+                        ax_osc.axhline(y=0, color=t["muted"], linestyle="--", linewidth=0.5, alpha=0.3)
 
                 # Set y-limits for bounded oscillators
                 osc_range = osc_spec.get("range")
@@ -4679,15 +4734,15 @@ def _run_post_handler(cancel_event):
                     ax_osc.set_ylim(osc_range[0] - 2, osc_range[1] + 2)
 
                 ax_osc.set_ylabel(osc_data["label"])
-                ax_osc.legend(loc="upper left", fontsize=7, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0", ncol=3)
-                ax_osc.grid(True, which="major", alpha=0.3, color="#252a3a")
+                ax_osc.legend(loc="upper left", fontsize=7, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["price"], ncol=3)
+                ax_osc.grid(True, which="major", alpha=0.3, color=t["grid"])
 
-            ax2.plot(best["equity"].index, best["equity"], label="Strategy Equity", color="#6495ED", linewidth=1)
+            ax2.plot(best["equity"].index, best["equity"], label="Strategy Equity", color=t["blue"], linewidth=1)
             if show_ratio:
-                ax2.plot(best["buyhold"].index, best["buyhold"], label="Buy & Hold", color="#8890a4", linewidth=1, alpha=0.7)
+                ax2.plot(best["buyhold"].index, best["buyhold"], label="Buy & Hold", color=t["muted"], linewidth=1, alpha=0.7)
             if p.sizing == "fixed":
                 ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if abs(x) < 1 else f"${x:,.0f}"))
-                ax2.axhline(y=p.initial_cash, color="#8890a4", linestyle="--", linewidth=0.8, alpha=0.5)
+                ax2.axhline(y=p.initial_cash, color=t["muted"], linestyle="--", linewidth=0.8, alpha=0.5)
                 ax2.set_ylabel("Portfolio Value (linear, fixed sizing)")
             else:
                 ax2.set_yscale("log")
@@ -4695,25 +4750,25 @@ def _run_post_handler(cancel_event):
                 ax2.yaxis.set_minor_formatter(_minor_usd_formatter())
                 ax2.tick_params(axis='y', which='minor', labelsize=6)
                 ax2.set_ylabel("Portfolio Value (log)")
-            ax2.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
-            ax2.grid(True, which="major", alpha=0.3, color="#252a3a")
-            ax2.grid(True, which="minor", alpha=0.15, color="#252a3a")
+            ax2.legend(loc="upper left", fontsize=8, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["price"])
+            ax2.grid(True, which="major", alpha=0.3, color=t["grid"])
+            ax2.grid(True, which="minor", alpha=0.15, color=t["grid"])
 
             last_ax = ax2
             if show_ratio:
                 ratio = best["equity"] / best["buyhold"].replace(0, np.nan)
                 ratio_normalized = ratio / ratio.dropna().iloc[0] * 100
                 ax3.plot(ratio_normalized.index, ratio_normalized, color="#a78bfa", linewidth=1, label=f"Strategy in {asset_name}")
-                ax3.axhline(y=100, color="#8890a4", linestyle="--", linewidth=0.8, alpha=0.7)
+                ax3.axhline(y=100, color=t["muted"], linestyle="--", linewidth=0.8, alpha=0.7)
                 if p.sizing != "fixed":
                     ax3.set_yscale("log")
                     ax3.yaxis.set_minor_formatter(_minor_usd_formatter(dollar=False))
                     ax3.tick_params(axis='y', which='minor', labelsize=6)
                 ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:,.2f}" if abs(x) < 1 else f"{x:,.0f}"))
                 ax3.set_ylabel(f"Value in {asset_name}")
-                ax3.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
-                ax3.grid(True, which="major", alpha=0.3, color="#252a3a")
-                ax3.grid(True, which="minor", alpha=0.15, color="#252a3a")
+                ax3.legend(loc="upper left", fontsize=8, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["price"])
+                ax3.grid(True, which="major", alpha=0.3, color=t["grid"])
+                ax3.grid(True, which="minor", alpha=0.15, color=t["grid"])
                 last_ax = ax3
             last_ax.set_xlabel("Date")
             last_ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
@@ -4732,16 +4787,16 @@ def _run_post_handler(cancel_event):
 
             # Generate small equity-only thumbnail
             thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
-            bt._apply_dark_theme(thumb_fig, [thumb_ax])
-            thumb_ax.plot(best["equity"].index, best["equity"], color="#6495ED", linewidth=1.5)
+            bt._apply_dark_theme(thumb_fig, [thumb_ax], p.theme)
+            thumb_ax.plot(best["equity"].index, best["equity"], color=t["blue"], linewidth=1.5)
             if show_ratio:
-                thumb_ax.plot(best["buyhold"].index, best["buyhold"], color="#8890a4", linewidth=1, alpha=0.7)
+                thumb_ax.plot(best["buyhold"].index, best["buyhold"], color=t["muted"], linewidth=1, alpha=0.7)
             if p.sizing == "fixed":
                 thumb_ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
             else:
                 thumb_ax.set_yscale("log")
                 thumb_ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
-            thumb_ax.grid(True, which="major", alpha=0.3, color="#252a3a")
+            thumb_ax.grid(True, which="major", alpha=0.3, color=t["grid"])
             thumb_ax.tick_params(labelsize=7)
             thumb_ax.set_xlabel("")
             thumb_ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
@@ -4787,6 +4842,7 @@ COMMUNITY_HTML = """\
 <!DOCTYPE html>
 <html>
 <head>
+    <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("theme")||"dark")</script>
     <title>{{ page_title }} — Strategy Analytics</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
@@ -4805,6 +4861,12 @@ COMMUNITY_HTML = """\
             --accent: #f7931a; --accent-hover: #ffa940; --accent-glow: rgba(247, 147, 26, 0.15);
             --green: #34d399; --blue: #6495ED;
         }
+        [data-theme="light"] {
+            --bg-deep: #f5f6fa; --bg-base: #ebedf5; --bg-surface: #ffffff; --bg-elevated: #f0f2f5;
+            --border: #d0d4e0; --border-hover: #a0a8c0; --text: #1a1a2e; --text-muted: #5a6078; --text-dim: #8890a4;
+            --accent: #d97706; --accent-hover: #b45309; --accent-glow: rgba(217, 119, 6, 0.15);
+            --green: #059669; --green-dim: rgba(5, 150, 105, 0.12); --blue: #3a6fd8;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'DM Sans', sans-serif; background: var(--bg-deep); color: var(--text); min-height: 100vh; }
         body::before {
@@ -4812,6 +4874,10 @@ COMMUNITY_HTML = """\
             background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(247, 147, 26, 0.06), transparent),
                         radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100, 149, 237, 0.04), transparent);
             pointer-events: none; z-index: 0;
+        }
+        [data-theme="light"] body::before {
+            background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(217, 119, 6, 0.04), transparent),
+                        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(58, 111, 216, 0.03), transparent);
         }
         .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
         .community-layout { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
@@ -5032,8 +5098,12 @@ COMMUNITY_HTML = """\
         <a href="/my-backtests" class="nav-link {{ 'active' if nav_active=='my-backtests' }}">My Backtests</a>
         {% endif %}
         {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active=='admin-assets' }}">Assets</a>{% endif %}
-        {% if is_authenticated %}
         <div class="nav-right-group">
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+            {% if is_authenticated %}
             <div class="notif-bell-wrap">
                 <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -5061,8 +5131,8 @@ COMMUNITY_HTML = """\
                     <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
                 </div>
             </div>
-        </div>
         {% endif %}
+        </div>
     </nav>
     {% if nav_active == 'community' and recent_comments|default(none) and recent_comments|length > 0 %}
     <div class="community-layout">
@@ -5419,6 +5489,17 @@ COMMUNITY_HTML = """\
     {% endif %}
 </div>
 <script>
+// Theme toggle
+(function() {
+    var saved = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+})();
+function toggleTheme() {
+    var current = document.documentElement.getAttribute('data-theme') || 'dark';
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+}
 var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
     customClass: { popup: 'swal-dark' }
@@ -5578,6 +5659,7 @@ DETAIL_HTML = """\
 <!DOCTYPE html>
 <html>
 <head>
+    <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("theme")||"dark")</script>
     <title>{{ backtest.title|title if backtest.title else 'Backtest' }} — Strategy Analytics</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
@@ -5597,6 +5679,12 @@ DETAIL_HTML = """\
             --accent: #f7931a; --accent-hover: #ffa940; --accent-glow: rgba(247, 147, 26, 0.15);
             --green: #34d399; --blue: #6495ED;
         }
+        [data-theme="light"] {
+            --bg-deep: #f5f6fa; --bg-base: #ebedf5; --bg-surface: #ffffff; --bg-elevated: #f0f2f5;
+            --border: #d0d4e0; --border-hover: #a0a8c0; --text: #1a1a2e; --text-muted: #5a6078; --text-dim: #8890a4;
+            --accent: #d97706; --accent-hover: #b45309; --accent-glow: rgba(217, 119, 6, 0.15);
+            --green: #059669; --green-dim: rgba(5, 150, 105, 0.12); --blue: #3a6fd8;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'DM Sans', sans-serif; background: var(--bg-deep); color: var(--text); min-height: 100vh; }
         body::before {
@@ -5604,6 +5692,10 @@ DETAIL_HTML = """\
             background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(247, 147, 26, 0.06), transparent),
                         radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100, 149, 237, 0.04), transparent);
             pointer-events: none; z-index: 0;
+        }
+        [data-theme="light"] body::before {
+            background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(217, 119, 6, 0.04), transparent),
+                        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(58, 111, 216, 0.03), transparent);
         }
         .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
         .header { text-align: center; margin-bottom: 32px; position: relative; }
@@ -5620,6 +5712,14 @@ DETAIL_HTML = """\
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        /* Theme toggle */
+        .theme-toggle { background: none; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); padding: 7px; border-radius: 8px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+        .theme-toggle:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border-hover); }
+        .theme-toggle svg { width: 16px; height: 16px; }
+        .theme-toggle .icon-sun { display: none; }
+        .theme-toggle .icon-moon { display: block; }
+        [data-theme="light"] .theme-toggle .icon-sun { display: block; }
+        [data-theme="light"] .theme-toggle .icon-moon { display: none; }
         .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; z-index: 9999; }
         .notif-bell-wrap { position: relative; }
         .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
@@ -5883,8 +5983,12 @@ DETAIL_HTML = """\
         <a href="/my-backtests" class="nav-link">My Backtests</a>
         {% endif %}
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
-        {% if is_authenticated %}
         <div class="nav-right-group">
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+            {% if is_authenticated %}
             <div class="notif-bell-wrap">
                 <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -5912,8 +6016,8 @@ DETAIL_HTML = """\
                     <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
                 </div>
             </div>
-        </div>
         {% endif %}
+        </div>
     </nav>
 
     <div class="panel">
@@ -6167,6 +6271,17 @@ DETAIL_HTML = """\
         </div>
 </div>
 <script>
+// Theme toggle
+(function() {
+    var saved = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+})();
+function toggleTheme() {
+    var current = document.documentElement.getAttribute('data-theme') || 'dark';
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+}
 var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
     customClass: { popup: 'swal-dark' }
@@ -6669,6 +6784,7 @@ MY_BACKTESTS_HTML = """\
 <!DOCTYPE html>
 <html>
 <head>
+    <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("theme")||"dark")</script>
     <title>My Backtests — Strategy Analytics</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
@@ -6687,6 +6803,12 @@ MY_BACKTESTS_HTML = """\
             --accent: #f7931a; --accent-hover: #ffa940; --accent-glow: rgba(247, 147, 26, 0.15);
             --green: #34d399; --blue: #6495ED;
         }
+        [data-theme="light"] {
+            --bg-deep: #f5f6fa; --bg-base: #ebedf5; --bg-surface: #ffffff; --bg-elevated: #f0f2f5;
+            --border: #d0d4e0; --border-hover: #a0a8c0; --text: #1a1a2e; --text-muted: #5a6078; --text-dim: #8890a4;
+            --accent: #d97706; --accent-hover: #b45309; --accent-glow: rgba(217, 119, 6, 0.15);
+            --green: #059669; --green-dim: rgba(5, 150, 105, 0.12); --blue: #3a6fd8;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'DM Sans', sans-serif; background: var(--bg-deep); color: var(--text); min-height: 100vh; }
         body::before {
@@ -6694,6 +6816,10 @@ MY_BACKTESTS_HTML = """\
             background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(247, 147, 26, 0.06), transparent),
                         radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100, 149, 237, 0.04), transparent);
             pointer-events: none; z-index: 0;
+        }
+        [data-theme="light"] body::before {
+            background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(217, 119, 6, 0.04), transparent),
+                        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(58, 111, 216, 0.03), transparent);
         }
         .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
         .header { text-align: center; margin-bottom: 32px; }
@@ -6704,6 +6830,14 @@ MY_BACKTESTS_HTML = """\
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        /* Theme toggle */
+        .theme-toggle { background: none; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); padding: 7px; border-radius: 8px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+        .theme-toggle:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border-hover); }
+        .theme-toggle svg { width: 16px; height: 16px; }
+        .theme-toggle .icon-sun { display: none; }
+        .theme-toggle .icon-moon { display: block; }
+        [data-theme="light"] .theme-toggle .icon-sun { display: block; }
+        [data-theme="light"] .theme-toggle .icon-moon { display: none; }
         .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; z-index: 9999; }
         .notif-bell-wrap { position: relative; }
         .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
@@ -6823,8 +6957,12 @@ MY_BACKTESTS_HTML = """\
         <a href="/backtester" class="nav-link">Create Backtest</a>
         <a href="/my-backtests" class="nav-link active">My Backtests</a>
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
-        {% if is_authenticated %}
         <div class="nav-right-group">
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+            {% if is_authenticated %}
             <div class="notif-bell-wrap">
                 <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -6852,8 +6990,8 @@ MY_BACKTESTS_HTML = """\
                     <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
                 </div>
             </div>
-        </div>
         {% endif %}
+        </div>
     </nav>
 
     <div class="panel">
@@ -7015,6 +7153,17 @@ MY_BACKTESTS_HTML = """\
     </div>
 </div>
 <script>
+// Theme toggle
+(function() {
+    var saved = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+})();
+function toggleTheme() {
+    var current = document.documentElement.getAttribute('data-theme') || 'dark';
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+}
 var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
     customClass: { popup: 'swal-dark' }
@@ -7255,6 +7404,7 @@ ADMIN_ASSETS_HTML = """\
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("theme")||"dark")</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Asset Management — Bitcoin Strategy Analytics</title>
@@ -7276,6 +7426,12 @@ ADMIN_ASSETS_HTML = """\
             --green: #34d399; --red: #ef4444;
             --blue: #6495ED;
         }
+        [data-theme="light"] {
+            --bg-deep: #f5f6fa; --bg-base: #ebedf5; --bg-surface: #ffffff; --bg-elevated: #f0f2f5;
+            --border: #d0d4e0; --border-hover: #a0a8c0; --text: #1a1a2e; --text-muted: #5a6078; --text-dim: #8890a4;
+            --accent: #d97706; --accent-hover: #b45309; --accent-glow: rgba(217, 119, 6, 0.15);
+            --green: #059669; --green-dim: rgba(5, 150, 105, 0.12); --blue: #3a6fd8;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'DM Sans', sans-serif; background: var(--bg-deep); color: var(--text); min-height: 100vh; }
         .container { max-width: 1000px; margin: 0 auto; padding: 24px 20px; }
@@ -7287,6 +7443,14 @@ ADMIN_ASSETS_HTML = """\
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; border: 1px solid transparent; transition: all 0.2s ease; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: rgba(247,147,26,0.2); }
+        /* Theme toggle */
+        .theme-toggle { background: none; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); padding: 7px; border-radius: 8px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+        .theme-toggle:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border-hover); }
+        .theme-toggle svg { width: 16px; height: 16px; }
+        .theme-toggle .icon-sun { display: none; }
+        .theme-toggle .icon-moon { display: block; }
+        [data-theme="light"] .theme-toggle .icon-sun { display: block; }
+        [data-theme="light"] .theme-toggle .icon-moon { display: none; }
         .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; z-index: 9999; }
         .notif-bell-wrap { position: relative; }
         .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
@@ -7422,8 +7586,12 @@ ADMIN_ASSETS_HTML = """\
         <a href="/backtester" class="nav-link">Create Backtest</a>
         <a href="/my-backtests" class="nav-link">My Backtests</a>
         <a href="/admin/assets" class="nav-link active">Assets</a>
-        {% if is_authenticated %}
         <div class="nav-right-group">
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+            {% if is_authenticated %}
             <div class="notif-bell-wrap">
                 <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -7451,8 +7619,8 @@ ADMIN_ASSETS_HTML = """\
                     <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
                 </div>
             </div>
-        </div>
         {% endif %}
+        </div>
     </nav>
 
     <div class="panel">
@@ -7533,6 +7701,17 @@ ADMIN_ASSETS_HTML = """\
 </div>
 
 <script>
+// Theme toggle
+(function() {
+    var saved = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+})();
+function toggleTheme() {
+    var current = document.documentElement.getAttribute('data-theme') || 'dark';
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+}
 var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
     customClass: { popup: 'swal-dark' }
@@ -8817,6 +8996,7 @@ COLLECTION_DETAIL_HTML = """\
 <!DOCTYPE html>
 <html>
 <head>
+    <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("theme")||"dark")</script>
     <title>{{ collection.title }} — Strategy Analytics</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
@@ -8835,6 +9015,12 @@ COLLECTION_DETAIL_HTML = """\
             --accent: #f7931a; --accent-hover: #ffa940; --accent-glow: rgba(247, 147, 26, 0.15);
             --green: #34d399; --blue: #6495ED;
         }
+        [data-theme="light"] {
+            --bg-deep: #f5f6fa; --bg-base: #ebedf5; --bg-surface: #ffffff; --bg-elevated: #f0f2f5;
+            --border: #d0d4e0; --border-hover: #a0a8c0; --text: #1a1a2e; --text-muted: #5a6078; --text-dim: #8890a4;
+            --accent: #d97706; --accent-hover: #b45309; --accent-glow: rgba(217, 119, 6, 0.15);
+            --green: #059669; --green-dim: rgba(5, 150, 105, 0.12); --blue: #3a6fd8;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'DM Sans', sans-serif; background: var(--bg-deep); color: var(--text); min-height: 100vh; }
         body::before {
@@ -8842,6 +9028,10 @@ COLLECTION_DETAIL_HTML = """\
             background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(139, 92, 246, 0.06), transparent),
                         radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100, 149, 237, 0.04), transparent);
             pointer-events: none; z-index: 0;
+        }
+        [data-theme="light"] body::before {
+            background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(217, 119, 6, 0.04), transparent),
+                        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(58, 111, 216, 0.03), transparent);
         }
         .container { max-width: 960px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
         .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); text-decoration: none; font-size: 0.85em; margin-bottom: 20px; transition: color 0.2s; }
@@ -9295,6 +9485,7 @@ document.addEventListener('click', function(e) {
 ACCOUNT_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("theme")||"dark")</script>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Account Settings - Bitcoin Strategy Analytics</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
@@ -9307,6 +9498,12 @@ ACCOUNT_HTML = """<!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         :root { --bg-deep: #0d0f1a; --bg-base: #131525; --bg-surface: #1a1d2e; --bg-elevated: #242842; --border: #2a2e45; --border-hover: #3d4266; --text: #e8e9ed; --text-muted: #b0b3c5; --text-dim: #6b7094; --accent: #F7931A; --accent-glow: rgba(247,147,26,0.15); --blue: #6495ED; }
+        [data-theme="light"] {
+            --bg-deep: #f5f6fa; --bg-base: #ebedf5; --bg-surface: #ffffff; --bg-elevated: #f0f2f5;
+            --border: #d0d4e0; --border-hover: #a0a8c0; --text: #1a1a2e; --text-muted: #5a6078; --text-dim: #8890a4;
+            --accent: #d97706; --accent-hover: #b45309; --accent-glow: rgba(217, 119, 6, 0.15);
+            --green: #059669; --green-dim: rgba(5, 150, 105, 0.12); --blue: #3a6fd8;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: var(--bg-deep); color: var(--text); font-family: 'DM Sans', sans-serif; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
@@ -9318,6 +9515,14 @@ ACCOUNT_HTML = """<!DOCTYPE html>
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        /* Theme toggle */
+        .theme-toggle { background: none; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); padding: 7px; border-radius: 8px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+        .theme-toggle:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border-hover); }
+        .theme-toggle svg { width: 16px; height: 16px; }
+        .theme-toggle .icon-sun { display: none; }
+        .theme-toggle .icon-moon { display: block; }
+        [data-theme="light"] .theme-toggle .icon-sun { display: block; }
+        [data-theme="light"] .theme-toggle .icon-moon { display: none; }
         .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; z-index: 9999; }
         .notif-bell-wrap { position: relative; }
         .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
@@ -9400,8 +9605,12 @@ ACCOUNT_HTML = """<!DOCTYPE html>
         <a href="/backtester" class="nav-link">Create Backtest</a>
         {% if is_authenticated %}<a href="/my-backtests" class="nav-link">My Backtests</a>{% endif %}
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
-        {% if is_authenticated %}
         <div class="nav-right-group">
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+            {% if is_authenticated %}
             <div class="notif-bell-wrap">
                 <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -9429,8 +9638,8 @@ ACCOUNT_HTML = """<!DOCTYPE html>
                     <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
                 </div>
             </div>
-        </div>
         {% endif %}
+        </div>
     </nav>
 
     <div class="panel">
@@ -9493,6 +9702,17 @@ ACCOUNT_HTML = """<!DOCTYPE html>
     </div>
 </div>
 <script>
+// Theme toggle
+(function() {
+    var saved = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+})();
+function toggleTheme() {
+    var current = document.documentElement.getAttribute('data-theme') || 'dark';
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+}
 var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
     customClass: { popup: 'swal-dark' }
@@ -9622,6 +9842,7 @@ function saveNotifPref() {
 FEEDBACK_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("theme")||"dark")</script>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Send Feedback - Bitcoin Strategy Analytics</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
@@ -9634,6 +9855,12 @@ FEEDBACK_HTML = """<!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         :root { --bg-deep: #0d0f1a; --bg-base: #131525; --bg-surface: #1a1d2e; --bg-elevated: #242842; --border: #2a2e45; --border-hover: #3d4266; --text: #e8e9ed; --text-muted: #b0b3c5; --text-dim: #6b7094; --accent: #F7931A; --accent-glow: rgba(247,147,26,0.15); --blue: #6495ED; }
+        [data-theme="light"] {
+            --bg-deep: #f5f6fa; --bg-base: #ebedf5; --bg-surface: #ffffff; --bg-elevated: #f0f2f5;
+            --border: #d0d4e0; --border-hover: #a0a8c0; --text: #1a1a2e; --text-muted: #5a6078; --text-dim: #8890a4;
+            --accent: #d97706; --accent-hover: #b45309; --accent-glow: rgba(217, 119, 6, 0.15);
+            --green: #059669; --green-dim: rgba(5, 150, 105, 0.12); --blue: #3a6fd8;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: var(--bg-deep); color: var(--text); font-family: 'DM Sans', sans-serif; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
@@ -9645,6 +9872,14 @@ FEEDBACK_HTML = """<!DOCTYPE html>
         .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
+        /* Theme toggle */
+        .theme-toggle { background: none; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); padding: 7px; border-radius: 8px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+        .theme-toggle:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border-hover); }
+        .theme-toggle svg { width: 16px; height: 16px; }
+        .theme-toggle .icon-sun { display: none; }
+        .theme-toggle .icon-moon { display: block; }
+        [data-theme="light"] .theme-toggle .icon-sun { display: block; }
+        [data-theme="light"] .theme-toggle .icon-moon { display: none; }
         .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; z-index: 9999; }
         .notif-bell-wrap { position: relative; }
         .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
@@ -9708,8 +9943,12 @@ FEEDBACK_HTML = """<!DOCTYPE html>
         <a href="/backtester" class="nav-link">Create Backtest</a>
         {% if is_authenticated %}<a href="/my-backtests" class="nav-link">My Backtests</a>{% endif %}
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
-        {% if is_authenticated %}
         <div class="nav-right-group">
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+            {% if is_authenticated %}
             <div class="notif-bell-wrap">
                 <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -9737,8 +9976,8 @@ FEEDBACK_HTML = """<!DOCTYPE html>
                     <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
                 </div>
             </div>
-        </div>
         {% endif %}
+        </div>
     </nav>
 
     <div class="panel">
@@ -9749,6 +9988,17 @@ FEEDBACK_HTML = """<!DOCTYPE html>
     </div>
 </div>
 <script>
+// Theme toggle
+(function() {
+    var saved = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+})();
+function toggleTheme() {
+    var current = document.documentElement.getAttribute('data-theme') || 'dark';
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+}
 var _swal = Swal.mixin({
     background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
     customClass: { popup: 'swal-dark' }
@@ -9880,6 +10130,7 @@ def feedback_page():
 _ERROR_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("theme")||"dark")</script>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>{{ code }} — Strategy Analytics</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
@@ -9898,6 +10149,12 @@ _ERROR_HTML = """<!DOCTYPE html>
             --text-muted: #8890a4; --accent: #f7931a; --accent-hover: #ffa940;
             --blue: #6495ED; --green: #34d399;
         }
+        [data-theme="light"] {
+            --bg-deep: #f5f6fa; --bg-base: #ebedf5; --bg-surface: #ffffff; --bg-elevated: #f0f2f5;
+            --border: #d0d4e0; --border-hover: #a0a8c0; --text: #1a1a2e; --text-muted: #5a6078; --text-dim: #8890a4;
+            --accent: #d97706; --accent-hover: #b45309; --accent-glow: rgba(217, 119, 6, 0.15);
+            --green: #059669; --green-dim: rgba(5, 150, 105, 0.12); --blue: #3a6fd8;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'DM Sans', sans-serif; background: var(--bg-deep);
@@ -9910,6 +10167,10 @@ _ERROR_HTML = """<!DOCTYPE html>
                 radial-gradient(ellipse 80% 50% at 50% -20%, rgba(247,147,26,0.06), transparent),
                 radial-gradient(ellipse 60% 40% at 80% 100%, rgba(100,149,237,0.04), transparent);
             pointer-events: none;
+        }
+        [data-theme="light"] body::before {
+            background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(217, 119, 6, 0.04), transparent),
+                        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(58, 111, 216, 0.03), transparent);
         }
         .error-container {
             text-align: center; position: relative; z-index: 1;

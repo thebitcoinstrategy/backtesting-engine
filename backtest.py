@@ -1508,7 +1508,7 @@ def sweep_regression_r_squared(df, osc_name, osc_period, buy_threshold=None, sel
     }
 
 
-def generate_regression_sweep_chart(sweep_result):
+def generate_regression_sweep_chart(sweep_result, theme="dark"):
     """Generate line chart of R² vs forward days. Returns base64 PNG."""
     import matplotlib
     matplotlib.use("Agg")
@@ -1516,23 +1516,24 @@ def generate_regression_sweep_chart(sweep_result):
     from io import BytesIO
     import base64
 
+    t = _get_theme(theme)
     days = sweep_result["days"]
     r_sq = sweep_result["r_squared"]
     spearman = sweep_result["spearman"]
 
     fig, ax = plt.subplots(figsize=(14, 5), dpi=150)
-    _apply_dark_theme(fig, ax)
+    _apply_dark_theme(fig, ax, theme)
 
-    ax.plot(days, r_sq, color="#6495ED", linewidth=1.5, label="R²")
+    ax.plot(days, r_sq, color=t["blue"], linewidth=1.5, label="R²")
     ax.scatter([sweep_result["best_days"]], [sweep_result["best_r_squared"]],
-               color="#f7931a", s=60, zorder=5,
+               color=t["accent"], s=60, zorder=5,
                label=f"Best R²: {sweep_result['best_days']}d ({sweep_result['best_r_squared']:.4f})")
 
     ax.set_xlabel("Forward Days")
     ax.set_ylabel("R²")
     ax.set_title(f"{sweep_result['osc_label']} — Predictive Power by Forward Horizon")
-    ax.legend(loc="best", fontsize=9, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
-    ax.grid(True, alpha=0.3, color="#252a3a")
+    ax.legend(loc="best", fontsize=9, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["text"])
+    ax.grid(True, alpha=0.3, color=t["grid"])
     ax.set_xlim(days[0], days[-1])
     plt.tight_layout()
 
@@ -1543,19 +1544,20 @@ def generate_regression_sweep_chart(sweep_result):
     return base64.b64encode(buf.read()).decode()
 
 
-def generate_regression_chart(result):
+def generate_regression_chart(result, theme="dark"):
     """Generate scatter plot of oscillator values vs forward returns. Returns base64 PNG."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    t = _get_theme(theme)
     osc_values = result["osc_values"]
     log_returns = result["log_returns"]
     buy_thr = result["buy_threshold"]
     sell_thr = result["sell_threshold"]
 
     fig, ax = plt.subplots(figsize=(14, 9), dpi=150)
-    _apply_dark_theme(fig, ax)
+    _apply_dark_theme(fig, ax, theme)
 
     # Color points by zone
     oversold_mask = osc_values < buy_thr
@@ -1563,25 +1565,25 @@ def generate_regression_chart(result):
     neutral_mask = ~oversold_mask & ~overbought_mask
 
     ax.scatter(osc_values[neutral_mask], log_returns[neutral_mask],
-               c="#8890a4", alpha=0.25, s=8, label="Neutral", rasterized=True)
+               c=t["muted"], alpha=0.25, s=8, label="Neutral", rasterized=True)
     ax.scatter(osc_values[oversold_mask], log_returns[oversold_mask],
-               c="#34d399", alpha=0.35, s=12, label="Oversold", rasterized=True)
+               c=t["green"], alpha=0.35, s=12, label="Oversold", rasterized=True)
     ax.scatter(osc_values[overbought_mask], log_returns[overbought_mask],
-               c="#ef4444", alpha=0.35, s=12, label="Overbought", rasterized=True)
+               c=t["red"], alpha=0.35, s=12, label="Overbought", rasterized=True)
 
     # Regression line (fitted in log space — straight line through log return data)
     x_range = np.linspace(osc_values.min(), osc_values.max(), 100)
     y_pred = result["slope"] * x_range + result["intercept"]
-    ax.plot(x_range, y_pred, color="#f7931a", linewidth=2, label="Regression line")
+    ax.plot(x_range, y_pred, color=t["accent"], linewidth=2, label="Regression line")
 
     # Threshold lines
-    ax.axvline(x=buy_thr, color="#34d399", linestyle="--", linewidth=1, alpha=0.7,
+    ax.axvline(x=buy_thr, color=t["green"], linestyle="--", linewidth=1, alpha=0.7,
                label=f"Buy threshold ({buy_thr})")
-    ax.axvline(x=sell_thr, color="#ef4444", linestyle="--", linewidth=1, alpha=0.7,
+    ax.axvline(x=sell_thr, color=t["red"], linestyle="--", linewidth=1, alpha=0.7,
                label=f"Sell threshold ({sell_thr})")
 
     # Zero return line
-    ax.axhline(y=0, color="#8890a4", linestyle="--", linewidth=0.8, alpha=0.5)
+    ax.axhline(y=0, color=t["muted"], linestyle="--", linewidth=0.8, alpha=0.5)
 
     # Stats annotation
     stats_text = (
@@ -1593,15 +1595,15 @@ def generate_regression_chart(result):
     )
     ax.text(0.02, 0.97, stats_text, transform=ax.transAxes, fontsize=10,
             verticalalignment="top", fontfamily="monospace",
-            color="#e8eaf0", bbox=dict(boxstyle="round,pad=0.5",
-            facecolor="#161922", edgecolor="#252a3a", alpha=0.9))
+            color=t["text"], bbox=dict(boxstyle="round,pad=0.5",
+            facecolor=t["panel"], edgecolor=t["grid"], alpha=0.9))
 
     osc_label = result["osc_data"]["label"]
     ax.set_xlabel(f"{osc_label} Value")
     ax.set_ylabel(f"Forward {result['forward_days']}-Day Log Return (%)")
     ax.set_title(f"{osc_label} vs Forward {result['forward_days']}-Day Log Return — Regression Analysis")
-    ax.legend(loc="upper right", fontsize=8, facecolor="#161922", edgecolor="#252a3a", labelcolor="#e8eaf0")
-    ax.grid(True, alpha=0.3, color="#252a3a")
+    ax.legend(loc="upper right", fontsize=8, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["text"])
+    ax.grid(True, alpha=0.3, color=t["grid"])
     plt.tight_layout()
 
     from io import BytesIO
@@ -1613,13 +1615,50 @@ def generate_regression_chart(result):
     return base64.b64encode(buf.read()).decode()
 
 
-def _apply_dark_theme(fig, axes):
-    """Apply the web UI's dark color palette to a matplotlib figure and axes."""
-    BG = "#080a10"
-    PANEL = "#161922"
-    TEXT = "#e8eaf0"
-    MUTED = "#8890a4"
-    GRID = "#252a3a"
+CHART_THEMES = {
+    "dark": {
+        "bg": "#080a10",
+        "panel": "#161922",
+        "text": "#e8eaf0",
+        "muted": "#8890a4",
+        "grid": "#252a3a",
+        "price": "#e8eaf0",
+        "blue": "#6495ED",
+        "accent": "#f7931a",
+        "green": "#34d399",
+        "red": "#ef4444",
+        "branding_color": "#ffffff",
+        "branding_alpha": 0.5,
+    },
+    "light": {
+        "bg": "#ffffff",
+        "panel": "#f0f2f5",
+        "text": "#1a1a2e",
+        "muted": "#5a6078",
+        "grid": "#d0d4e0",
+        "price": "#1a1a2e",
+        "blue": "#3a6fd8",
+        "accent": "#d97706",
+        "green": "#059669",
+        "red": "#dc2626",
+        "branding_color": "#000000",
+        "branding_alpha": 0.3,
+    },
+}
+
+def _get_theme(theme="dark"):
+    """Return a chart theme palette dict."""
+    return CHART_THEMES.get(theme, CHART_THEMES["dark"])
+
+
+def _apply_dark_theme(fig, axes, theme="dark"):
+    """Apply a color palette to a matplotlib figure and axes."""
+    t = _get_theme(theme)
+    BG = t["bg"]
+    PANEL = t["panel"]
+    TEXT = t["text"]
+    MUTED = t["muted"]
+    GRID = t["grid"]
 
     fig.patch.set_facecolor(PANEL)
     if not hasattr(axes, '__iter__'):
@@ -1635,39 +1674,40 @@ def _apply_dark_theme(fig, axes):
 
     # URL branding at bottom right
     fig.text(0.98, 0.01, "the-bitcoin-strategy.com", fontsize=9,
-             color="#ffffff", alpha=0.5, ha="right", va="bottom",
-             transform=fig.transFigure)
+             color=t["branding_color"], alpha=t["branding_alpha"],
+             ha="right", va="bottom", transform=fig.transFigure)
 
 
-def generate_chart(df, best_result, output_path, asset_name="Bitcoin"):
+def generate_chart(df, best_result, output_path, asset_name="Bitcoin", theme="dark"):
     """Generate a two-panel PNG chart: price+indicators with markers, and equity curves."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
 
+    t = _get_theme(theme)
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
     fig, (ax1, ax2) = plt.subplots(
         2, 1, figsize=(14, 10), dpi=150,
         gridspec_kw={"height_ratios": [7, 3]}, sharex=True
     )
-    _apply_dark_theme(fig, [ax1, ax2])
+    _apply_dark_theme(fig, [ax1, ax2], theme)
 
     # Top panel: price + indicators + buy/sell markers
-    ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color="#e8eaf0", linewidth=0.8)
+    ax1.plot(df.index, df["close"], label=f"{asset_name} Price", color=t["price"], linewidth=0.8)
 
     # Plot ind2 (always — the main/slow indicator)
     ax1.plot(
         best_result["ind2_series"].index, best_result["ind2_series"],
-        label=best_result["ind2_label"], color="#6495ED", linewidth=0.8, alpha=0.8
+        label=best_result["ind2_label"], color=t["blue"], linewidth=0.8, alpha=0.8
     )
 
     # Plot ind1 if not price (crossover strategy)
     if best_result.get("ind1_name") != "price":
         ax1.plot(
             best_result["ind1_series"].index, best_result["ind1_series"],
-            label=best_result["ind1_label"], color="#f7931a", linewidth=0.8, alpha=0.8
+            label=best_result["ind1_label"], color=t["accent"], linewidth=0.8, alpha=0.8
         )
 
     ax1.set_yscale("log")
@@ -1677,26 +1717,26 @@ def generate_chart(df, best_result, output_path, asset_name="Bitcoin"):
     ax1.set_ylabel(f"{asset_name} Price (log scale)")
     ax1.set_title(f"{asset_name} Backtest — Best: {best_result['label']} "
                   f"({best_result['total_return']:.1f}% return)")
-    ax1.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a",
-               labelcolor="#e8eaf0")
-    ax1.grid(True, which="major", alpha=0.3, color="#252a3a")
-    ax1.grid(True, which="minor", alpha=0.15, color="#252a3a")
+    ax1.legend(loc="upper left", fontsize=8, facecolor=t["panel"], edgecolor=t["grid"],
+               labelcolor=t["text"])
+    ax1.grid(True, which="major", alpha=0.3, color=t["grid"])
+    ax1.grid(True, which="minor", alpha=0.15, color=t["grid"])
 
     # Bottom panel: equity curve vs buy-and-hold
     ax2.plot(best_result["equity"].index, best_result["equity"],
-             label="Strategy Equity", color="#6495ED", linewidth=1)
+             label="Strategy Equity", color=t["blue"], linewidth=1)
     ax2.plot(best_result["buyhold"].index, best_result["buyhold"],
-             label="Buy & Hold", color="#8890a4", linewidth=1, alpha=0.7)
+             label="Buy & Hold", color=t["muted"], linewidth=1, alpha=0.7)
     ax2.set_yscale("log")
     ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
     ax2.yaxis.set_minor_formatter(_minor_fmt())
     ax2.tick_params(axis='y', which='minor', labelsize=6)
     ax2.set_ylabel("Portfolio Value (log)")
     ax2.set_xlabel("Date")
-    ax2.legend(loc="upper left", fontsize=8, facecolor="#161922", edgecolor="#252a3a",
-               labelcolor="#e8eaf0")
-    ax2.grid(True, which="major", alpha=0.3, color="#252a3a")
-    ax2.grid(True, which="minor", alpha=0.15, color="#252a3a")
+    ax2.legend(loc="upper left", fontsize=8, facecolor=t["panel"], edgecolor=t["grid"],
+               labelcolor=t["text"])
+    ax2.grid(True, which="major", alpha=0.3, color=t["grid"])
+    ax2.grid(True, which="minor", alpha=0.15, color=t["grid"])
 
     ax2.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
     import math
@@ -1712,7 +1752,7 @@ def generate_chart(df, best_result, output_path, asset_name="Bitcoin"):
 
 def generate_sweep_chart(df, ind1_name, ind1_period, ind2_name, sweep_min, sweep_max,
                          initial_cash, output_path, fee=0.001, exposure="long-cash",
-                         long_leverage=1, short_leverage=1, lev_mode="rebalance"):
+                         long_leverage=1, short_leverage=1, lev_mode="rebalance", theme="dark"):
     """Sweep ind2 period from sweep_min to sweep_max and plot annualized return vs period."""
     import matplotlib
     matplotlib.use("Agg")
@@ -1750,22 +1790,23 @@ def generate_sweep_chart(df, ind1_name, ind1_period, ind2_name, sweep_min, sweep
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
+    t = _get_theme(theme)
     fig, ax = plt.subplots(figsize=(14, 7), dpi=150)
-    _apply_dark_theme(fig, ax)
+    _apply_dark_theme(fig, ax, theme)
 
-    ax.plot(periods, annualized_returns, color="#6495ED", linewidth=1)
-    ax.axhline(y=bh_annualized, color="#8890a4", linestyle="--", linewidth=1,
+    ax.plot(periods, annualized_returns, color=t["blue"], linewidth=1)
+    ax.axhline(y=bh_annualized, color=t["muted"], linestyle="--", linewidth=1,
                label=f"Buy & Hold ({bh_annualized:.1f}%)")
-    ax.scatter([best_period], [best_ann], color="#f7931a", s=60, zorder=5,
+    ax.scatter([best_period], [best_ann], color=t["accent"], s=60, zorder=5,
                label=f"Best: {best_label} ({best_ann:.1f}%)")
 
     ax.set_xlabel(f"{ind2_upper} Period (days)")
     ax.set_ylabel("Annualized Return (%)")
     title_prefix = f"{ind1_label_str} vs " if ind1_name != "price" else ""
     ax.set_title(f"Annualized Return by {title_prefix}{ind2_upper} Period ({sweep_min}\u2013{sweep_max})")
-    ax.legend(loc="best", fontsize=9, facecolor="#161922", edgecolor="#252a3a",
-              labelcolor="#e8eaf0")
-    ax.grid(True, alpha=0.3, color="#252a3a")
+    ax.legend(loc="best", fontsize=9, facecolor=t["panel"], edgecolor=t["grid"],
+              labelcolor=t["text"])
+    ax.grid(True, alpha=0.3, color=t["grid"])
 
     plt.tight_layout()
     plt.savefig(output_path, facecolor=fig.get_facecolor())
@@ -1778,7 +1819,7 @@ def generate_sweep_chart(df, ind1_name, ind1_period, ind2_name, sweep_min, sweep
 def generate_dual_sweep_heatmap(df, ind1_name, ind2_name,
                                  period_min, period_max, period_step,
                                  initial_cash, output_path, fee=0.001, exposure="long-cash",
-                                 long_leverage=1, short_leverage=1, sizing="compound"):
+                                 long_leverage=1, short_leverage=1, sizing="compound", theme="dark"):
     """Sweep all ind1/ind2 period permutations and generate a heatmap of annualized returns."""
     import matplotlib
     matplotlib.use("Agg")
@@ -1849,8 +1890,9 @@ def generate_dual_sweep_heatmap(df, ind1_name, ind2_name,
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
+    t = _get_theme(theme)
     fig, ax = plt.subplots(figsize=(14, 12), dpi=150)
-    _apply_dark_theme(fig, ax)
+    _apply_dark_theme(fig, ax, theme)
 
     im = ax.imshow(matrix, cmap="RdYlGn", aspect="auto", origin="lower",
                    interpolation="nearest")
@@ -1872,11 +1914,11 @@ def generate_dual_sweep_heatmap(df, ind1_name, ind2_name,
                  f"B&H: {bh_ann:.1f}% | {exposure}")
 
     cbar = fig.colorbar(im, ax=ax, shrink=0.8)
-    cbar.set_label("Annualized Return (%)", color="#8890a4")
-    cbar.ax.yaxis.set_tick_params(color="#8890a4")
-    cbar.outline.set_edgecolor("#252a3a")
+    cbar.set_label("Annualized Return (%)", color=t["muted"])
+    cbar.ax.yaxis.set_tick_params(color=t["muted"])
+    cbar.outline.set_edgecolor(t["grid"])
     for label in cbar.ax.get_yticklabels():
-        label.set_color("#8890a4")
+        label.set_color(t["muted"])
 
     if n <= 30:
         for i in range(n):
