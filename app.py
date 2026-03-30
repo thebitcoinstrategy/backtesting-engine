@@ -715,7 +715,8 @@ HTML = """\
         .asset-modal-overlay.open { display: flex; animation: fadeIn 0.15s ease-out; }
         .asset-modal {
             background: var(--bg-base); border: 1px solid var(--border);
-            border-radius: 16px; padding: 20px 24px; width: 90%; max-width: 480px;
+            border-radius: 16px; padding: 16px 20px; width: 92%; max-width: 640px;
+            max-height: 80vh; overflow-y: auto;
             box-shadow: 0 24px 48px rgba(0,0,0,0.4);
             animation: fadeUp 0.2s ease-out;
         }
@@ -743,13 +744,13 @@ HTML = """\
         /* Asset grid */
         .asset-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-            gap: 6px;
+            grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+            gap: 4px;
         }
         .asset-card {
-            display: flex; flex-direction: column; align-items: center; gap: 4px;
-            padding: 8px 4px;
-            border-radius: 10px;
+            display: flex; flex-direction: column; align-items: center; gap: 2px;
+            padding: 6px 3px;
+            border-radius: 8px;
             border: 1px solid var(--border);
             background: var(--bg-deep);
             cursor: pointer;
@@ -766,16 +767,16 @@ HTML = """\
             box-shadow: 0 0 0 1px var(--accent), 0 2px 12px rgba(247, 147, 26, 0.12);
         }
         .asset-card-logo {
-            width: 28px; height: 28px; object-fit: contain;
+            width: 22px; height: 22px; object-fit: contain;
         }
         .asset-card-placeholder {
-            width: 28px; height: 28px; border-radius: 50%;
+            width: 22px; height: 22px; border-radius: 50%;
             background: var(--bg-elevated); display: flex; align-items: center;
             justify-content: center; font-size: 0.6em; font-weight: 700;
             color: var(--text-dim);
         }
         .asset-card-label {
-            font-size: 0.65em; font-weight: 600; color: var(--text-dim);
+            font-size: 0.58em; font-weight: 600; color: var(--text-dim);
             letter-spacing: 0.02em; line-height: 1.2; text-align: center;
             word-break: break-word; max-width: 100%;
             transition: color 0.2s ease;
@@ -1455,13 +1456,13 @@ HTML = """\
                         <input type="text" class="asset-modal-filter" id="vs-asset-filter" placeholder="Filter assets..." oninput="filterAssetCards(this.value, 'vs-asset-modal-overlay')">
                         <div class="asset-grid">
                             {% for a in priority_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                             {% for a in other_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
@@ -1471,7 +1472,7 @@ HTML = """\
                         <div class="asset-section-label">Crypto Aggregates</div>
                         <div class="asset-grid">
                             {% for a in crypto_agg_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
@@ -1482,7 +1483,7 @@ HTML = """\
                         <div class="asset-section-label">Stocks</div>
                         <div class="asset-grid">
                             {% for a in stock_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
@@ -1493,7 +1494,7 @@ HTML = """\
                         <div class="asset-section-label">Precious Metals</div>
                         <div class="asset-grid">
                             {% for a in metal_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
@@ -1504,7 +1505,7 @@ HTML = """\
                         <div class="asset-section-label">Indices</div>
                         <div class="asset-grid">
                             {% for a in index_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
@@ -1515,7 +1516,7 @@ HTML = """\
                         <div class="asset-section-label">Commodities</div>
                         <div class="asset-grid">
                             {% for a in commodity_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
+                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
@@ -1534,13 +1535,13 @@ HTML = """\
                         <input type="text" class="asset-modal-filter" id="asset-filter" placeholder="Filter assets..." oninput="filterAssetCards(this.value, 'asset-modal-overlay')">
                         <div class="asset-grid">
                             {% for a in priority_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
+                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
                             {% endfor %}
                             {% for a in other_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
+                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
@@ -1550,7 +1551,7 @@ HTML = """\
                         <div class="asset-section-label">Crypto Aggregates</div>
                         <div class="asset-grid">
                             {% for a in crypto_agg_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
+                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
@@ -1561,7 +1562,7 @@ HTML = """\
                         <div class="asset-section-label">Stocks</div>
                         <div class="asset-grid">
                             {% for a in stock_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
+                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
@@ -1572,7 +1573,7 @@ HTML = """\
                         <div class="asset-section-label">Precious Metals</div>
                         <div class="asset-grid">
                             {% for a in metal_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
+                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
@@ -1583,7 +1584,7 @@ HTML = """\
                         <div class="asset-section-label">Indices</div>
                         <div class="asset-grid">
                             {% for a in index_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
+                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
@@ -1594,7 +1595,7 @@ HTML = """\
                         <div class="asset-section-label">Commodities</div>
                         <div class="asset-grid">
                             {% for a in commodity_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
+                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
                                 {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
                                 <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
                             </div>
@@ -2562,7 +2563,8 @@ function filterAssetCards(query, overlayId) {
     var cards = overlay.querySelectorAll('.asset-card');
     for (var i = 0; i < cards.length; i++) {
         var name = cards[i].getAttribute('data-asset').toLowerCase();
-        cards[i].style.display = (!q || name.indexOf(q) !== -1) ? '' : 'none';
+        var ticker = (cards[i].getAttribute('data-ticker') || '').toLowerCase();
+        cards[i].style.display = (!q || name.indexOf(q) !== -1 || ticker.indexOf(q) !== -1) ? '' : 'none';
     }
     var labels = overlay.querySelectorAll('.asset-section-label');
     for (var j = 0; j < labels.length; j++) {
@@ -3705,10 +3707,13 @@ _PRICE_CACHE_TTL = 60  # seconds
 
 # Asset metadata lookup (source + source_id) — built from DB or hardcoded
 _ASSET_META = {}
+ASSET_TICKERS = {}  # {asset_name: ticker_symbol}
 if _USE_PRICE_DB:
     try:
         for _m in price_db.get_all_asset_metadata():
             _ASSET_META[_m["name"]] = {"source": _m["source"], "source_id": _m["source_id"]}
+            if _m.get("ticker"):
+                ASSET_TICKERS[_m["name"]] = _m["ticker"]
     except Exception:
         pass
 
@@ -4021,7 +4026,7 @@ def index():
         else:
             p = Params()
         return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
                                       price_json=None, ind1_json='[]', ind2_json='[]', ind1_label='', ind2_label='')
 
     # Check disk cache first
@@ -4078,7 +4083,7 @@ def _run_post_handler(cancel_event):
         common_idx = df_full.index.intersection(df_vs.index)
         if len(common_idx) == 0:
             return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
-                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
                                           error=f"No overlapping dates between {p.asset} and {p.vs_asset}.",
                                           price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
         df_full = df_full.loc[common_idx]
@@ -4119,7 +4124,7 @@ def _run_post_handler(cancel_event):
     if p.mode == "regression":
         if not is_oscillator:
             return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
-                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
                                           error="Regression analysis requires an oscillator indicator. Please select one from Indicator 2.",
                                           price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
@@ -4156,7 +4161,7 @@ def _run_post_handler(cancel_event):
         thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
 
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=None, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
                                       regression=reg_result, regression_sweep_chart=sweep_chart_b64, regression_sweep=sweep_result, thumb_b64=thumb_b64,
                                       price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
@@ -4179,7 +4184,7 @@ def _run_post_handler(cancel_event):
 
         if dca_result is None:
             return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
-                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
                                           error="Not enough data for DCA analysis.",
                                           price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
@@ -4335,7 +4340,7 @@ def _run_post_handler(cancel_event):
 
         price_json = _series_to_lw_json(df_price_all["close"])
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
                                       thumb_b64=thumb_b64,
                                       price_json=price_json, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
@@ -4517,7 +4522,7 @@ def _run_post_handler(cancel_event):
         else:
             ind1_json = "[]"
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
                                       hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info, thumb_b64=thumb_b64,
                                       price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                       ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
@@ -4687,7 +4692,7 @@ def _run_post_handler(cancel_event):
         else:
             ind1_json = "[]"
         return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
                                       hide_buyhold=(p.exposure == "short-cash"), thumb_b64=thumb_b64,
                                       price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                                       ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
@@ -5018,7 +5023,7 @@ def _run_post_handler(cancel_event):
         ind1_json = "[]"
         ind2_json = "[]"
     return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
-                                  asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+                                  asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
                                   hide_buyhold=(p.exposure == "short-cash"),
                                   ls_breakdown=long_short_breakdown,
                                   equity_top=equity_top if best else 0.7, equity_bottom=equity_bottom if best else 1.0,
@@ -8045,6 +8050,7 @@ function submitBulkUpload() {
         fd.append('file', entry.file);
         fd.append('asset_name', entry.resolvedName);
         fd.append('asset_type', cat);
+        fd.append('ticker', entry.ticker);
         var statusEl = document.getElementById('bulk-status-' + idx);
         var itemEl = document.getElementById('bulk-item-' + idx);
         fetch('/api/upload-asset', { method: 'POST', body: fd })
@@ -8549,6 +8555,7 @@ def api_upload_asset():
     file = request.files['file']
     asset_name = request.form.get('asset_name', '').strip()
     asset_type = request.form.get('asset_type', 'crypto')
+    asset_ticker = request.form.get('ticker', '').strip().upper() or None
 
     if not asset_name:
         return jsonify(error='Asset name is required'), 400
@@ -8574,7 +8581,8 @@ def api_upload_asset():
     # Persist price data
     if _USE_PRICE_DB:
         asset_id = price_db.get_or_create_asset(
-            asset_name, category=asset_type, source='csv', source_id=None)
+            asset_name, category=asset_type, source='csv', source_id=None,
+            ticker=asset_ticker)
         price_db.upsert_prices(asset_id, df)
         os.unlink(tmp_path)
     else:
@@ -8604,6 +8612,9 @@ def api_upload_asset():
     if logo_file:
         ASSET_LOGOS[asset_name] = logo_file
         _save_logos_file()
+
+    if asset_ticker:
+        ASSET_TICKERS[asset_name] = asset_ticker
 
     _rebuild_asset_lists()
     _touch_asset_signal()
@@ -8820,7 +8831,7 @@ def admin_assets():
     crypto_default = set(ASSET_NAMES) - _CRYPTO_AGG_ASSETS - _STOCK_ASSETS - _INDEX_ASSETS - _METAL_ASSETS - _COMMODITY_ASSETS
     return render_template_string(ADMIN_ASSETS_HTML,
         nav_active='admin-assets',
-        asset_names=ASSET_NAMES, asset_logos=ASSET_LOGOS, asset_starts=ASSET_STARTS,
+        asset_names=ASSET_NAMES, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS, asset_starts=ASSET_STARTS,
         crypto_names=crypto_default, crypto_agg_names=_CRYPTO_AGG_ASSETS,
         stock_names=_STOCK_ASSETS, index_names=_INDEX_ASSETS,
         metal_names=_METAL_ASSETS, commodity_names=_COMMODITY_ASSETS)

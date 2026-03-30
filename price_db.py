@@ -43,6 +43,9 @@ def init_db():
 
                 CREATE INDEX IF NOT EXISTS idx_prices_asset_date
                     ON prices(asset_id, date);
+
+                -- Add ticker column if it doesn't exist
+                ALTER TABLE assets ADD COLUMN IF NOT EXISTS ticker TEXT;
             """)
         conn.commit()
     finally:
@@ -50,21 +53,22 @@ def init_db():
 
 
 def get_or_create_asset(name, category="crypto", source=None, source_id=None,
-                        logo_url=None):
+                        logo_url=None, ticker=None):
     """Insert or update an asset row. Returns the asset id."""
     conn = _get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO assets (name, category, source, source_id, logo_url)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO assets (name, category, source, source_id, logo_url, ticker)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (name) DO UPDATE SET
                     category  = COALESCE(EXCLUDED.category, assets.category),
                     source    = COALESCE(EXCLUDED.source, assets.source),
                     source_id = COALESCE(EXCLUDED.source_id, assets.source_id),
-                    logo_url  = COALESCE(EXCLUDED.logo_url, assets.logo_url)
+                    logo_url  = COALESCE(EXCLUDED.logo_url, assets.logo_url),
+                    ticker    = COALESCE(EXCLUDED.ticker, assets.ticker)
                 RETURNING id
-            """, (name, category, source, source_id, logo_url))
+            """, (name, category, source, source_id, logo_url, ticker))
             asset_id = cur.fetchone()[0]
         conn.commit()
         return asset_id
@@ -184,7 +188,7 @@ def get_all_asset_metadata():
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT id, name, category, source, source_id, logo_url
+                SELECT id, name, category, source, source_id, logo_url, ticker
                 FROM assets
                 ORDER BY name
             """)

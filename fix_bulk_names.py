@@ -113,15 +113,15 @@ def main():
             print(f"  ERROR renaming: {e}")
             continue
 
-        # Update source info
+        # Update source info and ticker
         if cg_id:
             try:
                 conn = price_db._get_conn()
                 with conn.cursor() as cur:
-                    cur.execute("UPDATE assets SET source = 'coingecko', source_id = %s WHERE name = %s", (cg_id, name))
+                    cur.execute("UPDATE assets SET source = 'coingecko', source_id = %s, ticker = %s WHERE name = %s", (cg_id, ticker, name))
                 conn.commit()
                 conn.close()
-                print(f"  Set source: coingecko/{cg_id}")
+                print(f"  Set source: coingecko/{cg_id}, ticker: {ticker}")
             except Exception as e:
                 print(f"  WARN: could not update source: {e}")
 
@@ -139,7 +139,75 @@ def main():
     with open(logos_file, 'w') as f:
         json.dump(logos, f, indent=2)
     print(f"\nSaved logos to {logos_file}")
-    print("Done! Restart the service: systemctl restart backtesting")
+
+    # --- Phase 2: Populate ticker symbols for all assets missing one ---
+    print("\n=== Populating ticker symbols for all assets ===")
+    assets = price_db.get_all_asset_metadata()
+    missing_ticker = [a for a in assets if not a.get('ticker')
+                      and not re.match(r'^(COINBASE|BINANCE|BITSTAMP|CRYPTO)', a['name'])]
+
+    for i, asset in enumerate(missing_ticker):
+        name = asset['name']
+        source = asset.get('source')
+        source_id = asset.get('source_id')
+        ticker = None
+
+        # For coingecko assets, look up the symbol
+        if source == 'coingecko' and source_id:
+            try:
+                url = f"https://api.coingecko.com/api/v3/coins/{source_id}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false"
+                headers = {'User-Agent': 'BacktestingEngine/1.0'}
+                if COINGECKO_API_KEY:
+                    headers['x-cg-demo-api-key'] = COINGECKO_API_KEY
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = json.loads(resp.read())
+                    ticker = data.get('symbol', '').upper()
+            except Exception as e:
+                print(f"  [{i+1}/{len(missing_ticker)}] {name}: CG lookup error: {e}")
+                time.sleep(2)
+                continue
+        elif source == 'yfinance' and source_id:
+            # yfinance source_id IS the ticker
+            ticker = source_id.upper()
+        else:
+            # Try CoinGecko search as fallback
+            try:
+                _, _, _ = resolve_crypto_name(name)
+                search_url = f"https://api.coingecko.com/api/v3/search?query={urllib.parse.quote(name)}"
+                headers = {'User-Agent': 'BacktestingEngine/1.0'}
+                if COINGECKO_API_KEY:
+                    headers['x-cg-demo-api-key'] = COINGECKO_API_KEY
+                req = urllib.request.Request(search_url, headers=headers)
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    coins = json.loads(resp.read()).get('coins', [])
+                    for coin in coins:
+                        if coin.get('name', '').lower() == name.lower():
+                            ticker = coin.get('symbol', '').upper()
+                            break
+                    if not ticker and coins:
+                        ticker = coins[0].get('symbol', '').upper()
+            except Exception as e:
+                print(f"  [{i+1}/{len(missing_ticker)}] {name}: search error: {e}")
+                time.sleep(2)
+                continue
+
+        if ticker:
+            try:
+                conn = price_db._get_conn()
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE assets SET ticker = %s WHERE name = %s", (ticker, name))
+                conn.commit()
+                conn.close()
+                print(f"  [{i+1}/{len(missing_ticker)}] {name} -> {ticker}")
+            except Exception as e:
+                print(f"  [{i+1}/{len(missing_ticker)}] {name}: DB error: {e}")
+        else:
+            print(f"  [{i+1}/{len(missing_ticker)}] {name}: could not resolve ticker")
+
+        time.sleep(8)
+
+    print("\nDone! Restart the service: systemctl restart backtesting")
 
 
 if __name__ == '__main__':
