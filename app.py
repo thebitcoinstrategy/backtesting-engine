@@ -721,12 +721,13 @@ HTML = """\
             animation: fadeUp 0.2s ease-out;
         }
         .asset-modal-header {
-            display: flex; align-items: center; justify-content: space-between;
+            display: flex; align-items: center; gap: 12px;
             margin-bottom: 12px;
             font-size: 0.85em; font-weight: 600; color: var(--text);
         }
+        .asset-modal-header span { white-space: nowrap; }
         .asset-modal-filter {
-            width: 100%; padding: 8px 12px; margin-bottom: 12px;
+            flex: 1; padding: 6px 12px;
             background: var(--bg-deep); border: 1px solid var(--border);
             border-radius: 8px; color: var(--text); font-size: 0.82em;
             font-family: 'DM Sans', sans-serif; outline: none;
@@ -1451,9 +1452,9 @@ HTML = """\
                     <div class="asset-modal" onclick="event.stopPropagation()">
                         <div class="asset-modal-header">
                             <span>Select Denominator Asset</span>
+                            <input type="text" class="asset-modal-filter" id="vs-asset-filter" placeholder="Filter assets..." oninput="filterAssetCards(this.value, 'vs-asset-modal-overlay')">
                             <button type="button" class="asset-modal-close" onclick="closeVsAssetModal()">&times;</button>
                         </div>
-                        <input type="text" class="asset-modal-filter" id="vs-asset-filter" placeholder="Filter assets..." oninput="filterAssetCards(this.value, 'vs-asset-modal-overlay')">
                         <div class="asset-grid">
                             {% for a in priority_assets %}
                             <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
@@ -1530,9 +1531,9 @@ HTML = """\
                     <div class="asset-modal" onclick="event.stopPropagation()">
                         <div class="asset-modal-header">
                             <span>Select Asset</span>
+                            <input type="text" class="asset-modal-filter" id="asset-filter" placeholder="Filter assets..." oninput="filterAssetCards(this.value, 'asset-modal-overlay')">
                             <button type="button" class="asset-modal-close" onclick="closeAssetModal()">&times;</button>
                         </div>
-                        <input type="text" class="asset-modal-filter" id="asset-filter" placeholder="Filter assets..." oninput="filterAssetCards(this.value, 'asset-modal-overlay')">
                         <div class="asset-grid">
                             {% for a in priority_assets %}
                             <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
