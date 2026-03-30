@@ -1282,8 +1282,8 @@ HTML = """\
         {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active|default('')=='admin-assets' }}">Assets</a>{% endif %}
         <div class="nav-right-group">
             <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
@@ -5252,8 +5252,8 @@ COMMUNITY_HTML = """\
         {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active=='admin-assets' }}">Assets</a>{% endif %}
         <div class="nav-right-group">
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
@@ -6137,8 +6137,8 @@ DETAIL_HTML = """\
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         <div class="nav-right-group">
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
@@ -7146,8 +7146,8 @@ MY_BACKTESTS_HTML = """\
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         <div class="nav-right-group">
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
@@ -7775,8 +7775,8 @@ ADMIN_ASSETS_HTML = """\
         <a href="/admin/assets" class="nav-link active">Assets</a>
         <div class="nav-right-group">
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
@@ -9860,8 +9860,8 @@ ACCOUNT_HTML = """<!DOCTYPE html>
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         <div class="nav-right-group">
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
@@ -10198,8 +10198,8 @@ FEEDBACK_HTML = """<!DOCTYPE html>
         {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
         <div class="nav-right-group">
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><rect x="11" y="1" width="2" height="3" rx="1"/><rect x="11" y="20" width="2" height="3" rx="1"/><rect x="1" y="11" width="3" height="2" rx="1"/><rect x="20" y="11" width="3" height="2" rx="1"/><rect x="3.93" y="4.93" width="2" height="3" rx="1" transform="rotate(-45 4.93 6.43)"/><rect x="18.07" y="16.07" width="2" height="3" rx="1" transform="rotate(-45 19.07 17.57)"/><rect x="16.07" y="4.93" width="3" height="2" rx="1" transform="rotate(-45 17.57 5.93)"/><rect x="2.93" y="16.07" width="3" height="2" rx="1" transform="rotate(-45 4.43 17.07)"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
             </button>
             {% if is_authenticated %}
             <div class="notif-bell-wrap">
