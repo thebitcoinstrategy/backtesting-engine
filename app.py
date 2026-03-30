@@ -415,6 +415,62 @@ def _time_ago(dt_str):
         return ""
 
 
+NAV_HTML = """\
+    <div class="header">
+        {% if not is_authenticated %}
+        <div class="auth-buttons">
+            <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
+            <a href="https://the-bitcoin-strategy.com/subscribe" class="auth-btn auth-btn-signup">Sign Up</a>
+        </div>
+        {% endif %}
+        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
+        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px;font-family:'DM Sans',sans-serif">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a> at the-bitcoin-strategy.com</div>
+    </div>
+    <nav class="nav-bar">
+        <a href="/" class="nav-link {{ 'active' if nav_active|default('')=='featured' }}">Home</a>
+        <a href="/community" class="nav-link {{ 'active' if nav_active|default('')=='community' }}">Community</a>
+        <a href="/backtester" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Create Backtest</a>
+        {% if is_authenticated %}
+        <a href="/my-backtests" class="nav-link {{ 'active' if nav_active|default('')=='my-backtests' }}">My Backtests</a>
+        {% endif %}
+        {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active|default('')=='admin-assets' }}">Assets</a>{% endif %}
+        <div class="nav-right-group">
+            <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+            </button>
+            {% if is_authenticated %}
+            <div class="notif-bell-wrap">
+                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span class="notif-badge hidden" id="notif-badge">0</span>
+                </button>
+                <div class="notif-dropdown hidden" id="notif-dropdown">
+                    <div class="notif-dropdown-header"><span>Notifications</span></div>
+                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
+                </div>
+            </div>
+            <div class="avatar-wrap">
+                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
+                    {% if user_avatar %}
+                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
+                    {% else %}
+                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
+                    {% endif %}
+                </button>
+                <div class="avatar-dropdown hidden" id="avatar-dropdown">
+                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
+                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
+                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
+                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
+                    <div class="avatar-dropdown-divider"></div>
+                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
+                </div>
+            </div>
+        {% endif %}
+        </div>
+    </nav>"""
+
 HTML = """\
 <!DOCTYPE html>
 <html>
@@ -1262,60 +1318,7 @@ HTML = """\
 </head>
 <body>
 <div class="container">
-    <div class="header">
-        {% if not is_authenticated %}
-        <div class="auth-buttons">
-            <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
-            <a href="https://the-bitcoin-strategy.com/subscribe" class="auth-btn auth-btn-signup">Sign Up</a>
-        </div>
-        {% endif %}
-        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
-        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px;font-family:'DM Sans',sans-serif">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a> at the-bitcoin-strategy.com</div>
-    </div>
-    <nav class="nav-bar">
-        <a href="/" class="nav-link {{ 'active' if nav_active|default('')=='featured' }}">Home</a>
-        <a href="/community" class="nav-link {{ 'active' if nav_active|default('')=='community' }}">Community</a>
-        <a href="/backtester" class="nav-link {{ 'active' if nav_active|default('')=='backtester' }}">Create Backtest</a>
-        {% if is_authenticated %}
-        <a href="/my-backtests" class="nav-link {{ 'active' if nav_active|default('')=='my-backtests' }}">My Backtests</a>
-        {% endif %}
-        {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active|default('')=='admin-assets' }}">Assets</a>{% endif %}
-        <div class="nav-right-group">
-            <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-            </button>
-            {% if is_authenticated %}
-            <div class="notif-bell-wrap">
-                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                    <span class="notif-badge hidden" id="notif-badge">0</span>
-                </button>
-                <div class="notif-dropdown hidden" id="notif-dropdown">
-                    <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
-                </div>
-            </div>
-            <div class="avatar-wrap">
-                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
-                    {% if user_avatar %}
-                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
-                    {% else %}
-                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
-                    {% endif %}
-                </button>
-                <div class="avatar-dropdown hidden" id="avatar-dropdown">
-                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
-                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
-                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
-                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
-                    <div class="avatar-dropdown-divider"></div>
-                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
-                </div>
-            </div>
-        {% endif %}
-        </div>
-    </nav>
+""" + NAV_HTML + """
     <div class="layout">
         <div class="panel">
             <form method="POST" id="form">
@@ -2012,6 +2015,7 @@ HTML = """\
                 </div>
                 <script>
                 var __lwAsset = {{ p.asset|tojson }};
+                var __lwVsAsset = {{ (p.vs_asset or '')|tojson }};
                 var __lwData = {
                     price: {{ price_json|safe }},
                     ind1: {{ ind1_json|safe }},
@@ -2572,15 +2576,29 @@ function fetchLivePrice() {
     if (document.hidden) return;
     if (!window._lwPriceSeries) return;
     if (typeof __lwAsset === 'undefined') return;
-    fetch('/api/price-now/' + encodeURIComponent(__lwAsset))
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.price && data.time) {
-                window._lwPriceSeries.update({time: data.time, value: data.price});
+    var vsAsset = (typeof __lwVsAsset !== 'undefined' && __lwVsAsset) ? __lwVsAsset : '';
+    if (vsAsset) {
+        Promise.all([
+            fetch('/api/price-now/' + encodeURIComponent(__lwAsset)).then(function(r) { return r.json(); }),
+            fetch('/api/price-now/' + encodeURIComponent(vsAsset)).then(function(r) { return r.json(); })
+        ]).then(function(results) {
+            var base = results[0], quote = results[1];
+            if (base.error === 'quota' || quote.error === 'quota') { stopLivePolling(); return; }
+            if (base.price && quote.price && base.time) {
+                window._lwPriceSeries.update({time: base.time, value: base.price / quote.price});
             }
-            if (data.error === 'quota') stopLivePolling();
-        })
-        .catch(function(){});
+        }).catch(function(){});
+    } else {
+        fetch('/api/price-now/' + encodeURIComponent(__lwAsset))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.price && data.time) {
+                    window._lwPriceSeries.update({time: data.time, value: data.price});
+                }
+                if (data.error === 'quota') stopLivePolling();
+            })
+            .catch(function(){});
+    }
 }
 document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
@@ -5232,60 +5250,7 @@ COMMUNITY_HTML = """\
 </head>
 <body>
 <div class="container">
-    <div class="header">
-        {% if not is_authenticated %}
-        <div class="auth-buttons">
-            <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
-            <a href="https://the-bitcoin-strategy.com/subscribe" class="auth-btn auth-btn-signup">Sign Up</a>
-        </div>
-        {% endif %}
-        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
-        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
-    </div>
-    <nav class="nav-bar">
-        <a href="/" class="nav-link {{ 'active' if nav_active=='featured' }}">Home</a>
-        <a href="/community" class="nav-link {{ 'active' if nav_active=='community' }}">Community</a>
-        <a href="/backtester" class="nav-link {{ 'active' if nav_active=='backtester' }}">Create Backtest</a>
-        {% if is_authenticated %}
-        <a href="/my-backtests" class="nav-link {{ 'active' if nav_active=='my-backtests' }}">My Backtests</a>
-        {% endif %}
-        {% if is_admin %}<a href="/admin/assets" class="nav-link {{ 'active' if nav_active=='admin-assets' }}">Assets</a>{% endif %}
-        <div class="nav-right-group">
-        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-            </button>
-            {% if is_authenticated %}
-            <div class="notif-bell-wrap">
-                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                    <span class="notif-badge hidden" id="notif-badge">0</span>
-                </button>
-                <div class="notif-dropdown hidden" id="notif-dropdown">
-                    <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
-                </div>
-            </div>
-            <div class="avatar-wrap">
-                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
-                    {% if user_avatar %}
-                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
-                    {% else %}
-                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
-                    {% endif %}
-                </button>
-                <div class="avatar-dropdown hidden" id="avatar-dropdown">
-                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
-                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
-                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
-                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
-                    <div class="avatar-dropdown-divider"></div>
-                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
-                </div>
-            </div>
-        {% endif %}
-        </div>
-    </nav>
+""" + NAV_HTML + """
     {% if nav_active == 'community' and recent_comments|default(none) and recent_comments|length > 0 %}
     <div class="community-layout">
     {% endif %}
@@ -6117,60 +6082,7 @@ DETAIL_HTML = """\
 </head>
 <body>
 <div class="container">
-    <div class="header">
-        {% if not is_authenticated %}
-        <div class="auth-buttons">
-            <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
-            <a href="https://the-bitcoin-strategy.com/subscribe" class="auth-btn auth-btn-signup">Sign Up</a>
-        </div>
-        {% endif %}
-        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
-        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
-    </div>
-    <nav class="nav-bar">
-        <a href="/" class="nav-link {{ 'active' if backtest.visibility=='featured' }}">Home</a>
-        <a href="/community" class="nav-link {{ 'active' if backtest.visibility=='community' }}">Community</a>
-        <a href="/backtester" class="nav-link">Create Backtest</a>
-        {% if is_authenticated %}
-        <a href="/my-backtests" class="nav-link">My Backtests</a>
-        {% endif %}
-        {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
-        <div class="nav-right-group">
-        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-            </button>
-            {% if is_authenticated %}
-            <div class="notif-bell-wrap">
-                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                    <span class="notif-badge hidden" id="notif-badge">0</span>
-                </button>
-                <div class="notif-dropdown hidden" id="notif-dropdown">
-                    <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
-                </div>
-            </div>
-            <div class="avatar-wrap">
-                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
-                    {% if user_avatar %}
-                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
-                    {% else %}
-                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
-                    {% endif %}
-                </button>
-                <div class="avatar-dropdown hidden" id="avatar-dropdown">
-                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
-                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
-                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
-                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
-                    <div class="avatar-dropdown-divider"></div>
-                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
-                </div>
-            </div>
-        {% endif %}
-        </div>
-    </nav>
+""" + NAV_HTML + """
 
     <div class="panel">
         <div class="detail-header">
@@ -6773,13 +6685,29 @@ function fetchLivePrice() {
     if (document.hidden) return;
     if (!window._lwPriceSeries) return;
     if (typeof __lwAsset === 'undefined') return;
-    fetch('/api/price-now/' + encodeURIComponent(__lwAsset))
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.price && data.time) window._lwPriceSeries.update({time: data.time, value: data.price});
-            if (data.error === 'quota') stopLivePolling();
-        })
-        .catch(function(){});
+    var vsAsset = (typeof __lwVsAsset !== 'undefined' && __lwVsAsset) ? __lwVsAsset : '';
+    if (vsAsset) {
+        Promise.all([
+            fetch('/api/price-now/' + encodeURIComponent(__lwAsset)).then(function(r) { return r.json(); }),
+            fetch('/api/price-now/' + encodeURIComponent(vsAsset)).then(function(r) { return r.json(); })
+        ]).then(function(results) {
+            var base = results[0], quote = results[1];
+            if (base.error === 'quota' || quote.error === 'quota') { stopLivePolling(); return; }
+            if (base.price && quote.price && base.time) {
+                window._lwPriceSeries.update({time: base.time, value: base.price / quote.price});
+            }
+        }).catch(function(){});
+    } else {
+        fetch('/api/price-now/' + encodeURIComponent(__lwAsset))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.price && data.time) {
+                    window._lwPriceSeries.update({time: data.time, value: data.price});
+                }
+                if (data.error === 'quota') stopLivePolling();
+            })
+            .catch(function(){});
+    }
 }
 document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
@@ -7134,52 +7062,7 @@ MY_BACKTESTS_HTML = """\
 </head>
 <body>
 <div class="container">
-    <div class="header">
-        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
-        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
-    </div>
-    <nav class="nav-bar">
-        <a href="/" class="nav-link">Home</a>
-        <a href="/community" class="nav-link">Community</a>
-        <a href="/backtester" class="nav-link">Create Backtest</a>
-        <a href="/my-backtests" class="nav-link active">My Backtests</a>
-        {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
-        <div class="nav-right-group">
-        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-            </button>
-            {% if is_authenticated %}
-            <div class="notif-bell-wrap">
-                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                    <span class="notif-badge hidden" id="notif-badge">0</span>
-                </button>
-                <div class="notif-dropdown hidden" id="notif-dropdown">
-                    <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
-                </div>
-            </div>
-            <div class="avatar-wrap">
-                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
-                    {% if user_avatar %}
-                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
-                    {% else %}
-                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
-                    {% endif %}
-                </button>
-                <div class="avatar-dropdown hidden" id="avatar-dropdown">
-                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
-                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
-                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
-                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
-                    <div class="avatar-dropdown-divider"></div>
-                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
-                </div>
-            </div>
-        {% endif %}
-        </div>
-    </nav>
+""" + NAV_HTML + """
 
     <div class="panel">
         <h2 class="page-title">My Backtests</h2>
@@ -7763,52 +7646,7 @@ ADMIN_ASSETS_HTML = """\
 </head>
 <body>
 <div class="container">
-    <div class="header">
-        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
-        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
-    </div>
-    <nav class="nav-bar">
-        <a href="/" class="nav-link">Home</a>
-        <a href="/community" class="nav-link">Community</a>
-        <a href="/backtester" class="nav-link">Create Backtest</a>
-        <a href="/my-backtests" class="nav-link">My Backtests</a>
-        <a href="/admin/assets" class="nav-link active">Assets</a>
-        <div class="nav-right-group">
-        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-            </button>
-            {% if is_authenticated %}
-            <div class="notif-bell-wrap">
-                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                    <span class="notif-badge hidden" id="notif-badge">0</span>
-                </button>
-                <div class="notif-dropdown hidden" id="notif-dropdown">
-                    <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
-                </div>
-            </div>
-            <div class="avatar-wrap">
-                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
-                    {% if user_avatar %}
-                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
-                    {% else %}
-                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
-                    {% endif %}
-                </button>
-                <div class="avatar-dropdown hidden" id="avatar-dropdown">
-                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
-                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
-                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
-                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
-                    <div class="avatar-dropdown-divider"></div>
-                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
-                </div>
-            </div>
-        {% endif %}
-        </div>
-    </nav>
+""" + NAV_HTML + """
 
     <div class="panel">
         <h2 class="page-title">Asset Management</h2>
@@ -8950,6 +8788,7 @@ def my_backtests():
     email = session.get('email', '')
     email_prefix = email.split('@')[0] if email else ''
     return render_template_string(MY_BACKTESTS_HTML,
+        nav_active='my-backtests',
         published=published, saved=saved, collections=user_collections,
         time_ago=_time_ago,
         display_name=display_name, email_prefix=email_prefix)
@@ -9047,6 +8886,7 @@ def backtest_detail(bt_id):
             _ind2_lbl = f"{_ind2_name.upper()}({_p2})" if _p2 else _ind2_name.upper()
             # Replace the __lwData block in cached HTML (includes __lwAsset for live polling)
             _new_lw = (f'<script>\nvar __lwAsset = {json_mod.dumps(_asset)};\n'
+                       f'var __lwVsAsset = {json_mod.dumps(_vs)};\n'
                        f'var __lwData = {{\n'
                        f'    price: {_fresh_price},\n'
                        f'    ind1: {_fresh_ind1},\n'
@@ -9054,13 +8894,17 @@ def backtest_detail(bt_id):
                        f'    ind1Label: {json_mod.dumps(_ind1_lbl)},\n'
                        f'    ind2Label: {json_mod.dumps(_ind2_lbl)}\n'
                        f'}};\n</script>')
-            cached = re.sub(r'<script>\s*(?:var __lwAsset\s*=.*?)?var __lwData\s*=\s*\{.*?\};\s*</script>', _new_lw, cached, flags=re.DOTALL)
+            cached = re.sub(r'<script>\s*(?:var __lwAsset\s*=.*?)?(?:var __lwVsAsset\s*=.*?)?var __lwData\s*=\s*\{.*?\};\s*</script>', _new_lw, cached, flags=re.DOTALL)
     except Exception:
         pass  # If fresh data injection fails, keep original cached HTML
 
     bt_entry = dict(bt_entry)
     bt_entry['cached_html'] = cached
+    nav = bt_entry.get('visibility', '')
+    if nav not in ('featured', 'community'):
+        nav = ''
     return render_template_string(DETAIL_HTML,
+        nav_active=nav,
         backtest=bt_entry, comments=comments, bt_params=bt_params,
         is_authenticated=is_auth, is_admin=_is_admin(),
         has_liked=liked, time_ago=_time_ago,
@@ -9411,489 +9255,7 @@ COLLECTION_DETAIL_HTML = """\
 </head>
 <body>
 <div class="container">
-    <div class="header">
-        {% if not is_authenticated %}
-        <div class="auth-buttons">
-            <a href="https://the-bitcoin-strategy.com/app/analytics-redirect" class="auth-btn auth-btn-login">Log In</a>
-            <a href="https://the-bitcoin-strategy.com/subscribe" class="auth-btn auth-btn-signup">Sign Up</a>
-        </div>
-        {% endif %}
-        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
-        <div style="font-size:0.8em;color:var(--text-dim);margin-top:2px">Exclusive to <a href="https://the-bitcoin-strategy.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Premium Members</a></div>
-    </div>
-    <a href="javascript:history.back()" class="back-link">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-        Back
-    </a>
-    <div class="coll-header">
-        <span class="coll-badge">Collection</span>
-        <h1 class="coll-title">{{ collection.title }}</h1>
-        <div class="coll-meta">
-            {% if author_avatar %}
-            <img src="/static/avatars/{{ author_avatar }}" class="coll-meta-avatar" alt="">
-            {% else %}
-            <span class="coll-meta-initials" style="background:{{ author_avatar_color }}">{{ author_initial }}</span>
-            {% endif %}
-            <span>{{ display_name }}</span>
-            <span style="color:var(--text-dim)">·</span>
-            <span>{{ time_ago(collection.created_at) }}</span>
-            <span style="color:var(--text-dim)">·</span>
-            <span>{{ backtests|length }} backtest{{ 's' if backtests|length != 1 }}</span>
-            <span style="color:var(--text-dim)">·</span>
-            <span>{{ collection.views_count or 0 }} views</span>
-        </div>
-        {% if is_owner or is_admin %}
-        <div class="coll-actions">
-            <button class="action-btn" onclick="openEditModal()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                Edit
-            </button>
-            <button class="action-btn" onclick="copyLink()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                Share
-            </button>
-            <button class="action-btn danger" onclick="deleteCollection()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                Delete
-            </button>
-            {% if is_admin %}
-            <select class="vis-select" id="coll-visibility" onchange="changeVisibility(this.value)">
-                <option value="private"{{ ' selected' if collection.visibility == 'private' }}>Private</option>
-                <option value="community"{{ ' selected' if collection.visibility == 'community' }}>Community</option>
-                <option value="featured"{{ ' selected' if collection.visibility == 'featured' }}>Featured</option>
-            </select>
-            {% endif %}
-        </div>
-        {% endif %}
-    </div>
-
-    {% if youtube_embed_url %}
-    <div class="yt-embed">
-        <iframe src="{{ youtube_embed_url }}" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
-    </div>
-    {% endif %}
-
-    {% if collection.description %}
-    <div class="coll-desc">{{ collection.description }}</div>
-    {% endif %}
-
-    <div class="section-divider"><span>Backtests in this Collection</span></div>
-
-    {% if backtests %}
-    <div class="backtest-grid">
-        {% for bt in backtests %}
-        <div class="backtest-card-wrapper{{ ' locked' if not is_authenticated and not loop.first else '' }}" data-bt-id="{{ bt.id }}" {% if is_owner %}draggable="true"{% endif %}>
-            {% if not is_authenticated and not loop.first %}
-            <div class="locked-overlay" onclick="shakeLock(this)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                <span>Locked</span>
-            </div>
-            {% endif %}
-            {% if is_owner %}
-            <div class="drag-handle" title="Drag to reorder">⠿</div>
-            <button class="remove-bt-btn" onclick="event.preventDefault();removeBacktest('{{ bt.id }}')" title="Remove from collection">&times;</button>
-            {% endif %}
-            <a class="backtest-card" href="{{ '/backtest/' ~ bt.id if is_authenticated or loop.first else '#' }}">
-                <div class="backtest-card-head">
-                    {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
-                    <div class="backtest-card-head-text">
-                        <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled Backtest' }}</div>
-                        <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
-                    </div>
-                    <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
-                </div>
-                {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
-                {% if bt.description %}<div class="backtest-card-desc">{{ bt.description[:250] }}</div>{% endif %}
-                <div class="backtest-card-params">
-                    <span class="backtest-card-tag">{{ bt._mode_label }}</span>
-                    <span class="backtest-card-tag">{{ bt._strategy }}</span>
-                    {% if bt._leverage %}<span class="backtest-card-tag">{{ bt._leverage }}</span>{% endif %}
-                    {% if bt._start_date %}<span class="backtest-card-tag">{{ bt._start_date }}</span>{% endif %}
-                </div>
-                {% if bt._apr %}
-                <div class="backtest-card-metrics">
-                    <div class="card-metric">
-                        <span class="card-metric-label">APR</span>
-                        <span class="card-metric-val {{ 'positive' if bt._apr|float > 0 else 'negative' }}">{{ bt._apr }}%</span>
-                        <span class="card-metric-vs">vs {{ bt._apr_bh }}% B&H</span>
-                    </div>
-                    <div class="card-metric">
-                        <span class="card-metric-label">Max DD</span>
-                        <span class="card-metric-val negative">{{ bt._max_dd }}%</span>
-                        <span class="card-metric-vs">vs {{ bt._max_dd_bh }}% B&H</span>
-                    </div>
-                </div>
-                {% endif %}
-                <div class="backtest-card-footer">
-                    <div class="card-author">
-                        {% if bt._avatar %}
-                        <img src="/static/avatars/{{ bt._avatar }}" class="card-author-avatar" alt="">
-                        {% else %}
-                        <span class="card-author-initials" style="background:{{ bt._avatar_color }}">{{ bt._initial }}</span>
-                        {% endif %}
-                        <span class="card-author-name">{{ bt._display_name }}</span>
-                        <span class="card-author-sep">·</span>
-                        <span class="card-author-time">{{ time_ago(bt.created_at) }}</span>
-                    </div>
-                    <div class="engagement">
-                        <span>{{ bt.likes_count }} likes</span>
-                        <span>{{ bt.comments_count }} comments</span>
-                    </div>
-                </div>
-            </a>
-        </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="empty-state">
-        <h3>No backtests yet</h3>
-        <p>Add backtests to this collection from your My Backtests page.</p>
-    </div>
-    {% endif %}
-
-    {% if is_owner %}
-    <div class="add-bt-section">
-        <div class="add-bt-dropdown">
-            <button class="action-btn" onclick="toggleAddBtList()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Backtest
-            </button>
-            <div class="add-bt-list hidden" id="add-bt-list">
-                {% for ubt in user_backtests|sort(attribute='created_at', reverse=true) %}
-                <div class="add-bt-item{{ ' in-collection' if ubt.id in collection_bt_ids else '' }}" onclick="addBacktest('{{ ubt.id }}')">
-                    <div class="abt-info">
-                        <div class="abt-title">{{ ubt.title or 'Untitled' }}</div>
-                        <div class="abt-meta">
-                            {% if ubt._asset %}<span>{{ ubt._asset }}</span>{% endif %}
-                            <span>{{ ubt.created_at[:10] if ubt.created_at else '' }}</span>
-                        </div>
-                    </div>
-                    {% if ubt.id in collection_bt_ids %}<span class="abt-check">Added</span>{% endif %}
-                </div>
-                {% endfor %}
-                {% if not user_backtests %}
-                <div style="padding:12px 14px;color:var(--text-dim);font-size:0.82em">No backtests to add</div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    {% endif %}
-</div>
-
-<script>
-function shakeLock(el) {
-    el.classList.remove('shake');
-    void el.offsetWidth;
-    el.classList.add('shake');
-    setTimeout(function() { el.classList.remove('shake'); }, 600);
-}
-var _swal = Swal.mixin({
-    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#8b5cf6',
-    customClass: { popup: 'swal-dark' }
-});
-var collId = '{{ collection.id }}';
-function copyLink() {
-    navigator.clipboard.writeText(window.location.href);
-    _swal.fire({icon:'success', title:'Link copied!', timer:1500, showConfirmButton:false});
-}
-function deleteCollection() {
-    _swal.fire({
-        title: 'Delete this collection?', text: 'Backtests inside will not be deleted.',
-        icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
-    }).then(function(result) {
-        if (!result.isConfirmed) return;
-        fetch('/api/collection/' + collId + '/delete', { method: 'POST' })
-        .then(function() { window.location.href = '/my-backtests'; });
-    });
-}
-function changeVisibility(vis) {
-    fetch('/api/collection/' + collId + '/visibility', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({visibility: vis})
-    }).then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.error) { _swal.fire({icon:'error', title:data.error}); return; }
-        _swal.fire({icon:'success', title:'Visibility updated to ' + vis, timer:1500, showConfirmButton:false});
-    });
-}
-function removeBacktest(btId) {
-    fetch('/api/collection/' + collId + '/remove-backtest', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({backtest_id: btId})
-    }).then(function() { location.reload(); });
-}
-function toggleAddBtList() {
-    document.getElementById('add-bt-list').classList.toggle('hidden');
-}
-function addBacktest(btId) {
-    fetch('/api/collection/' + collId + '/add-backtest', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({backtest_id: btId})
-    }).then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.error) { _swal.fire({icon:'warning', title:data.error}); return; }
-        location.reload();
-    });
-}
-function openEditModal() {
-    document.getElementById('edit-modal-overlay').classList.add('open');
-    document.getElementById('edit-coll-title').focus();
-}
-function closeEditModal() {
-    document.getElementById('edit-modal-overlay').classList.remove('open');
-}
-function saveEditColl() {
-    var title = document.getElementById('edit-coll-title').value.trim();
-    var desc = document.getElementById('edit-coll-desc').value.trim();
-    var yt = document.getElementById('edit-coll-youtube').value.trim();
-    fetch('/api/collection/' + collId + '/update', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({title: title, description: desc, youtube_url: yt})
-    }).then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.error) throw new Error(data.error);
-        closeEditModal(); location.reload();
-    }).catch(function(e) { _swal.fire({icon:'error', title:'Failed', text:e.message}); });
-}
-document.addEventListener('click', function(e) {
-    var list = document.getElementById('add-bt-list');
-    if (list && !list.classList.contains('hidden')) {
-        var wrap = e.target.closest('.add-bt-dropdown');
-        if (!wrap) list.classList.add('hidden');
-    }
-});
-// Drag-and-drop reorder
-(function() {
-    var dragSrc = null;
-    var grid = document.querySelector('.backtest-grid');
-    if (!grid) return;
-    var cards = grid.querySelectorAll('.backtest-card-wrapper[draggable]');
-    if (!cards.length) return;
-    cards.forEach(function(card) {
-        card.addEventListener('dragstart', function(e) {
-            dragSrc = card;
-            card.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', card.dataset.btId);
-        });
-        card.addEventListener('dragend', function() {
-            card.classList.remove('dragging');
-            grid.querySelectorAll('.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
-        });
-        card.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            if (card !== dragSrc) card.classList.add('drag-over');
-        });
-        card.addEventListener('dragleave', function() {
-            card.classList.remove('drag-over');
-        });
-        card.addEventListener('drop', function(e) {
-            e.preventDefault();
-            card.classList.remove('drag-over');
-            if (dragSrc === card) return;
-            // Reorder DOM
-            var allCards = Array.from(grid.querySelectorAll('.backtest-card-wrapper[data-bt-id]'));
-            var fromIdx = allCards.indexOf(dragSrc);
-            var toIdx = allCards.indexOf(card);
-            if (fromIdx < toIdx) {
-                card.parentNode.insertBefore(dragSrc, card.nextSibling);
-            } else {
-                card.parentNode.insertBefore(dragSrc, card);
-            }
-            // Save new order
-            var newOrder = Array.from(grid.querySelectorAll('.backtest-card-wrapper[data-bt-id]')).map(function(el) { return el.dataset.btId; });
-            fetch('/api/collection/' + collId + '/reorder', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ordered_ids: newOrder})
-            });
-        });
-    });
-})();
-</script>
-
-{% if is_owner or is_admin %}
-<div class="publish-modal-overlay" id="edit-modal-overlay">
-    <div class="publish-modal">
-        <button class="close-btn" onclick="closeEditModal()">&times;</button>
-        <h3>Edit Collection</h3>
-        <label for="edit-coll-title">Title</label>
-        <input type="text" id="edit-coll-title" maxlength="120" value="{{ collection.title|e }}">
-        <label for="edit-coll-desc">Description</label>
-        <textarea id="edit-coll-desc">{{ collection.description or '' }}</textarea>
-        <label for="edit-coll-youtube">YouTube URL</label>
-        <input type="text" id="edit-coll-youtube" value="{{ collection.youtube_url or '' }}" placeholder="https://www.youtube.com/watch?v=...">
-        <div class="publish-modal-actions">
-            <button class="action-btn" onclick="closeEditModal()">Cancel</button>
-            <button class="action-btn" onclick="saveEditColl()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent">Save Changes</button>
-        </div>
-    </div>
-</div>
-{% endif %}
-</body>
-</html>
-"""
-
-
-ACCOUNT_HTML = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("theme")||"dark")</script>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Account Settings - Bitcoin Strategy Analytics</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="manifest" href="/static/site.webmanifest">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <style>
-        :root { --bg-deep: #0d0f1a; --bg-base: #131525; --bg-surface: #1a1d2e; --bg-elevated: #242842; --border: #2a2e45; --border-hover: #3d4266; --text: #e8e9ed; --text-muted: #b0b3c5; --text-dim: #6b7094; --accent: #F7931A; --accent-glow: rgba(247,147,26,0.15); --blue: #6495ED; }
-        [data-theme="light"] {
-            --bg-deep: #f5f6fa; --bg-base: #ebedf5; --bg-surface: #ffffff; --bg-elevated: #f0f2f5;
-            --border: #d0d4e0; --border-hover: #a0a8c0; --text: #1a1a2e; --text-muted: #5a6078; --text-dim: #8890a4;
-            --accent: #d97706; --accent-hover: #b45309; --accent-glow: rgba(217, 119, 6, 0.15);
-            --green: #059669; --green-dim: rgba(5, 150, 105, 0.12); --blue: #3a6fd8;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: var(--bg-deep); color: var(--text); font-family: 'DM Sans', sans-serif; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; }
-        .header { text-align: center; margin-bottom: 32px; position: relative; }
-        .header h1 { font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 0; }
-        .header h1 .brand-btc { background: linear-gradient(135deg, var(--blue), #4a7dd6); color: #fff; padding: 6px 14px; font-weight: 700; }
-        .header h1 .brand-analytics { background: var(--bg-elevated); color: var(--text); padding: 6px 14px; border: 1px solid var(--border); border-left: none; }
-        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 20px; position: relative; }
-        .nav-link { padding: 8px 18px; border-radius: 8px; font-size: 0.82em; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }
-        .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
-        .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
-        /* Theme toggle */
-        .theme-toggle { background: none; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); padding: 7px; border-radius: 8px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
-        .theme-toggle:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border-hover); }
-        .theme-toggle svg { width: 16px; height: 16px; }
-        .theme-toggle .icon-sun { display: none; }
-        .theme-toggle .icon-moon { display: block; }
-        [data-theme="light"] .theme-toggle .icon-sun { display: block; }
-        [data-theme="light"] .theme-toggle .icon-moon { display: none; }
-        .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; z-index: 9999; }
-        .notif-bell-wrap { position: relative; }
-        .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
-        .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
-        .notif-badge { position: absolute; top: 2px; right: 2px; background: #e74c3c; color: #fff; font-size: 0.65em; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
-        .notif-badge.hidden { display: none; }
-        .notif-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 340px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 9999; overflow: hidden; }
-        .notif-dropdown.hidden { display: none; }
-        .notif-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85em; color: var(--text); }
-        .notif-list { max-height: 320px; overflow-y: auto; }
-        .notif-item { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); font-size: 0.82em; transition: background 0.15s ease; cursor: pointer; }
-        .notif-item.notif-unread { background: rgba(100,149,237,0.08); border-left: 3px solid var(--accent); }
-        .notif-item.notif-read { opacity: 0.55; }
-        .notif-item:hover { background: var(--bg-elevated); opacity: 1; }
-        .notif-item:last-child { border-bottom: none; }
-        .notif-item-text { line-height: 1.4; }
-        .notif-item-text strong { color: var(--accent); font-weight: 600; }
-        .notif-item-time { color: var(--text-dim); font-size: 0.78em; margin-top: 4px; }
-        .notif-empty { padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.82em; }
-        .avatar-wrap { position: relative; }
-        .avatar-btn { background: none; border: none; cursor: pointer; padding: 4px; border-radius: 50%; transition: all 0.2s ease; }
-        .avatar-btn:hover { background: var(--bg-elevated); }
-        .avatar-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); display: block; }
-        .avatar-initials { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: 700; color: #fff; font-family: 'DM Sans', sans-serif; text-transform: uppercase; }
-        .avatar-dropdown { position: absolute; right: 0; top: calc(100% + 8px); width: 220px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 9999; overflow: hidden; padding: 6px 0; }
-        .avatar-dropdown.hidden { display: none; }
-        .avatar-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--text-muted); text-decoration: none; font-size: 0.82em; font-weight: 500; transition: all 0.15s ease; font-family: 'DM Sans', sans-serif; }
-        .avatar-dropdown-item:hover { background: var(--bg-elevated); color: var(--text); }
-        .avatar-dropdown-item svg { width: 16px; height: 16px; flex-shrink: 0; }
-        .avatar-dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
-        .avatar-dropdown-logout { color: #e74c3c; }
-        .avatar-dropdown-logout:hover { background: rgba(231,76,60,0.1); color: #e74c3c; }
-        .panel { background: var(--bg-surface); border-radius: 16px; padding: 24px; border: 1px solid var(--border); margin-bottom: 16px; }
-        .page-title { font-size: 1.4em; font-weight: 700; margin-bottom: 20px; }
-        .setting-group { margin-bottom: 24px; }
-        .setting-label { font-size: 0.8em; color: var(--text-muted); font-weight: 500; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
-        .setting-input { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-deep); color: var(--text); font-size: 0.85em; font-family: 'DM Sans', sans-serif; }
-        .setting-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
-        .setting-input[readonly] { opacity: 0.6; cursor: not-allowed; }
-        .setting-btn { padding: 8px 20px; border-radius: 8px; border: none; font-weight: 600; font-size: 0.82em; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s ease; }
-        .setting-btn-primary { background: var(--accent); color: #fff; }
-        .setting-btn-primary:hover { background: #e08a1a; }
-        .setting-btn-danger { background: transparent; color: #e74c3c; border: 1px solid #e74c3c; }
-        .setting-btn-danger:hover { background: rgba(231,76,60,0.1); }
-        .avatar-preview { width: 96px; height: 96px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2em; font-weight: 700; color: #fff; margin-bottom: 12px; overflow: hidden; }
-        .avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
-        .avatar-actions { display: flex; gap: 10px; align-items: center; }
-        .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
-        .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-elevated); border: 1px solid var(--border); transition: 0.3s; border-radius: 24px; }
-        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background: var(--text-dim); transition: 0.3s; border-radius: 50%; }
-        input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
-        input:checked + .toggle-slider:before { transform: translateX(20px); background: #fff; }
-        .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
-        .toggle-row:last-child { border-bottom: none; }
-        .toggle-info { }
-        .toggle-title { font-size: 0.85em; font-weight: 600; }
-        .toggle-desc { font-size: 0.75em; color: var(--text-dim); margin-top: 2px; }
-
-        /* ── Mobile responsive ── */
-        @media (max-width: 480px) {
-            .container { padding: 16px 12px; }
-            .header h1 { font-size: 1.2em; }
-            .nav-bar { flex-wrap: wrap; }
-            .nav-link { padding: 6px 10px; font-size: 0.75em; }
-        }
-        @media (max-width: 400px) {
-            .notif-dropdown { width: calc(100vw - 32px); right: -8px; }
-        }
-    </style>
-</head>
-<body>
-<div class="container">
-    <div class="header">
-        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
-    </div>
-    <nav class="nav-bar">
-        <a href="/" class="nav-link">Home</a>
-        <a href="/community" class="nav-link">Community</a>
-        <a href="/backtester" class="nav-link">Create Backtest</a>
-        {% if is_authenticated %}<a href="/my-backtests" class="nav-link">My Backtests</a>{% endif %}
-        {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
-        <div class="nav-right-group">
-        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-            </button>
-            {% if is_authenticated %}
-            <div class="notif-bell-wrap">
-                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                    <span class="notif-badge hidden" id="notif-badge">0</span>
-                </button>
-                <div class="notif-dropdown hidden" id="notif-dropdown">
-                    <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
-                </div>
-            </div>
-            <div class="avatar-wrap">
-                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
-                    {% if user_avatar %}
-                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
-                    {% else %}
-                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
-                    {% endif %}
-                </button>
-                <div class="avatar-dropdown hidden" id="avatar-dropdown">
-                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
-                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
-                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
-                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
-                    <div class="avatar-dropdown-divider"></div>
-                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
-                </div>
-            </div>
-        {% endif %}
-        </div>
-    </nav>
+""" + NAV_HTML + """
 
     <div class="panel">
         <h2 class="page-title">Account Settings</h2>
@@ -10187,51 +9549,7 @@ FEEDBACK_HTML = """<!DOCTYPE html>
 </head>
 <body>
 <div class="container">
-    <div class="header">
-        <h1><a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:0"><span class="brand-btc">Bitcoin</span><span class="brand-analytics">Strategy Analytics</span></a></h1>
-    </div>
-    <nav class="nav-bar">
-        <a href="/" class="nav-link">Home</a>
-        <a href="/community" class="nav-link">Community</a>
-        <a href="/backtester" class="nav-link">Create Backtest</a>
-        {% if is_authenticated %}<a href="/my-backtests" class="nav-link">My Backtests</a>{% endif %}
-        {% if is_admin %}<a href="/admin/assets" class="nav-link">Assets</a>{% endif %}
-        <div class="nav-right-group">
-        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v2a1 1 0 01-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-9a1 1 0 010 2h-2a1 1 0 010-2h2zM5 11a1 1 0 010 2H3a1 1 0 010-2h2zm13.36-5.64a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zM8.46 15.54a1 1 0 010 1.41l-1.42 1.42a1 1 0 01-1.41-1.42l1.42-1.41a1 1 0 011.41 0zm9.18 2.83a1 1 0 01-1.41 0l-1.42-1.42a1 1 0 011.41-1.41l1.42 1.42a1 1 0 010 1.41zM8.46 8.46a1 1 0 01-1.41 0L5.63 7.05a1 1 0 011.41-1.42L8.46 7.05a1 1 0 010 1.41z"/></svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-            </button>
-            {% if is_authenticated %}
-            <div class="notif-bell-wrap">
-                <button class="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                    <span class="notif-badge hidden" id="notif-badge">0</span>
-                </button>
-                <div class="notif-dropdown hidden" id="notif-dropdown">
-                    <div class="notif-dropdown-header"><span>Notifications</span></div>
-                    <div class="notif-list" id="notif-list"><div class="notif-empty">No notifications yet</div></div>
-                </div>
-            </div>
-            <div class="avatar-wrap">
-                <button class="avatar-btn" onclick="toggleAvatarDropdown(event)">
-                    {% if user_avatar %}
-                    <img src="/static/avatars/{{ user_avatar }}" class="avatar-img" alt="Profile">
-                    {% else %}
-                    <span class="avatar-initials" style="background:{{ user_avatar_color }}">{{ user_initial }}</span>
-                    {% endif %}
-                </button>
-                <div class="avatar-dropdown hidden" id="avatar-dropdown">
-                    <a href="/account" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Account Settings</a>
-                    <a href="/feedback" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send Feedback</a>
-                    <a href="https://the-bitcoin-strategy.com/app" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Main Website</a>
-                    <a href="https://the-bitcoin-strategy.com/subscription-and-invoices" target="_blank" class="avatar-dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Billing</a>
-                    <div class="avatar-dropdown-divider"></div>
-                    <a href="/logout" class="avatar-dropdown-item avatar-dropdown-logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log Out</a>
-                </div>
-            </div>
-        {% endif %}
-        </div>
-    </nav>
+""" + NAV_HTML + """
 
     <div class="panel">
         <h2 class="page-title">Send Feedback</h2>
@@ -10359,6 +9677,7 @@ def account_page():
     avatar = db.get_user_avatar(user_id)
     prefs = db.get_notification_prefs(user_id)
     return render_template_string(ACCOUNT_HTML,
+        nav_active='account',
         display_name=display_name,
         email=email,
         email_prefix=email.split('@')[0] if email else '',
@@ -10373,7 +9692,7 @@ def account_page():
 @require_auth
 def feedback_page():
     """Feedback page."""
-    return render_template_string(FEEDBACK_HTML)
+    return render_template_string(FEEDBACK_HTML, nav_active='feedback')
 
 
 # ---------------------------------------------------------------------------
