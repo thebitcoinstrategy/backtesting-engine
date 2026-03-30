@@ -7656,6 +7656,13 @@ ADMIN_ASSETS_HTML = """\
             font-family: 'DM Sans', sans-serif; outline: none; cursor: pointer;
         }
         .cat-select:focus { border-color: var(--accent); }
+        .ticker-input {
+            width: 70px; padding: 4px 8px; border: 1px solid transparent; border-radius: 6px;
+            background: transparent; color: var(--text-muted); font-size: 0.8em;
+            font-family: 'JetBrains Mono', monospace; outline: none; text-transform: uppercase;
+        }
+        .ticker-input:hover { border-color: var(--border); background: var(--bg-deep); }
+        .ticker-input:focus { border-color: var(--accent); background: var(--bg-deep); color: var(--text); }
         .action-btn-sm {
             padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px;
             background: none; color: var(--text-muted); font-size: 0.75em; cursor: pointer;
@@ -7787,7 +7794,7 @@ ADMIN_ASSETS_HTML = """\
                         <span class="asset-name-text">{{ name }}</span>
                     </div>
                 </td>
-                <td style="font-family:'JetBrains Mono',monospace;font-size:0.8em;color:var(--text-muted)">{{ asset_tickers.get(name, '') }}</td>
+                <td><input class="ticker-input" value="{{ asset_tickers.get(name, '') }}" data-asset="{{ name }}" data-orig="{{ asset_tickers.get(name, '') }}" onblur="saveTicker(this)" onkeydown="if(event.key==='Enter'){this.blur();}"></td>
                 <td>
                     <select class="cat-select" data-asset="{{ name }}" onchange='changeCategory({{ name|tojson }}, this.value)'>
                         <option value="crypto" {{ 'selected' if name in crypto_names }}>Crypto</option>
@@ -8099,6 +8106,21 @@ document.getElementById('bulk-asset-type').addEventListener('change', function()
 });
 
 // Category change
+function saveTicker(el) {
+    var asset = el.getAttribute('data-asset');
+    var orig = el.getAttribute('data-orig');
+    var val = el.value.trim().toUpperCase();
+    el.value = val;
+    if (val === orig) return;
+    fetch('/api/update-ticker', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({asset: asset, ticker: val})
+    }).then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.ok) { el.setAttribute('data-orig', val); el.style.borderColor = 'var(--green)'; setTimeout(function(){ el.style.borderColor = ''; }, 1000); }
+        else { _swal.fire({icon:'error', title:'Error', text: d.error}); el.value = orig; }
+    }).catch(function(e) { _swal.fire({icon:'error', title:'Error', text: e.message}); el.value = orig; });
+}
 function changeCategory(asset, cat) {
     fetch('/api/change-asset-category', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -8949,6 +8971,29 @@ def api_change_asset_category():
     _save_categories_file()
     _rebuild_asset_lists()
     _touch_asset_signal()
+    return jsonify(ok=True)
+
+
+@app.route('/api/update-ticker', methods=['POST'])
+def api_update_ticker():
+    """Admin-only: update an asset's ticker symbol."""
+    if not _is_admin():
+        abort(403)
+    data = request.get_json()
+    name = data.get('asset', '').strip()
+    ticker = data.get('ticker', '').strip().upper()
+    if not name or name not in ASSETS:
+        return jsonify(error='Asset not found'), 404
+    if _USE_PRICE_DB:
+        conn = price_db._get_conn()
+        with conn.cursor() as cur:
+            cur.execute("UPDATE assets SET ticker = %s WHERE name = %s", (ticker or None, name))
+        conn.commit()
+        conn.close()
+    if ticker:
+        ASSET_TICKERS[name] = ticker
+    elif name in ASSET_TICKERS:
+        del ASSET_TICKERS[name]
     return jsonify(ok=True)
 
 
