@@ -7602,6 +7602,32 @@ ADMIN_ASSETS_HTML = """\
         .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
         .upload-msg { font-size: 0.75em; margin-top: 8px; font-family: 'JetBrains Mono', monospace; }
         .upload-msg.error { color: var(--red); }
+
+        /* Bulk upload */
+        .bulk-file-list { margin: 12px 0; max-height: 320px; overflow-y: auto; }
+        .bulk-file-item {
+            display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+            border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px;
+            background: var(--bg-deep); font-size: 0.8em;
+        }
+        .bulk-file-item .file-ticker { font-family: 'JetBrains Mono', monospace; color: var(--text-dim); min-width: 80px; }
+        .bulk-file-item .file-name { flex: 1; color: var(--text); font-weight: 600; }
+        .bulk-file-item .file-name input {
+            width: 100%; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px;
+            background: var(--bg-surface); color: var(--text); font-size: 0.95em;
+            font-family: 'DM Sans', sans-serif; outline: none;
+        }
+        .bulk-file-item .file-name input:focus { border-color: var(--accent); }
+        .bulk-file-item .file-status { min-width: 24px; text-align: center; }
+        .bulk-file-item .file-remove { cursor: pointer; color: var(--text-dim); font-size: 1.1em; padding: 0 4px; }
+        .bulk-file-item .file-remove:hover { color: var(--red); }
+        .bulk-file-item.resolving { opacity: 0.7; }
+        .bulk-file-item.resolved .file-name input { border-color: var(--green); }
+        .bulk-file-item.failed .file-name input { border-color: var(--red); }
+        .bulk-file-item.uploaded { opacity: 0.5; }
+        .bulk-file-item.uploaded .file-status { color: var(--green); }
+        .bulk-file-item.upload-error .file-status { color: var(--red); }
+        .bulk-progress { font-size: 0.75em; color: var(--text-dim); margin-top: 8px; font-family: 'JetBrains Mono', monospace; }
         .upload-msg.success { color: var(--green); }
 
         /* Asset table */
@@ -7717,6 +7743,30 @@ ADMIN_ASSETS_HTML = """\
                 <div><button class="btn btn-primary" id="upload-confirm-btn" onclick="submitUpload()" disabled>Upload</button></div>
             </div>
             <div class="upload-msg" id="upload-message"></div>
+        </div>
+
+        <!-- Bulk Upload -->
+        <div class="upload-section">
+            <h3>Bulk Upload Assets</h3>
+            <div class="upload-dropzone" id="bulk-dropzone" onclick="document.getElementById('bulk-file-input').click()">
+                <div class="upload-dropzone-text"><strong>Click to browse</strong> or drag & drop<br>Multiple CSV files &mdash; ticker symbol in filename is auto-resolved to full name</div>
+                <input type="file" id="bulk-file-input" accept=".csv" multiple style="display:none" onchange="handleBulkFiles(this.files)">
+            </div>
+            <div class="upload-row" style="margin-bottom:8px">
+                <div class="upload-field"><label>Category for all</label>
+                    <select id="bulk-asset-type">
+                        <option value="crypto">Crypto</option>
+                        <option value="crypto_agg">Crypto Aggregate</option>
+                        <option value="stock">Stock</option>
+                        <option value="index">Stock Index</option>
+                        <option value="metal">Precious Metal</option>
+                        <option value="commodity">Commodity</option>
+                    </select>
+                </div>
+                <div><button class="btn btn-primary" id="bulk-upload-btn" onclick="submitBulkUpload()" disabled>Upload All</button></div>
+            </div>
+            <div class="bulk-file-list" id="bulk-file-list"></div>
+            <div class="bulk-progress" id="bulk-progress"></div>
         </div>
 
         <!-- Asset List -->
@@ -7895,6 +7945,140 @@ function submitUpload() {
             else { msg.innerHTML = '<span class="upload-msg error">' + (res.data.error || 'Failed') + '</span>'; btn.disabled = false; btn.textContent = 'Upload'; }
         }).catch(function(e) { msg.innerHTML = '<span class="upload-msg error">' + e.message + '</span>'; btn.disabled = false; btn.textContent = 'Upload'; });
 }
+
+// Bulk upload
+var _bulkFiles = [];
+function handleBulkFiles(fileList) {
+    var list = document.getElementById('bulk-file-list');
+    for (var i = 0; i < fileList.length; i++) {
+        var file = fileList[i];
+        if (!file.name.endsWith('.csv')) continue;
+        var ticker = file.name.replace(/\.csv$/i, '').replace(/[-_]/g, ' ').trim().toUpperCase();
+        var idx = _bulkFiles.length;
+        _bulkFiles.push({ file: file, ticker: ticker, resolvedName: '', status: 'pending' });
+        var item = document.createElement('div');
+        item.className = 'bulk-file-item resolving';
+        item.id = 'bulk-item-' + idx;
+        item.innerHTML = '<span class="file-ticker">' + ticker + '</span>' +
+            '<span class="file-name"><input type="text" id="bulk-name-' + idx + '" value="Resolving..." readonly></span>' +
+            '<span class="file-status" id="bulk-status-' + idx + '"></span>' +
+            '<span class="file-remove" onclick="removeBulkItem(' + idx + ')">&times;</span>';
+        list.appendChild(item);
+        resolveTicker(idx, ticker);
+    }
+    document.getElementById('bulk-file-input').value = '';
+    _checkBulkReady();
+}
+function resolveTicker(idx, ticker) {
+    var cat = document.getElementById('bulk-asset-type').value;
+    fetch('/api/resolve-ticker', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ticker: ticker, category: cat})
+    }).then(function(r) { return r.json(); })
+    .then(function(d) {
+        var item = document.getElementById('bulk-item-' + idx);
+        if (!item) return;
+        var nameInput = document.getElementById('bulk-name-' + idx);
+        nameInput.value = d.name || ticker;
+        nameInput.readOnly = false;
+        _bulkFiles[idx].resolvedName = d.name || ticker;
+        item.classList.remove('resolving');
+        item.classList.add(d.ok ? 'resolved' : 'failed');
+        _checkBulkReady();
+    }).catch(function() {
+        var item = document.getElementById('bulk-item-' + idx);
+        if (!item) return;
+        var nameInput = document.getElementById('bulk-name-' + idx);
+        nameInput.value = ticker;
+        nameInput.readOnly = false;
+        _bulkFiles[idx].resolvedName = ticker;
+        item.classList.remove('resolving');
+        item.classList.add('failed');
+        _checkBulkReady();
+    });
+}
+function removeBulkItem(idx) {
+    _bulkFiles[idx] = null;
+    var item = document.getElementById('bulk-item-' + idx);
+    if (item) item.remove();
+    _checkBulkReady();
+}
+function _checkBulkReady() {
+    var hasFiles = _bulkFiles.some(function(f) { return f && f.status !== 'done'; });
+    var allResolved = !_bulkFiles.some(function(f) { return f && f.status === 'pending' && document.getElementById('bulk-item-' + _bulkFiles.indexOf(f)) && document.getElementById('bulk-item-' + _bulkFiles.indexOf(f)).classList.contains('resolving'); });
+    document.getElementById('bulk-upload-btn').disabled = !hasFiles || !allResolved;
+}
+function submitBulkUpload() {
+    var btn = document.getElementById('bulk-upload-btn');
+    btn.disabled = true; btn.textContent = 'Uploading...';
+    var cat = document.getElementById('bulk-asset-type').value;
+    var pending = [];
+    for (var i = 0; i < _bulkFiles.length; i++) {
+        if (_bulkFiles[i] && _bulkFiles[i].status !== 'done') {
+            var nameInput = document.getElementById('bulk-name-' + i);
+            _bulkFiles[i].resolvedName = nameInput ? nameInput.value.trim() : _bulkFiles[i].resolvedName;
+            pending.push(i);
+        }
+    }
+    var total = pending.length, done = 0, errors = 0;
+    var prog = document.getElementById('bulk-progress');
+    function uploadNext() {
+        if (pending.length === 0) {
+            prog.textContent = done + '/' + total + ' uploaded' + (errors ? ', ' + errors + ' failed' : '') + '. Reloading...';
+            btn.textContent = 'Upload All';
+            setTimeout(function() { location.reload(); }, 1200);
+            return;
+        }
+        var idx = pending.shift();
+        var entry = _bulkFiles[idx];
+        var fd = new FormData();
+        fd.append('file', entry.file);
+        fd.append('asset_name', entry.resolvedName);
+        fd.append('asset_type', cat);
+        var statusEl = document.getElementById('bulk-status-' + idx);
+        var itemEl = document.getElementById('bulk-item-' + idx);
+        fetch('/api/upload-asset', { method: 'POST', body: fd })
+            .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+            .then(function(res) {
+                done++;
+                if (res.ok && res.data.ok) {
+                    entry.status = 'done';
+                    if (itemEl) itemEl.className = 'bulk-file-item uploaded';
+                    if (statusEl) statusEl.textContent = '\u2713';
+                } else {
+                    errors++;
+                    if (itemEl) itemEl.className = 'bulk-file-item upload-error';
+                    if (statusEl) statusEl.textContent = res.data.error || '\u2717';
+                }
+                prog.textContent = done + '/' + total + ' uploaded' + (errors ? ', ' + errors + ' failed' : '');
+                uploadNext();
+            }).catch(function(e) {
+                done++; errors++;
+                if (itemEl) itemEl.className = 'bulk-file-item upload-error';
+                if (statusEl) statusEl.textContent = e.message;
+                prog.textContent = done + '/' + total + ' uploaded, ' + errors + ' failed';
+                uploadNext();
+            });
+    }
+    uploadNext();
+}
+(function() {
+    var dz = document.getElementById('bulk-dropzone');
+    ['dragenter','dragover'].forEach(function(ev) { dz.addEventListener(ev, function(e) { e.preventDefault(); dz.classList.add('dragover'); }); });
+    ['dragleave','drop'].forEach(function(ev) { dz.addEventListener(ev, function(e) { e.preventDefault(); dz.classList.remove('dragover'); }); });
+    dz.addEventListener('drop', function(e) { if (e.dataTransfer.files.length) handleBulkFiles(e.dataTransfer.files); });
+})();
+document.getElementById('bulk-asset-type').addEventListener('change', function() {
+    for (var i = 0; i < _bulkFiles.length; i++) {
+        if (_bulkFiles[i] && _bulkFiles[i].status !== 'done') {
+            var item = document.getElementById('bulk-item-' + i);
+            if (item) { item.className = 'bulk-file-item resolving'; }
+            var nameInput = document.getElementById('bulk-name-' + i);
+            if (nameInput) { nameInput.value = 'Resolving...'; nameInput.readOnly = true; }
+            resolveTicker(i, _bulkFiles[i].ticker);
+        }
+    }
+});
 
 // Category change
 function changeCategory(asset, cat) {
@@ -8415,6 +8599,54 @@ def api_upload_asset():
     _touch_asset_signal()
 
     return jsonify(ok=True, asset=asset_name, logo=ASSET_LOGOS.get(asset_name, ''))
+
+
+@app.route('/api/resolve-ticker', methods=['POST'])
+def api_resolve_ticker():
+    """Resolve a ticker symbol to a full asset name."""
+    if not _is_admin():
+        abort(403)
+    data = request.get_json()
+    ticker = data.get('ticker', '').strip()
+    category = data.get('category', 'crypto')
+    if not ticker:
+        return jsonify(error='No ticker provided'), 400
+
+    import urllib.request
+    import urllib.parse
+
+    name = None
+    try:
+        if category in ('crypto', 'crypto_agg'):
+            # CoinGecko search API
+            search_url = f"https://api.coingecko.com/api/v3/search?query={urllib.parse.quote(ticker)}"
+            headers = {'User-Agent': 'BacktestingEngine/1.0'}
+            if COINGECKO_API_KEY:
+                headers['x-cg-demo-api-key'] = COINGECKO_API_KEY
+            req = urllib.request.Request(search_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                coins = json.loads(resp.read()).get('coins', [])
+                # Match by symbol (case-insensitive)
+                for coin in coins:
+                    if coin.get('symbol', '').upper() == ticker.upper():
+                        name = coin.get('name')
+                        break
+                # Fallback: first result
+                if not name and coins:
+                    name = coins[0].get('name')
+        else:
+            # yfinance for stocks/indices/metals/commodities
+            import yfinance as yf
+            t = yf.Ticker(ticker.upper())
+            info = t.info
+            name = info.get('longName') or info.get('shortName')
+    except Exception:
+        pass
+
+    if name:
+        return jsonify(ok=True, name=name)
+    else:
+        return jsonify(ok=False, name=ticker.upper())
 
 
 MODE_SVGS = {
