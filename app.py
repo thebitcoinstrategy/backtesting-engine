@@ -7948,12 +7948,22 @@ function submitUpload() {
 
 // Bulk upload
 var _bulkFiles = [];
+function extractTicker(filename) {
+    var name = filename.replace(/\.csv$/i, '').trim();
+    // TradingView style: "COINBASE ARBUSD, 1D" or "CRYPTO ETCUSD, 1D"
+    name = name.replace(/,\s*\d+[DWMH]$/i, '').trim();
+    name = name.replace(/^(COINBASE|BINANCE|BITSTAMP|CRYPTO(?:COM)?)\s+/i, '').trim();
+    name = name.replace(/USD[T]?$/i, '').trim();
+    // If nothing left or still has spaces, fall back to original minus .csv
+    if (!name) name = filename.replace(/\.csv$/i, '').trim();
+    return name.toUpperCase();
+}
 function handleBulkFiles(fileList) {
     var list = document.getElementById('bulk-file-list');
     for (var i = 0; i < fileList.length; i++) {
         var file = fileList[i];
         if (!file.name.endsWith('.csv')) continue;
-        var ticker = file.name.replace(/\.csv$/i, '').replace(/[-_]/g, ' ').trim().toUpperCase();
+        var ticker = extractTicker(file.name);
         var idx = _bulkFiles.length;
         _bulkFiles.push({ file: file, ticker: ticker, resolvedName: '', status: 'pending' });
         var item = document.createElement('div');
