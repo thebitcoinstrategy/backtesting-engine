@@ -546,7 +546,7 @@ HTML = """\
                 radial-gradient(ellipse 80% 50% at 50% -20%, rgba(217, 119, 6, 0.04), transparent),
                 radial-gradient(ellipse 60% 40% at 80% 100%, rgba(58, 111, 216, 0.03), transparent);
         }
-        .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 1; }
+        .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px; position: relative; }
 
         /* Header */
         .header {
