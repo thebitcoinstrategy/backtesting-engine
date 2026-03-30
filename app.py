@@ -708,7 +708,7 @@ HTML = """\
 
         /* Asset modal */
         .asset-modal-overlay {
-            display: none; position: fixed; inset: 0; z-index: 1000;
+            display: none; position: fixed; inset: 0; z-index: 100000;
             background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
             align-items: center; justify-content: center;
         }
