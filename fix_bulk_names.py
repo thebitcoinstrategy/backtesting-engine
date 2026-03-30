@@ -132,8 +132,8 @@ def main():
                 logos[name] = logo_file
                 print(f"  Logo: {logo_file}")
 
-        # Rate limit for CoinGecko
-        time.sleep(0.5)
+        # Rate limit for CoinGecko (free tier: ~10-15 req/min)
+        time.sleep(5)
 
     # Save logos file
     with open(logos_file, 'w') as f:

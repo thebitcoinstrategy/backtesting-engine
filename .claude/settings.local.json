@@ -6,7 +6,19 @@
       "Bash(cd \"C:/Users/kusch/OneDrive/Desktop/ClaudeCodeTest/backtesting-engine\" && python backtest.py --sma 40 --exposure long-cash 2>&1 | grep \"Best\" && python backtest.py --sma 40 --exposure short-cash 2>&1 | grep \"Best\" && python backtest.py --sma 40 --exposure long-short 2>&1 | grep \"Best\")",
       "Bash(cd \"C:/Users/kusch/OneDrive/Desktop/ClaudeCodeTest/backtesting-engine\" && python -c \"\nimport backtest as bt\nimport pandas as pd\ndf = bt.load_data\\('bitcoin.csv'\\)\nfor exp in ['long-cash', 'short-cash', 'long-short']:\n    r = bt.run_single_sma_strategy\\(df, 40, 10000, 0.001, exp\\)\n    print\\(f'{exp:12s}  Return: {r[\\\\\"total_return\\\\\"]:>15.2f}%  Trades: {r[\\\\\"trades\\\\\"]}'\\)\n\")",
       "Bash(cd \"C:/Users/kusch/OneDrive/Desktop/ClaudeCodeTest/backtesting-engine\" && python backtest.py --examples)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5000)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5000)",
+      "Bash(cd \"C:\\\\Users\\\\kusch\\\\OneDrive\\\\Desktop\\\\ClaudeCodeTest\\\\backtesting-engine\" && python -c \"import py_compile; py_compile.compile\\('app.py', doraise=True\\); print\\('Syntax OK'\\)\")",
+      "WebFetch(domain:bitbucket.org)",
+      "Bash(ssh root@209.97.172.76 \"cd /opt/backtesting-engine && git pull && systemctl restart backtesting && echo 'Deploy OK'\")",
+      "Bash(git add:*)",
+      "Bash(python:*)",
+      "Bash(LOGOS_DIR=\"/c/Users/kusch/OneDrive/Desktop/ClaudeCodeTest/backtesting-engine/static/logos\")",
+      "Bash(curl -sL -o \"$LOGOS_DIR/hangseng-logo.png\" \"https://www.google.com/s2/favicons?sz=128&domain=hkex.com.hk\")",
+      "Read(//c/Users/kusch/OneDrive/Desktop/ClaudeCodeTest/backtesting-engine/$LOGOS_DIR/**)",
+      "Bash(curl -sL -o \"$LOGOS_DIR/dax-logo.png\" \"https://www.google.com/s2/favicons?sz=128&domain=boerse-frankfurt.de\")",
+      "Bash(grep -E \"\\\\.py$|\\\\.json$|\\\\.md$\")",
+      "Bash(wc -l /c/Users/kusch/OneDrive/Desktop/ClaudeCodeTest/backtesting-engine/data/*.csv)",
+      "Bash(ls -la /c/Users/kusch/OneDrive/Desktop/ClaudeCodeTest/backtesting-engine/data/*.json)"
     ]
   }
 }
