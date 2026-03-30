@@ -5071,6 +5071,14 @@ COMMUNITY_HTML = """\
         .nav-link:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border); }
         .nav-link.active { color: var(--accent); background: rgba(247,147,26,0.08); border-color: var(--accent); }
         .nav-right-group { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; z-index: 9999; }
+        /* Theme toggle */
+        .theme-toggle { background: none; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); padding: 7px; border-radius: 8px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+        .theme-toggle:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border-hover); }
+        .theme-toggle svg { width: 16px; height: 16px; }
+        .theme-toggle .icon-sun { display: none; }
+        .theme-toggle .icon-moon { display: block; }
+        [data-theme="light"] .theme-toggle .icon-sun { display: block; }
+        [data-theme="light"] .theme-toggle .icon-moon { display: none; }
         .notif-bell-wrap { position: relative; }
         .notif-bell { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 8px; border-radius: 8px; position: relative; transition: all 0.2s ease; }
         .notif-bell:hover { color: var(--text); background: var(--bg-elevated); }
