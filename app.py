@@ -1447,164 +1447,6 @@ HTML = """\
                         </div>
                     </div>
                 </div>
-                <!-- Denominator asset picker modal -->
-                <div class="asset-modal-overlay" id="vs-asset-modal-overlay" onclick="closeVsAssetModal()">
-                    <div class="asset-modal" onclick="event.stopPropagation()">
-                        <div class="asset-modal-header">
-                            <span>Select Denominator Asset</span>
-                            <input type="text" class="asset-modal-filter" id="vs-asset-filter" placeholder="Filter assets..." oninput="filterAssetCards(this.value, 'vs-asset-modal-overlay')">
-                            <button type="button" class="asset-modal-close" onclick="closeVsAssetModal()">&times;</button>
-                        </div>
-                        <div class="asset-grid">
-                            {% for a in priority_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                            {% for a in other_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% if crypto_agg_assets %}
-                        <div class="asset-section-label">Crypto Aggregates</div>
-                        <div class="asset-grid">
-                            {% for a in crypto_agg_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if stock_assets %}
-                        <div class="asset-section-label">Stocks</div>
-                        <div class="asset-grid">
-                            {% for a in stock_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if metal_assets %}
-                        <div class="asset-section-label">Precious Metals</div>
-                        <div class="asset-grid">
-                            {% for a in metal_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if index_assets %}
-                        <div class="asset-section-label">Indices</div>
-                        <div class="asset-grid">
-                            {% for a in index_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if commodity_assets %}
-                        <div class="asset-section-label">Commodities</div>
-                        <div class="asset-grid">
-                            {% for a in commodity_assets %}
-                            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-                <!-- Asset picker modal -->
-                <div class="asset-modal-overlay" id="asset-modal-overlay" onclick="closeAssetModal()">
-                    <div class="asset-modal" onclick="event.stopPropagation()">
-                        <div class="asset-modal-header">
-                            <span>Select Asset</span>
-                            <input type="text" class="asset-modal-filter" id="asset-filter" placeholder="Filter assets..." oninput="filterAssetCards(this.value, 'asset-modal-overlay')">
-                            <button type="button" class="asset-modal-close" onclick="closeAssetModal()">&times;</button>
-                        </div>
-                        <div class="asset-grid">
-                            {% for a in priority_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                            {% for a in other_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% if crypto_agg_assets %}
-                        <div class="asset-section-label">Crypto Aggregates</div>
-                        <div class="asset-grid">
-                            {% for a in crypto_agg_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if stock_assets %}
-                        <div class="asset-section-label">Stocks</div>
-                        <div class="asset-grid">
-                            {% for a in stock_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if metal_assets %}
-                        <div class="asset-section-label">Precious Metals</div>
-                        <div class="asset-grid">
-                            {% for a in metal_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if index_assets %}
-                        <div class="asset-section-label">Indices</div>
-                        <div class="asset-grid">
-                            {% for a in index_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if commodity_assets %}
-                        <div class="asset-section-label">Commodities</div>
-                        <div class="asset-grid">
-                            {% for a in commodity_assets %}
-                            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
-                                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
-                                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
                 <div class="form-section" id="indicators-section">
                     <div class="section-title">Indicators</div>
                     <input type="hidden" name="signal_type" id="signal_type" value="{{ p.signal_type }}">
@@ -3465,6 +3307,164 @@ function saveEdit() {
             <button class="action-btn" onclick="closeEditModal()">Cancel</button>
             <button class="action-btn primary" onclick="saveEdit()">Save Changes</button>
         </div>
+    </div>
+</div>
+<!-- Denominator asset picker modal -->
+<div class="asset-modal-overlay" id="vs-asset-modal-overlay" onclick="closeVsAssetModal()">
+    <div class="asset-modal" onclick="event.stopPropagation()">
+        <div class="asset-modal-header">
+            <span>Select Denominator Asset</span>
+            <input type="text" class="asset-modal-filter" id="vs-asset-filter" placeholder="Filter assets..." oninput="filterAssetCards(this.value, 'vs-asset-modal-overlay')">
+            <button type="button" class="asset-modal-close" onclick="closeVsAssetModal()">&times;</button>
+        </div>
+        <div class="asset-grid">
+            {% for a in priority_assets %}
+            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+            {% for a in other_assets %}
+            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% if crypto_agg_assets %}
+        <div class="asset-section-label">Crypto Aggregates</div>
+        <div class="asset-grid">
+            {% for a in crypto_agg_assets %}
+            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if stock_assets %}
+        <div class="asset-section-label">Stocks</div>
+        <div class="asset-grid">
+            {% for a in stock_assets %}
+            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if metal_assets %}
+        <div class="asset-section-label">Precious Metals</div>
+        <div class="asset-grid">
+            {% for a in metal_assets %}
+            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if index_assets %}
+        <div class="asset-section-label">Indices</div>
+        <div class="asset-grid">
+            {% for a in index_assets %}
+            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if commodity_assets %}
+        <div class="asset-section-label">Commodities</div>
+        <div class="asset-grid">
+            {% for a in commodity_assets %}
+            <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectVsAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+<!-- Asset picker modal -->
+<div class="asset-modal-overlay" id="asset-modal-overlay" onclick="closeAssetModal()">
+    <div class="asset-modal" onclick="event.stopPropagation()">
+        <div class="asset-modal-header">
+            <span>Select Asset</span>
+            <input type="text" class="asset-modal-filter" id="asset-filter" placeholder="Filter assets..." oninput="filterAssetCards(this.value, 'asset-modal-overlay')">
+            <button type="button" class="asset-modal-close" onclick="closeAssetModal()">&times;</button>
+        </div>
+        <div class="asset-grid">
+            {% for a in priority_assets %}
+            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+            {% for a in other_assets %}
+            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% if crypto_agg_assets %}
+        <div class="asset-section-label">Crypto Aggregates</div>
+        <div class="asset-grid">
+            {% for a in crypto_agg_assets %}
+            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if stock_assets %}
+        <div class="asset-section-label">Stocks</div>
+        <div class="asset-grid">
+            {% for a in stock_assets %}
+            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if metal_assets %}
+        <div class="asset-section-label">Precious Metals</div>
+        <div class="asset-grid">
+            {% for a in metal_assets %}
+            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if index_assets %}
+        <div class="asset-section-label">Indices</div>
+        <div class="asset-grid">
+            {% for a in index_assets %}
+            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if commodity_assets %}
+        <div class="asset-section-label">Commodities</div>
+        <div class="asset-grid">
+            {% for a in commodity_assets %}
+            <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" data-ticker="{{ asset_tickers.get(a, '') }}" onclick="selectAsset('{{ a }}', this)">
+                {% if asset_logos.get(a) %}<img class="asset-card-logo" src="/static/logos/{{ asset_logos[a] }}" alt="{{ a }}">{% else %}<div class="asset-card-placeholder">{{ a[:3]|upper }}</div>{% endif %}
+                <span class="asset-card-label">{{ a|capitalize if a == a|lower else a }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
 </div>
 </body>
