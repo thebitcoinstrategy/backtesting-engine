@@ -721,9 +721,18 @@ HTML = """\
         }
         .asset-modal-header {
             display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
             font-size: 0.85em; font-weight: 600; color: var(--text);
         }
+        .asset-modal-filter {
+            width: 100%; padding: 8px 12px; margin-bottom: 12px;
+            background: var(--bg-deep); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text); font-size: 0.82em;
+            font-family: 'DM Sans', sans-serif; outline: none;
+            transition: border-color 0.15s ease;
+        }
+        .asset-modal-filter:focus { border-color: var(--accent); }
+        .asset-modal-filter::placeholder { color: var(--text-dim); }
         .asset-modal-close {
             background: none; border: none; color: var(--text-dim);
             font-size: 1.4em; cursor: pointer; padding: 0 4px;
@@ -1443,6 +1452,7 @@ HTML = """\
                             <span>Select Denominator Asset</span>
                             <button type="button" class="asset-modal-close" onclick="closeVsAssetModal()">&times;</button>
                         </div>
+                        <input type="text" class="asset-modal-filter" id="vs-asset-filter" placeholder="Filter assets..." oninput="filterAssetCards(this.value, 'vs-asset-modal-overlay')">
                         <div class="asset-grid">
                             {% for a in priority_assets %}
                             <div class="vs-asset-card asset-card {{ 'active' if p.vs_asset==a }}" data-asset="{{ a }}" onclick="selectVsAsset('{{ a }}', this)">
@@ -1521,6 +1531,7 @@ HTML = """\
                             <span>Select Asset</span>
                             <button type="button" class="asset-modal-close" onclick="closeAssetModal()">&times;</button>
                         </div>
+                        <input type="text" class="asset-modal-filter" id="asset-filter" placeholder="Filter assets..." oninput="filterAssetCards(this.value, 'asset-modal-overlay')">
                         <div class="asset-grid">
                             {% for a in priority_assets %}
                             <div class="asset-card {{ 'active' if p.asset==a }}" data-asset="{{ a }}" onclick="selectAsset('{{ a }}', this)">
@@ -2492,6 +2503,10 @@ function selectAsset(name, el) {
 }
 function openAssetModal() {
     document.getElementById('asset-modal-overlay').classList.add('open');
+    var f = document.getElementById('asset-filter');
+    f.value = '';
+    filterAssetCards('', 'asset-modal-overlay');
+    setTimeout(function() { f.focus(); }, 50);
 }
 function closeAssetModal() {
     document.getElementById('asset-modal-overlay').classList.remove('open');
@@ -2533,9 +2548,30 @@ function selectVsAsset(name, el) {
 }
 function openVsAssetModal() {
     document.getElementById('vs-asset-modal-overlay').classList.add('open');
+    var f = document.getElementById('vs-asset-filter');
+    f.value = '';
+    filterAssetCards('', 'vs-asset-modal-overlay');
+    setTimeout(function() { f.focus(); }, 50);
 }
 function closeVsAssetModal() {
     document.getElementById('vs-asset-modal-overlay').classList.remove('open');
+}
+function filterAssetCards(query, overlayId) {
+    var overlay = document.getElementById(overlayId);
+    var q = query.toLowerCase();
+    var cards = overlay.querySelectorAll('.asset-card');
+    for (var i = 0; i < cards.length; i++) {
+        var name = cards[i].getAttribute('data-asset').toLowerCase();
+        cards[i].style.display = (!q || name.indexOf(q) !== -1) ? '' : 'none';
+    }
+    var labels = overlay.querySelectorAll('.asset-section-label');
+    for (var j = 0; j < labels.length; j++) {
+        var grid = labels[j].nextElementSibling;
+        if (grid && grid.classList.contains('asset-grid')) {
+            var visible = grid.querySelectorAll('.asset-card:not([style*="display: none"])');
+            labels[j].style.display = visible.length ? '' : 'none';
+        }
+    }
 }
 
 toggleFields();
