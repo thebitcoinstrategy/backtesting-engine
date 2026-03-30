@@ -7777,7 +7777,7 @@ ADMIN_ASSETS_HTML = """\
 
         <!-- Asset List -->
         <table class="asset-table">
-            <thead><tr><th>Asset</th><th>Category</th><th>Start Date</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Asset</th><th>Ticker</th><th>Category</th><th>Start Date</th><th>Actions</th></tr></thead>
             <tbody>
             {% for name in asset_names %}
             <tr id="row-{{ name|replace(' ', '_') }}">
@@ -7787,6 +7787,7 @@ ADMIN_ASSETS_HTML = """\
                         <span class="asset-name-text">{{ name }}</span>
                     </div>
                 </td>
+                <td style="font-family:'JetBrains Mono',monospace;font-size:0.8em;color:var(--text-muted)">{{ asset_tickers.get(name, '') }}</td>
                 <td>
                     <select class="cat-select" data-asset="{{ name }}" onchange='changeCategory({{ name|tojson }}, this.value)'>
                         <option value="crypto" {{ 'selected' if name in crypto_names }}>Crypto</option>
