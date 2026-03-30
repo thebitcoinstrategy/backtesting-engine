@@ -715,7 +715,7 @@ HTML = """\
         .asset-modal-overlay.open { display: flex; animation: fadeIn 0.15s ease-out; }
         .asset-modal {
             background: var(--bg-base); border: 1px solid var(--border);
-            border-radius: 16px; padding: 16px 20px; width: 92%; max-width: 640px;
+            border-radius: 16px; padding: 20px 24px; width: 94%; max-width: 820px;
             max-height: 80vh; overflow-y: auto;
             box-shadow: 0 24px 48px rgba(0,0,0,0.4);
             animation: fadeUp 0.2s ease-out;
@@ -744,13 +744,13 @@ HTML = """\
         /* Asset grid */
         .asset-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
-            gap: 4px;
+            grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+            gap: 6px;
         }
         .asset-card {
-            display: flex; flex-direction: column; align-items: center; gap: 2px;
-            padding: 6px 3px;
-            border-radius: 8px;
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            padding: 8px 4px;
+            border-radius: 10px;
             border: 1px solid var(--border);
             background: var(--bg-deep);
             cursor: pointer;
@@ -767,16 +767,16 @@ HTML = """\
             box-shadow: 0 0 0 1px var(--accent), 0 2px 12px rgba(247, 147, 26, 0.12);
         }
         .asset-card-logo {
-            width: 22px; height: 22px; object-fit: contain;
+            width: 28px; height: 28px; object-fit: contain;
         }
         .asset-card-placeholder {
-            width: 22px; height: 22px; border-radius: 50%;
+            width: 28px; height: 28px; border-radius: 50%;
             background: var(--bg-elevated); display: flex; align-items: center;
             justify-content: center; font-size: 0.6em; font-weight: 700;
             color: var(--text-dim);
         }
         .asset-card-label {
-            font-size: 0.58em; font-weight: 600; color: var(--text-dim);
+            font-size: 0.65em; font-weight: 600; color: var(--text-dim);
             letter-spacing: 0.02em; line-height: 1.2; text-align: center;
             word-break: break-word; max-width: 100%;
             transition: color 0.2s ease;
