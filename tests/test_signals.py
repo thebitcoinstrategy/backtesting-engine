@@ -233,3 +233,111 @@ class TestAssetCaseResolution:
             "price_db.py must use case-insensitive (LOWER) matching for asset names "
             "so that 'solana' matches 'Solana' in the database"
         )
+
+
+# ---------------------------------------------------------------------------
+# Asset rename must propagate to all backtests
+# ---------------------------------------------------------------------------
+
+class TestAssetRenamePropagation:
+    """Verify that renaming an asset updates all backtests that reference it."""
+
+    def test_rename_asset_in_backtests_exists(self):
+        """database.py must have rename_asset_in_backtests function."""
+        db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "database.py")
+        with open(db_path, "r", encoding="utf-8") as f:
+            src = f.read()
+        assert "def rename_asset_in_backtests" in src, (
+            "database.py must have rename_asset_in_backtests() to propagate "
+            "asset renames to saved backtests"
+        )
+
+    def test_rename_endpoint_calls_propagation(self):
+        """The rename-asset API must call rename_asset_in_backtests."""
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            src = f.read()
+        # Find the api_rename_asset function
+        func_match = re.search(
+            r"def api_rename_asset\(\):(.*?)(?=\n@app\.route|\ndef \w+\()",
+            src, re.DOTALL
+        )
+        assert func_match, "api_rename_asset() not found"
+        func_body = func_match.group(1)
+        assert "rename_asset_in_backtests" in func_body, (
+            "api_rename_asset() must call db.rename_asset_in_backtests() to "
+            "propagate the rename to all saved backtests"
+        )
+
+    def test_rename_updates_tickers_and_meta(self):
+        """The rename endpoint must also update ASSET_TICKERS and _ASSET_META."""
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            src = f.read()
+        func_match = re.search(
+            r"def api_rename_asset\(\):(.*?)(?=\n@app\.route|\ndef \w+\()",
+            src, re.DOTALL
+        )
+        assert func_match, "api_rename_asset() not found"
+        func_body = func_match.group(1)
+        assert "ASSET_TICKERS" in func_body, (
+            "api_rename_asset() must update ASSET_TICKERS when renaming"
+        )
+        assert "_ASSET_META" in func_body, (
+            "api_rename_asset() must update _ASSET_META when renaming"
+        )
+
+
+# ---------------------------------------------------------------------------
+# No silent fallbacks — errors instead of wrong data
+# ---------------------------------------------------------------------------
+
+class TestNoSilentFallbacks:
+    """Verify that missing assets produce errors, not silent fallback to bitcoin."""
+
+    def _read_app_source(self):
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def test_no_fallback_in_run_handler(self):
+        """_run_post_handler must not silently fall back to DEFAULT_ASSET."""
+        src = self._read_app_source()
+        # Find the _run_post_handler function
+        func_match = re.search(
+            r"def _run_post_handler\(.*?\):(.*?)(?=\ndef \w+\()",
+            src, re.DOTALL
+        )
+        assert func_match, "_run_post_handler() not found"
+        func_body = func_match.group(1)
+        assert "ASSETS.get(p.asset, ASSETS[DEFAULT_ASSET])" not in func_body, (
+            "_run_post_handler must NOT silently fall back to DEFAULT_ASSET — "
+            "show an error instead so the user knows the asset wasn't found"
+        )
+
+    def test_no_fallback_in_backtest_detail(self):
+        """backtest_detail must not silently fall back to DEFAULT_ASSET for live chart."""
+        src = self._read_app_source()
+        func_match = re.search(
+            r"def backtest_detail\(bt_id\):(.*?)(?=\n@app\.route|\ndef \w+\()",
+            src, re.DOTALL
+        )
+        assert func_match, "backtest_detail() not found"
+        func_body = func_match.group(1)
+        assert "ASSETS.get(_asset, ASSETS.get(DEFAULT_ASSET))" not in func_body, (
+            "backtest_detail must NOT silently fall back to DEFAULT_ASSET for "
+            "live chart data — raise an error so the cached HTML is served as-is"
+        )
+
+    def test_error_message_for_missing_asset(self):
+        """The run handler must show an error when asset is not found."""
+        src = self._read_app_source()
+        func_match = re.search(
+            r"def _run_post_handler\(.*?\):(.*?)(?=\ndef \w+\()",
+            src, re.DOTALL
+        )
+        assert func_match, "_run_post_handler() not found"
+        func_body = func_match.group(1)
+        assert "not found" in func_body.lower() or "not in ASSETS" in func_body, (
+            "_run_post_handler must show a user-visible error when the asset is not found"
+        )

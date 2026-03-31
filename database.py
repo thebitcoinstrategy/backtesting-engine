@@ -399,6 +399,44 @@ def list_telegram_enabled_backtests():
     return [_row_to_dict(r) for r in rows]
 
 
+def rename_asset_in_backtests(old_name, new_name):
+    """Update all backtests that reference old_name in their params JSON.
+    Updates both 'asset' and 'vs_asset' fields. Returns count of updated rows."""
+    import json as _json
+    conn = _get_conn()
+    rows = conn.execute("SELECT id, params, query_string FROM backtests").fetchall()
+    updated = 0
+    now = datetime.utcnow().isoformat()
+    for row in rows:
+        params_str = row[1] or '{}'
+        try:
+            params = _json.loads(params_str)
+        except (ValueError, TypeError):
+            continue
+        changed = False
+        if params.get('asset') == old_name:
+            params['asset'] = new_name
+            changed = True
+        if params.get('vs_asset') == old_name:
+            params['vs_asset'] = new_name
+            changed = True
+        if changed:
+            new_params = _json.dumps(params)
+            new_qs = (row[2] or '').replace(
+                f'asset={old_name}', f'asset={new_name}'
+            ).replace(
+                f'vs_asset={old_name}', f'vs_asset={new_name}'
+            )
+            conn.execute(
+                "UPDATE backtests SET params=?, query_string=?, updated_at=? WHERE id=?",
+                (new_params, new_qs, now, row[0])
+            )
+            updated += 1
+    conn.commit()
+    conn.close()
+    return updated
+
+
 def update_backtest(bt_id, user_id, title=None, description=None):
     """Update title/description of a backtest. Owner only. Returns updated dict or None."""
     conn = _get_conn()

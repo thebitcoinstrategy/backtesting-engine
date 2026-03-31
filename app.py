@@ -3497,7 +3497,8 @@ class Params:
     """Hold form parameters with defaults."""
     def __init__(self, form=None):
         if form:
-            self.asset = _resolve_asset(form.get("asset", "")) or DEFAULT_ASSET
+            _raw_asset = form.get("asset", "").strip()
+            self.asset = _resolve_asset(_raw_asset) or _raw_asset or DEFAULT_ASSET
             self.vs_asset = _resolve_asset(form.get("vs_asset", "").strip())
             self.mode = form.get("mode", "sweep")
             self.signal_type = form.get("signal_type", "crossover")
@@ -4105,7 +4106,12 @@ def _run_post_handler(cancel_event):
     is_oscillator = p.signal_type == "oscillator"
     is_ratio = bool(p.vs_asset and p.vs_asset in ASSETS)
     import pandas as pd_mod
-    df_full = ASSETS.get(p.asset, ASSETS[DEFAULT_ASSET]).copy()
+    if p.asset not in ASSETS:
+        return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
+                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
+                                      error=f'Asset "{p.asset}" not found. It may have been renamed or deleted.',
+                                      price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
+    df_full = ASSETS[p.asset].copy()
 
     # Relative price mode: divide by denominator asset
     if is_ratio:
@@ -8976,11 +8982,18 @@ def api_rename_asset():
         if os.path.exists(old_path):
             shutil.move(old_path, new_path)
 
+    # Propagate rename to all backtests referencing this asset
+    bt_updated = db.rename_asset_in_backtests(old_name, new_name)
+
     # Update in-memory state
     ASSETS[new_name] = ASSETS.pop(old_name)
     ASSET_STARTS[new_name] = ASSET_STARTS.pop(old_name, '')
     if old_name in ASSET_LOGOS:
         ASSET_LOGOS[new_name] = ASSET_LOGOS.pop(old_name)
+    if old_name in ASSET_TICKERS:
+        ASSET_TICKERS[new_name] = ASSET_TICKERS.pop(old_name)
+    if old_name in _ASSET_META:
+        _ASSET_META[new_name] = _ASSET_META.pop(old_name)
 
     # Update category sets
     for cat_set in [_CRYPTO_AGG_ASSETS, _STOCK_ASSETS, _INDEX_ASSETS, _METAL_ASSETS, _COMMODITY_ASSETS]:
@@ -8992,7 +9005,7 @@ def api_rename_asset():
     _save_logos_file()
     _rebuild_asset_lists()
     _touch_asset_signal()
-    return jsonify(ok=True)
+    return jsonify(ok=True, backtests_updated=bt_updated)
 
 
 @app.route('/api/change-asset-category', methods=['POST'])
@@ -9220,9 +9233,11 @@ def backtest_detail(bt_id):
     bt_params = json_mod.loads(bt_entry.get('params', '{}') or '{}')
     try:
         import pandas as pd_mod
-        _asset = _resolve_asset(bt_params.get('asset', '')) or DEFAULT_ASSET
+        _asset = _resolve_asset(bt_params.get('asset', ''))
         _vs = _resolve_asset(bt_params.get('vs_asset', ''))
-        _df_all = ASSETS.get(_asset, ASSETS.get(DEFAULT_ASSET)).copy()
+        if not _asset or _asset not in ASSETS:
+            raise KeyError(f'Asset "{bt_params.get("asset")}" not found')
+        _df_all = ASSETS[_asset].copy()
         if _vs and _vs in ASSETS:
             _df_vs = ASSETS[_vs].copy()
             _df_all.index = _df_all.index.normalize()
