@@ -2623,6 +2623,12 @@ function loadLWChart() {
         chart.timeScale().fitContent();
     }
 
+    // Ticker watermark
+    var wm = document.createElement('div');
+    wm.textContent = (typeof __lwAsset !== 'undefined' ? __lwAsset : '').toUpperCase();
+    wm.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"JetBrains Mono",monospace;font-size:80px;font-weight:700;color:rgba(255,255,255,0.04);pointer-events:none;z-index:1;user-select:none;letter-spacing:4px;white-space:nowrap;';
+    container.appendChild(wm);
+
     window.addEventListener('resize', function() {
         chart.applyOptions({ width: container.clientWidth });
     });
@@ -6818,6 +6824,11 @@ function loadLWChart() {
     } else {
         chart.timeScale().fitContent();
     }
+    // Ticker watermark
+    var wm = document.createElement('div');
+    wm.textContent = (typeof __lwAsset !== 'undefined' ? __lwAsset : '').toUpperCase();
+    wm.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"JetBrains Mono",monospace;font-size:80px;font-weight:700;color:rgba(255,255,255,0.04);pointer-events:none;z-index:1;user-select:none;letter-spacing:4px;white-space:nowrap;';
+    container.appendChild(wm);
     window.addEventListener('resize', function() { chart.applyOptions({ width: container.clientWidth }); });
     var activeTool = null, isLogScale = true;
     var measureStart = null, measureLabel = null, measureLine = null, measureActive = false;
