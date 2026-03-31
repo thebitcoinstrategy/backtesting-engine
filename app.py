@@ -3497,8 +3497,8 @@ class Params:
     """Hold form parameters with defaults."""
     def __init__(self, form=None):
         if form:
-            self.asset = form.get("asset", DEFAULT_ASSET)
-            self.vs_asset = form.get("vs_asset", "").strip() or None
+            self.asset = _resolve_asset(form.get("asset", "")) or DEFAULT_ASSET
+            self.vs_asset = _resolve_asset(form.get("vs_asset", "").strip())
             self.mode = form.get("mode", "sweep")
             self.signal_type = form.get("signal_type", "crossover")
             self.ind1_name = form.get("ind1_name", "price")
@@ -3614,6 +3614,19 @@ else:
             ASSETS[_name] = _df
             ASSET_STARTS[_name] = str(_df.index[0].date())
 ASSET_NAMES = sorted(ASSETS.keys())
+# Case-insensitive lookup: maps lowercased name -> actual ASSETS key
+_ASSET_KEY_MAP = {k.lower(): k for k in ASSETS}
+
+
+def _resolve_asset(name):
+    """Resolve an asset name to its canonical ASSETS key (case-insensitive)."""
+    if not name:
+        return None
+    if name in ASSETS:
+        return name
+    return _ASSET_KEY_MAP.get(name.lower())
+
+
 _PRIORITY_ORDER = ["bitcoin", "ethereum", "solana"]
 _CRYPTO_AGG_ASSETS = set()
 _STOCK_ASSETS = {"Apple", "Microsoft", "Amazon", "Alphabet", "Tesla", "Nvidia", "Meta", "Netflix", "Coinbase", "Strategy"}
@@ -3778,8 +3791,9 @@ def _fetch_live_price(asset_name):
 
 def _rebuild_asset_lists():
     """Rebuild all asset name/category lists from current ASSETS dict."""
-    global ASSET_NAMES, PRIORITY_ASSETS, OTHER_ASSETS, CRYPTO_AGG_ASSETS, STOCK_ASSETS, INDEX_ASSETS, METAL_ASSETS, COMMODITY_ASSETS
+    global ASSET_NAMES, PRIORITY_ASSETS, OTHER_ASSETS, CRYPTO_AGG_ASSETS, STOCK_ASSETS, INDEX_ASSETS, METAL_ASSETS, COMMODITY_ASSETS, _ASSET_KEY_MAP
     ASSET_NAMES = sorted(ASSETS.keys())
+    _ASSET_KEY_MAP = {k.lower(): k for k in ASSETS}
     PRIORITY_ASSETS = [a for a in _PRIORITY_ORDER if a in ASSETS]
     OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER and a not in _CRYPTO_AGG_ASSETS and a not in _STOCK_ASSETS and a not in _INDEX_ASSETS and a not in _METAL_ASSETS and a not in _COMMODITY_ASSETS]
     CRYPTO_AGG_ASSETS = [a for a in ASSET_NAMES if a in _CRYPTO_AGG_ASSETS]
@@ -9206,8 +9220,8 @@ def backtest_detail(bt_id):
     bt_params = json_mod.loads(bt_entry.get('params', '{}') or '{}')
     try:
         import pandas as pd_mod
-        _asset = bt_params.get('asset', 'bitcoin')
-        _vs = bt_params.get('vs_asset', '')
+        _asset = _resolve_asset(bt_params.get('asset', '')) or DEFAULT_ASSET
+        _vs = _resolve_asset(bt_params.get('vs_asset', ''))
         _df_all = ASSETS.get(_asset, ASSETS.get(DEFAULT_ASSET)).copy()
         if _vs and _vs in ASSETS:
             _df_vs = ASSETS[_vs].copy()

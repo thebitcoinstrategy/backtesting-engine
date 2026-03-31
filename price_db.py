@@ -118,7 +118,7 @@ def get_asset_df(name):
                 SELECT p.date, p.close
                 FROM prices p
                 JOIN assets a ON p.asset_id = a.id
-                WHERE a.name = %s
+                WHERE LOWER(a.name) = LOWER(%s)
                 ORDER BY p.date
             """, (name,))
             rows = cur.fetchall()
@@ -258,7 +258,7 @@ def get_asset_last_date(name):
                 SELECT MAX(p.date)
                 FROM prices p
                 JOIN assets a ON p.asset_id = a.id
-                WHERE a.name = %s
+                WHERE LOWER(a.name) = LOWER(%s)
             """, (name,))
             row = cur.fetchone()
             return row[0] if row else None
@@ -275,7 +275,7 @@ def get_price_count(name):
                 SELECT COUNT(*)
                 FROM prices p
                 JOIN assets a ON p.asset_id = a.id
-                WHERE a.name = %s
+                WHERE LOWER(a.name) = LOWER(%s)
             """, (name,))
             return cur.fetchone()[0]
     finally:

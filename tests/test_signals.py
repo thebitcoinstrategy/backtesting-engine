@@ -169,3 +169,67 @@ class TestFetchPricesNoShift:
                     f"The shift is only for backtesting (look-ahead bias), not notifications.\n"
                     f"Offending line: {line.strip()}"
                 )
+
+
+# ---------------------------------------------------------------------------
+# Bug fix: Asset name case-insensitive resolution
+# "solana" must resolve to "Solana", not silently fall back to bitcoin
+# ---------------------------------------------------------------------------
+
+class TestAssetCaseResolution:
+    """Verify that asset names are resolved case-insensitively so saved
+    backtests with lowercase names (e.g. 'solana') still work after
+    asset names were capitalized in the DB."""
+
+    def _read_app_source(self):
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def test_resolve_asset_function_exists(self):
+        """app.py must define a _resolve_asset helper for case-insensitive lookup."""
+        src = self._read_app_source()
+        assert "def _resolve_asset" in src, (
+            "app.py must have a _resolve_asset() function for case-insensitive asset lookup"
+        )
+
+    def test_params_uses_resolve_asset(self):
+        """Params.__init__ must use _resolve_asset for both asset and vs_asset."""
+        src = self._read_app_source()
+        # Find the Params __init__ method
+        init_match = re.search(
+            r"class Params:.*?def __init__\(self.*?\):(.*?)(?=\n    def |\nclass )",
+            src, re.DOTALL
+        )
+        assert init_match, "Params.__init__ not found"
+        init_body = init_match.group(1)
+        assert "_resolve_asset" in init_body, (
+            "Params.__init__ must use _resolve_asset() to normalize asset names — "
+            "without this, lowercase asset names from saved backtests or URLs "
+            "silently fall back to the default asset (bitcoin)"
+        )
+
+    def test_backtest_detail_uses_resolve_asset(self):
+        """backtest_detail route must resolve asset names from saved params."""
+        src = self._read_app_source()
+        # Find the backtest_detail function
+        detail_match = re.search(
+            r"def backtest_detail\(bt_id\):(.*?)(?=\n@app\.route|\ndef \w+\()",
+            src, re.DOTALL
+        )
+        assert detail_match, "backtest_detail() not found"
+        detail_body = detail_match.group(1)
+        assert "_resolve_asset" in detail_body, (
+            "backtest_detail() must use _resolve_asset() when reading asset from "
+            "saved params — saved backtests may have lowercase names"
+        )
+
+    def test_price_db_case_insensitive(self):
+        """price_db.get_asset_df must use case-insensitive name matching."""
+        pdb_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "price_db.py")
+        with open(pdb_path, "r", encoding="utf-8") as f:
+            src = f.read()
+        assert "LOWER" in src, (
+            "price_db.py must use case-insensitive (LOWER) matching for asset names "
+            "so that 'solana' matches 'Solana' in the database"
+        )
