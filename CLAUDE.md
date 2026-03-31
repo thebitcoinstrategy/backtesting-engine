@@ -61,6 +61,22 @@ python app.py                            # Flask server at http://localhost:5000
 - Heatmap with same indicator type: upper triangle only (skip redundant combos)
 - Heatmap with mixed types (e.g., EMA vs SMA): all combos valid
 
+## Mandatory Deploy Flow
+
+**Every code change MUST be committed, pushed, and deployed to production. No exceptions.**
+
+```bash
+# 1. Commit and push
+git add <files> && git commit -m "..." && git push origin master
+
+# 2. Deploy to production
+ssh root@209.97.172.76 "cd /opt/backtesting-engine && git pull && systemctl restart backtesting"
+```
+
+- Server path: `/opt/backtesting-engine` (NOT `/root/`)
+- Service: `backtesting` (Gunicorn on 127.0.0.1:5000 behind Nginx)
+- Production URL: https://analytics.the-bitcoin-strategy.com/
+
 ## Conventions
 
 - When adding new CLI parameters or modes, update the `EXAMPLES` string constant in `backtest.py`
