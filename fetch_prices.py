@@ -23,6 +23,7 @@ import pandas as pd
 import requests
 
 import price_db
+from helpers import compute_ratio_prices
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -245,13 +246,11 @@ def check_and_send_signals():
             if vs_asset:
                 df_vs = price_db.get_asset_df(vs_asset)
                 if not df_vs.empty:
-                    df.index = df.index.normalize()
-                    df_vs.index = df_vs.index.normalize()
-                    df = df[~df.index.duplicated(keep='first')]
-                    df_vs = df_vs[~df_vs.index.duplicated(keep='first')]
-                    common = df.index.intersection(df_vs.index)
-                    df = df.loc[common]
-                    df["close"] = df["close"] / df_vs.loc[common, "close"]
+                    try:
+                        df = compute_ratio_prices(df, df_vs)
+                    except ValueError:
+                        log.warning("No overlapping dates for %s / %s", asset, vs_asset)
+                        continue
 
             # Extract strategy params
             ind1_name = params.get('ind1_name', 'price')

@@ -86,9 +86,19 @@ ssh root@209.97.172.76 "cd /opt/backtesting-engine && git pull && systemctl rest
 - Run tests manually: `python -m pytest tests/ -v`
 - Tests cover: signal detection, live chart ratio mode, asset name resolution, source code invariants
 
+## Shared Code (Extracted from app.py)
+
+- **`helpers.py`** — `compute_ratio_prices(df, df_vs)` shared by app.py, backtest.py, fetch_prices.py
+- **`static/js/nav.js`** — Theme toggle, notifications, dropdown handlers (loaded by all 7 navbar templates)
+- **`static/js/chart.js`** — LightweightCharts: loadLWChart, fetchLivePrice, switchChartTab, drawing tools (loaded by backtester + detail templates)
+- **`_render_main(p, **kwargs)`** in app.py — Wraps `render_template_string(HTML, ...)` with shared asset metadata params
+
 ## Conventions
 
 - When adding new CLI parameters or modes, update the `EXAMPLES` string constant in `backtest.py`
 - When adding new indicators, add entry to `INDICATORS` dict in `backtest.py` with `{fn, needs_period}`
 - Web UI field visibility is toggled via JS `toggleFields()` using a `.hidden` CSS class with `!important`
 - After editing `app.py`, kill existing Flask process before restarting (`taskkill //F //IM python.exe` on Windows)
+- Nav JS changes go in `static/js/nav.js` (one place, affects all pages)
+- Chart JS changes go in `static/js/chart.js` (one place, affects backtester + detail page)
+- Ratio computation changes go in `helpers.py` `compute_ratio_prices()` (one place, affects all 4 callers)

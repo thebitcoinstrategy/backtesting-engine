@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import sys
 
+from helpers import compute_ratio_prices
+
 RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
 
 
@@ -2198,12 +2200,11 @@ def main():
             df_vs = load_data(vs_path)
         else:
             df_vs = load_asset(args.vs, data_dir=data_dir, use_db=use_db)
-        common_idx = df.index.intersection(df_vs.index)
-        if len(common_idx) == 0:
+        try:
+            df = compute_ratio_prices(df, df_vs)
+        except ValueError:
             print(f"Error: No overlapping dates between {args.asset} and {args.vs}.")
             sys.exit(1)
-        df = df.loc[common_idx]
-        df["close"] = df["close"] / df_vs.loc[common_idx, "close"]
         asset_label = f"{args.asset}/{args.vs}"
 
     if args.start_date:

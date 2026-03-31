@@ -119,20 +119,28 @@ class TestLiveChartRatioMode:
             "Backtest detail route must inject __lwVsAsset into cached HTML"
         )
 
+    def _read_chart_js(self):
+        """Read chart.js if it exists, otherwise return empty string."""
+        chart_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "js", "chart.js")
+        if os.path.isfile(chart_path):
+            with open(chart_path, "r", encoding="utf-8") as f:
+                return f.read()
+        return ""
+
     def test_fetchLivePrice_has_ratio_division(self):
         """fetchLivePrice() must divide prices when vsAsset is set."""
-        src = self._read_app_source()
-        # Both instances of fetchLivePrice must contain the ratio division logic
+        # Check both app.py and static/js/chart.js (post-refactor)
+        src = self._read_app_source() + self._read_chart_js()
         matches = list(re.finditer(r"d1\.price\s*/\s*d2\.price", src))
-        assert len(matches) >= 2, (
-            f"Expected at least 2 instances of ratio division (d1.price / d2.price) "
+        assert len(matches) >= 1, (
+            f"Expected at least 1 instance of ratio division (d1.price / d2.price) "
             f"in fetchLivePrice(), found {len(matches)}"
         )
 
     def test_fetchLivePrice_fetches_both_assets(self):
         """fetchLivePrice() must fetch both asset and vsAsset prices in ratio mode."""
-        src = self._read_app_source()
-        # Must use Promise.all to fetch both prices
+        # Check both app.py and static/js/chart.js (post-refactor)
+        src = self._read_app_source() + self._read_chart_js()
         assert "Promise.all" in src, (
             "fetchLivePrice must use Promise.all to fetch both asset prices for ratio mode"
         )

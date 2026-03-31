@@ -21,6 +21,7 @@ import threading
 import uuid
 import database as db
 import price_db
+from helpers import compute_ratio_prices
 
 app = Flask(__name__)
 db.init_db()
@@ -1971,101 +1972,9 @@ HTML = """\
         </div>
     </div>
 </div>
+<script src="/static/js/nav.js"></script>
+<script src="/static/js/chart.js"></script>
 <script>
-// Theme toggle
-(function() {
-    var saved = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', saved);
-    var inp = document.getElementById('theme-input');
-    if (inp) inp.value = saved;
-})();
-function toggleTheme() {
-    var current = document.documentElement.getAttribute('data-theme') || 'dark';
-    var next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('theme', next);
-    var inp = document.getElementById('theme-input');
-    if (inp) inp.value = next;
-}
-var _swal = Swal.mixin({
-    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
-    customClass: { popup: 'swal-dark' }
-});
-// Notification bell
-function toggleNotifDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('notif-dropdown');
-    if (!dd) return;
-    var wasHidden = dd.classList.contains('hidden');
-    dd.classList.toggle('hidden');
-    var add = document.getElementById('avatar-dropdown');
-    if (add) add.classList.add('hidden');
-    if (wasHidden) {
-        // Auto-mark as read when opening
-        fetch('/api/notifications/read', { method: 'POST' });
-        var badge = document.getElementById('notif-badge');
-        if (badge) badge.classList.add('hidden');
-    }
-}
-function toggleAvatarDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('avatar-dropdown');
-    if (dd) dd.classList.toggle('hidden');
-    var ndd = document.getElementById('notif-dropdown');
-    if (ndd) ndd.classList.add('hidden');
-}
-document.addEventListener('click', function(e) {
-    var dd = document.getElementById('notif-dropdown');
-    if (dd && !dd.classList.contains('hidden')) {
-        var wrap = document.querySelector('.notif-bell-wrap');
-        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
-    }
-    var add = document.getElementById('avatar-dropdown');
-    if (add && !add.classList.contains('hidden')) {
-        var awrap = document.querySelector('.avatar-wrap');
-        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
-    }
-});
-function fetchNotifications() {
-    fetch('/api/notifications').then(function(r) { return r.json(); })
-    .then(function(data) {
-        var badge = document.getElementById('notif-badge');
-        var list = document.getElementById('notif-list');
-        if (!badge || !list) return;
-        if (data.count > 0) {
-            badge.textContent = data.count > 99 ? '99+' : data.count;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-        if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
-        } else {
-            list.innerHTML = data.notifications.map(function(n) {
-                var text, href;
-                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
-                if (n.type === 'welcome') {
-                    text = _escHtml(n.message || 'Welcome!');
-                    href = n.link || '/feedback';
-                } else {
-                    var title = n.backtest_title || 'Untitled';
-                    if (title.length > 40) title = title.substring(0, 37) + '...';
-                    text = n.type === 'reply'
-                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
-                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
-                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
-                }
-                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
-                    + '<div class="notif-item-text">' + text + '</div>'
-                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
-            }).join('');
-        }
-    }).catch(function() {});
-}
-function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-document.addEventListener('DOMContentLoaded', function() {
-    if (document.getElementById('notif-badge')) fetchNotifications();
-});
 var assetStarts = {{ asset_starts_json|tojson }};
 function selectMode(mode, el) {
     document.getElementById('mode').value = mode;
@@ -2438,413 +2347,8 @@ toggleFields();
 })();
 
 // Lightweight Charts tab switching
-var lwChartLoaded = false;
-var _livePriceInterval = null;
-var _liveChartActive = false;
 
-function startLivePolling() {
-    if (_livePriceInterval) return;
-    if (typeof __lwAsset === 'undefined') return;
-    _liveChartActive = true;
-    fetchLivePrice();
-    _livePriceInterval = setInterval(fetchLivePrice, 60000);
-}
-function stopLivePolling() {
-    _liveChartActive = false;
-    if (_livePriceInterval) { clearInterval(_livePriceInterval); _livePriceInterval = null; }
-}
-function fetchLivePrice() {
-    if (document.hidden) return;
-    if (!window._lwPriceSeries) return;
-    if (typeof __lwAsset === 'undefined') return;
-    var vsAsset = (typeof __lwVsAsset !== 'undefined') ? __lwVsAsset : '';
-    if (vsAsset) {
-        Promise.all([
-            fetch('/api/price-now/' + encodeURIComponent(__lwAsset)).then(function(r) { return r.json(); }),
-            fetch('/api/price-now/' + encodeURIComponent(vsAsset)).then(function(r) { return r.json(); })
-        ]).then(function(results) {
-            var d1 = results[0], d2 = results[1];
-            if (d1.error === 'quota' || d2.error === 'quota') { stopLivePolling(); return; }
-            if (d1.price && d2.price && d2.price > 0 && d1.time) {
-                window._lwPriceSeries.update({time: d1.time, value: d1.price / d2.price});
-            }
-        }).catch(function(){});
-    } else {
-        fetch('/api/price-now/' + encodeURIComponent(__lwAsset))
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.price && data.time) {
-                    window._lwPriceSeries.update({time: data.time, value: data.price});
-                }
-                if (data.error === 'quota') stopLivePolling();
-            })
-            .catch(function(){});
-    }
-}
-document.addEventListener('visibilitychange', function() {
-    if (document.hidden) {
-        if (_livePriceInterval) { clearInterval(_livePriceInterval); _livePriceInterval = null; }
-    } else if (_liveChartActive) {
-        fetchLivePrice();
-        _livePriceInterval = setInterval(fetchLivePrice, 60000);
-    }
-});
 
-function switchChartTab(tab, btn) {
-    var bt = document.getElementById('backtest-chart-tab');
-    var lw = document.getElementById('livechart-tab');
-    if (!bt || !lw) return;
-    bt.style.display = tab === 'backtest' ? '' : 'none';
-    lw.style.display = tab === 'livechart' ? '' : 'none';
-    var tabs = btn.parentElement.querySelectorAll('.chart-tab');
-    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
-    btn.classList.add('active');
-    if (tab === 'livechart' && !lwChartLoaded) {
-        loadLWChart();
-    }
-    if (tab === 'livechart') {
-        startLivePolling();
-    } else {
-        stopLivePolling();
-    }
-    // Update URL with view parameter
-    var url = new URL(window.location);
-    if (tab === 'livechart') {
-        url.searchParams.set('view', 'livechart');
-    } else {
-        url.searchParams.delete('view');
-    }
-    history.replaceState(null, '', url.toString());
-}
-function activateViewFromURL() {
-    var params = new URLSearchParams(window.location.search);
-    if (params.get('view') === 'livechart') {
-        var tabs = document.querySelectorAll('.chart-tab');
-        if (tabs.length >= 2) switchChartTab('livechart', tabs[1]);
-    }
-}
-function downloadChart() {
-    var img = document.getElementById('backtest-chart-img');
-    if (!img) return;
-    var asset = document.getElementById('asset');
-    var assetName = asset ? asset.value : 'chart';
-    var a = document.createElement('a');
-    a.href = img.src;
-    a.download = assetName + '_backtest.png';
-    a.click();
-}
-function loadLWChart() {
-    var container = document.getElementById('lw-chart-container');
-    if (!container || typeof __lwData === 'undefined') return;
-    lwChartLoaded = true;
-    container.innerHTML = '';
-
-    var priceData = __lwData.price || [];
-    var ind1Data = __lwData.ind1 || [];
-    var ind2Data = __lwData.ind2 || [];
-    var ind1Label = __lwData.ind1Label || '';
-    var ind2Label = __lwData.ind2Label || '';
-
-    if (priceData.length === 0) return;
-
-    // Determine decimal precision from data magnitude
-    function calcPriceFormat(data) {
-        if (!data || data.length === 0) return { precision: 2, minMove: 0.01 };
-        var vals = data.map(function(d) { return Math.abs(d.value); }).filter(function(v) { return v > 0; });
-        if (vals.length === 0) return { precision: 2, minMove: 0.01 };
-        var median = vals.sort(function(a,b){return a-b;})[Math.floor(vals.length/2)];
-        var prec;
-        if (median >= 1) prec = 2;
-        else if (median >= 0.1) prec = 3;
-        else if (median >= 0.01) prec = 4;
-        else if (median >= 0.001) prec = 5;
-        else if (median >= 0.0001) prec = 6;
-        else prec = 8;
-        return { precision: prec, minMove: Math.pow(10, -prec) };
-    }
-    var priceFmt = calcPriceFormat(priceData);
-
-    var chart = LightweightCharts.createChart(container, {
-        width: container.clientWidth,
-        height: 600,
-        layout: {
-            background: { color: '#161922' },
-            textColor: '#8890a4',
-            fontFamily: "'DM Sans', sans-serif"
-        },
-        grid: {
-            vertLines: { color: '#252a3a' },
-            horzLines: { color: '#252a3a' }
-        },
-        rightPriceScale: {
-            mode: LightweightCharts.PriceScaleMode.Logarithmic,
-            borderColor: '#252a3a'
-        },
-        timeScale: {
-            borderColor: '#252a3a',
-            timeVisible: false
-        },
-        crosshair: {
-            horzLine: { color: '#555d74', labelBackgroundColor: '#252a3a' },
-            vertLine: { color: '#555d74', labelBackgroundColor: '#252a3a' }
-        }
-    });
-
-    var priceSeries = chart.addSeries(LightweightCharts.LineSeries, {
-        color: '#e8eaf0',
-        lineWidth: 2,
-        title: 'Price',
-        priceLineVisible: false,
-        priceFormat: { type: 'price', precision: priceFmt.precision, minMove: priceFmt.minMove }
-    });
-    priceSeries.setData(priceData);
-    window._lwPriceSeries = priceSeries;
-
-    if (ind2Data.length > 0) {
-        var ind2Fmt = calcPriceFormat(ind2Data);
-        var ind2Series = chart.addSeries(LightweightCharts.LineSeries, {
-            color: '#6495ED',
-            lineWidth: 2,
-            title: ind2Label,
-            priceLineVisible: false,
-            priceFormat: { type: 'price', precision: ind2Fmt.precision, minMove: ind2Fmt.minMove }
-        });
-        ind2Series.setData(ind2Data);
-    }
-
-    if (ind1Data.length > 0) {
-        var ind1Fmt = calcPriceFormat(ind1Data);
-        var ind1Series = chart.addSeries(LightweightCharts.LineSeries, {
-            color: '#f7931a',
-            lineWidth: 2,
-            title: ind1Label,
-            priceLineVisible: false,
-            priceFormat: { type: 'price', precision: ind1Fmt.precision, minMove: ind1Fmt.minMove }
-        });
-        ind1Series.setData(ind1Data);
-    }
-
-    // Default zoom: show last 12 months
-    if (priceData.length > 0) {
-        var lastPoint = priceData[priceData.length - 1];
-        var lastDate = new Date(lastPoint.time);
-        var fromDate = new Date(lastDate);
-        fromDate.setFullYear(fromDate.getFullYear() - 1);
-        chart.timeScale().setVisibleRange({
-            from: fromDate.toISOString().split('T')[0],
-            to: lastPoint.time
-        });
-    } else {
-        chart.timeScale().fitContent();
-    }
-
-    // Ticker watermark
-    var wm = document.createElement('div');
-    wm.textContent = (typeof __lwAsset !== 'undefined' ? __lwAsset : '').toUpperCase();
-    wm.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"JetBrains Mono",monospace;font-size:80px;font-weight:700;color:rgba(255,255,255,0.04);pointer-events:none;z-index:1;user-select:none;letter-spacing:4px;white-space:nowrap;';
-    container.appendChild(wm);
-
-    window.addEventListener('resize', function() {
-        chart.applyOptions({ width: container.clientWidth });
-    });
-
-    var activeTool = null;  // 'measure' | 'draw' | null
-    var isLogScale = true;
-
-    function setTool(tool) {
-        if (activeTool === tool) { activeTool = null; } else { activeTool = tool; }
-        container.style.cursor = activeTool ? 'crosshair' : '';
-        // Cancel any in-progress action
-        if (activeTool !== 'measure') removeMeasure();
-        if (activeTool !== 'draw') cancelDraw();
-    }
-
-    function toggleScale() {
-        isLogScale = !isLogScale;
-        chart.applyOptions({
-            rightPriceScale: {
-                mode: isLogScale ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal
-            }
-        });
-    }
-
-    function clearAll() {
-        removeMeasure();
-        cancelDraw();
-        drawnLines.forEach(function(item) { item.remove(); });
-        drawnLines = [];
-    }
-
-    // ===== Shared SVG helpers =====
-    function makeSvgOverlay() {
-        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;';
-        svg.setAttribute('width', '100%');
-        svg.setAttribute('height', '100%');
-        return svg;
-    }
-    function addDot(svg, cx, cy, color) {
-        var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', '4');
-        c.setAttribute('fill', color);
-        svg.appendChild(c);
-    }
-    function addLine(svg, x1, y1, x2, y2, color, dash) {
-        var l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        l.setAttribute('x1', x1); l.setAttribute('y1', y1);
-        l.setAttribute('x2', x2); l.setAttribute('y2', y2);
-        l.setAttribute('stroke', color); l.setAttribute('stroke-width', '1.5');
-        if (dash) l.setAttribute('stroke-dasharray', dash);
-        l.setAttribute('opacity', '0.8');
-        svg.appendChild(l);
-    }
-    function createLabel(text, x, y) {
-        var el = document.createElement('div');
-        el.className = 'lw-measure-label';
-        el.innerHTML = text;
-        el.style.left = x + 'px';
-        el.style.top = y + 'px';
-        container.appendChild(el);
-        var rect = el.getBoundingClientRect();
-        var cRect = container.getBoundingClientRect();
-        if (rect.right > cRect.right - 4) el.style.left = (x - rect.width - 8) + 'px';
-        if (rect.bottom > cRect.bottom - 4) el.style.top = (y - rect.height - 8) + 'px';
-        return el;
-    }
-    function formatMeasure(startPrice, endPrice) {
-        if (!startPrice || startPrice <= 0) return '';
-        var pctChange = ((endPrice - startPrice) / startPrice * 100);
-        var sign = pctChange >= 0 ? '+' : '';
-        var color = pctChange >= 0 ? '#34d399' : '#ef4444';
-        return '<span style="color:' + color + ';font-weight:600;font-size:13px">' + sign + pctChange.toFixed(2) + '%</span>' +
-               '<br><span style="color:#8890a4;font-size:11px">' + (endPrice - startPrice >= 0 ? '+' : '') + (endPrice - startPrice).toFixed(priceFmt.precision) + '</span>';
-    }
-
-    // ===== Measure tool =====
-    var measureStart = null, measureLabel = null, measureLine = null, measureActive = false;
-    function removeMeasure() {
-        if (measureLabel) { measureLabel.remove(); measureLabel = null; }
-        if (measureLine) { measureLine.remove(); measureLine = null; }
-        measureStart = null; measureActive = false;
-    }
-
-    // ===== Draw lines tool =====
-    var drawStart = null, drawPreview = null, drawActive = false;
-    var drawnLines = [];  // persistent lines [{svg, ...}]
-    function cancelDraw() {
-        if (drawPreview) { drawPreview.remove(); drawPreview = null; }
-        drawStart = null; drawActive = false;
-    }
-
-    // ===== Click handler =====
-    container.addEventListener('click', function(e) {
-        var cRect = container.getBoundingClientRect();
-        var x = e.clientX - cRect.left;
-        var y = e.clientY - cRect.top;
-
-        // Shift+Click always activates measure regardless of active tool
-        if (e.shiftKey) {
-            if (activeTool !== 'measure') setTool('measure');
-        }
-
-        if (activeTool === 'measure') {
-            var price = priceSeries.coordinateToPrice(y);
-            if (!measureStart) {
-                removeMeasure();
-                measureStart = { x: x, y: y, price: price };
-                measureActive = true;
-                var svg = makeSvgOverlay(); addDot(svg, x, y, '#f7931a'); addLine(svg, x, y, x, y, '#f7931a', '6,3');
-                container.appendChild(svg); measureLine = svg;
-            } else {
-                if (measureLine) measureLine.remove();
-                var svg = makeSvgOverlay();
-                addLine(svg, measureStart.x, measureStart.y, x, y, '#f7931a', '6,3');
-                addDot(svg, measureStart.x, measureStart.y, '#f7931a');
-                addDot(svg, x, y, '#f7931a');
-                container.appendChild(svg); measureLine = svg;
-                if (measureStart.price && price && measureStart.price > 0 && price > 0) {
-                    measureLabel = createLabel(formatMeasure(measureStart.price, price),
-                        Math.max(measureStart.x, x) + 12, Math.min(measureStart.y, y) - 8);
-                }
-                measureStart = null; measureActive = false;
-            }
-            return;
-        }
-
-        if (activeTool === 'draw') {
-            if (!drawStart) {
-                drawStart = { x: x, y: y };
-                drawActive = true;
-                var svg = makeSvgOverlay(); addDot(svg, x, y, '#6495ED'); addLine(svg, x, y, x, y, '#6495ED');
-                container.appendChild(svg); drawPreview = svg;
-            } else {
-                if (drawPreview) drawPreview.remove(); drawPreview = null;
-                var svg = makeSvgOverlay();
-                addLine(svg, drawStart.x, drawStart.y, x, y, '#6495ED');
-                addDot(svg, drawStart.x, drawStart.y, '#6495ED');
-                addDot(svg, x, y, '#6495ED');
-                container.appendChild(svg);
-                drawnLines.push(svg);
-                drawStart = null; drawActive = false;
-            }
-            return;
-        }
-
-        // No tool active — plain click clears measure if any
-        if (measureStart) removeMeasure();
-    });
-
-    // ===== Mousemove for live preview =====
-    container.addEventListener('mousemove', function(e) {
-        var cRect = container.getBoundingClientRect();
-        var x = e.clientX - cRect.left;
-        var y = e.clientY - cRect.top;
-
-        if (measureActive && measureStart) {
-            if (measureLine) measureLine.remove();
-            if (measureLabel) { measureLabel.remove(); measureLabel = null; }
-            var svg = makeSvgOverlay();
-            addLine(svg, measureStart.x, measureStart.y, x, y, '#f7931a', '6,3');
-            addDot(svg, measureStart.x, measureStart.y, '#f7931a');
-            addDot(svg, x, y, '#f7931a');
-            container.appendChild(svg); measureLine = svg;
-            var price = priceSeries.coordinateToPrice(y);
-            if (measureStart.price && price && measureStart.price > 0 && price > 0) {
-                measureLabel = createLabel(formatMeasure(measureStart.price, price),
-                    Math.max(measureStart.x, x) + 12, Math.min(measureStart.y, y) - 8);
-            }
-        }
-
-        if (drawActive && drawStart) {
-            if (drawPreview) drawPreview.remove();
-            var svg = makeSvgOverlay();
-            addLine(svg, drawStart.x, drawStart.y, x, y, '#6495ED');
-            addDot(svg, drawStart.x, drawStart.y, '#6495ED');
-            addDot(svg, x, y, '#6495ED');
-            container.appendChild(svg); drawPreview = svg;
-        }
-    });
-
-    // Keyboard shortcuts for chart tools
-    document.addEventListener('keydown', function(e) {
-        // Skip if user is typing in an input/textarea/select
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-        var key = e.key.toLowerCase();
-        if (key === 'escape') {
-            if (measureActive) removeMeasure();
-            if (drawActive) cancelDraw();
-            if (activeTool) setTool(null);
-        } else if (key === 'm') {
-            setTool('measure');
-        } else if (key === 'd') {
-            setTool('draw');
-        } else if (key === 'l') {
-            toggleScale();
-        } else if (key === 'c') {
-            clearAll();
-        }
-    });
-}
 
 // Validation before submit
 function validateForm() {
@@ -4047,6 +3551,21 @@ def cancel():
     return '', 204
 
 
+def _render_main(p, **kwargs):
+    """Render the main backtester HTML template with shared asset metadata."""
+    defaults = dict(
+        nav_active='backtester',
+        asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS,
+        other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS,
+        index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS,
+        commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS,
+        asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS,
+        asset_tickers=ASSET_TICKERS,
+    )
+    defaults.update(kwargs)
+    return render_template_string(HTML, p=p, **defaults)
+
+
 @app.route("/backtester", methods=["GET", "POST"])
 @require_auth
 def index():
@@ -4062,9 +3581,8 @@ def index():
             p = Params(request.args)
         else:
             p = Params()
-        return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
-                                      price_json=None, ind1_json='[]', ind2_json='[]', ind1_label='', ind2_label='')
+        return _render_main(p, chart=None, best=None, table_rows=None, col_header=col_header,
+                            price_json=None, ind1_json='[]', ind2_json='[]', ind1_label='', ind2_label='')
 
     # Check disk cache first
     cache_key = _cache_key(request.form)
@@ -4107,29 +3625,20 @@ def _run_post_handler(cancel_event):
     is_ratio = bool(p.vs_asset and p.vs_asset in ASSETS)
     import pandas as pd_mod
     if p.asset not in ASSETS:
-        return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
-                                      error=f'Asset "{p.asset}" not found. It may have been renamed or deleted.',
-                                      price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
+        return _render_main(p, chart=None, best=None, table_rows=None, col_header=col_header,
+                            error=f'Asset "{p.asset}" not found. It may have been renamed or deleted.',
+                            price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
     df_full = ASSETS[p.asset].copy()
 
     # Relative price mode: divide by denominator asset
     if is_ratio:
         df_vs = ASSETS[p.vs_asset].copy()
-        # Normalize both indexes to midnight UTC so assets with different intraday timestamps can match
-        df_full.index = df_full.index.normalize()
-        df_vs.index = df_vs.index.normalize()
-        # Drop duplicate dates (keep first) that may arise from normalization
-        df_full = df_full[~df_full.index.duplicated(keep='first')]
-        df_vs = df_vs[~df_vs.index.duplicated(keep='first')]
-        common_idx = df_full.index.intersection(df_vs.index)
-        if len(common_idx) == 0:
-            return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
-                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
-                                          error=f"No overlapping dates between {p.asset} and {p.vs_asset}.",
-                                          price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
-        df_full = df_full.loc[common_idx]
-        df_full["close"] = df_full["close"] / df_vs.loc[common_idx, "close"]
+        try:
+            df_full = compute_ratio_prices(df_full, df_vs)
+        except ValueError:
+            return _render_main(p, chart=None, best=None, table_rows=None, col_header=col_header,
+                                error=f"No overlapping dates between {p.asset} and {p.vs_asset}.",
+                                price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
         _cap = lambda s: s.capitalize() if s == s.lower() else s
         asset_display = f"{_cap(p.asset)} / {_cap(p.vs_asset)}"
     else:
@@ -4165,10 +3674,9 @@ def _run_post_handler(cancel_event):
     # --- Regression Analysis Mode ---
     if p.mode == "regression":
         if not is_oscillator:
-            return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
-                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
-                                          error="Regression analysis requires an oscillator indicator. Please select one from Indicator 2.",
-                                          price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
+            return _render_main(p, chart=None, best=None, table_rows=None, col_header=col_header,
+                                error="Regression analysis requires an oscillator indicator. Please select one from Indicator 2.",
+                                price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
         reg_result = bt.run_regression_analysis(df, p.osc_name, p.osc_period, p.forward_days,
                                                  p.buy_threshold, p.sell_threshold)
@@ -4202,10 +3710,9 @@ def _run_post_handler(cancel_event):
         thumb_buf.seek(0)
         thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
 
-        return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=None, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
-                                      regression=reg_result, regression_sweep_chart=sweep_chart_b64, regression_sweep=sweep_result, thumb_b64=thumb_b64,
-                                      price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
+        return _render_main(p, chart=chart_b64, best=None, table_rows=None, col_header=col_header,
+                            regression=reg_result, regression_sweep_chart=sweep_chart_b64, regression_sweep=sweep_result, thumb_b64=thumb_b64,
+                            price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
     # --- DCA Optimization Mode ---
     if p.mode == "dca":
@@ -4225,10 +3732,9 @@ def _run_post_handler(cancel_event):
         )
 
         if dca_result is None:
-            return render_template_string(HTML, p=p, nav_active='backtester', chart=None, best=None, table_rows=None, col_header=col_header,
-                                          asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
-                                          error="Not enough data for DCA analysis.",
-                                          price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
+            return _render_main(p, chart=None, best=None, table_rows=None, col_header=col_header,
+                                error="Not enough data for DCA analysis.",
+                                price_json=None, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
         const = dca_result["constant"]
         dyn = dca_result["dynamic"]
@@ -4381,10 +3887,9 @@ def _run_post_handler(cancel_event):
         }
 
         price_json = _series_to_lw_json(df_price_all["close"])
-        return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
-                                      thumb_b64=thumb_b64,
-                                      price_json=price_json, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
+        return _render_main(p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
+                            thumb_b64=thumb_b64,
+                            price_json=price_json, ind1_json="[]", ind2_json="[]", ind1_label="", ind2_label="")
 
     # --- Leverage Sweep Mode ---
     if p.mode == "sweep-lev":
@@ -4563,11 +4068,10 @@ def _run_post_handler(cancel_event):
             ind1_json = _series_to_lw_json(_lc1)
         else:
             ind1_json = "[]"
-        return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
-                                      hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info, thumb_b64=thumb_b64,
-                                      price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
-                                      ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
+        return _render_main(p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
+                            hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info, thumb_b64=thumb_b64,
+                            price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
+                            ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
 
     # --- Heatmap Mode ---
     if p.mode == "heatmap":
@@ -4733,11 +4237,10 @@ def _run_post_handler(cancel_event):
             ind1_json = _series_to_lw_json(_lc1)
         else:
             ind1_json = "[]"
-        return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=None, col_header=col_header,
-                                      asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
-                                      hide_buyhold=(p.exposure == "short-cash"), thumb_b64=thumb_b64,
-                                      price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
-                                      ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
+        return _render_main(p, chart=chart_b64, best=best, table_rows=None, col_header=col_header,
+                            hide_buyhold=(p.exposure == "short-cash"), thumb_b64=thumb_b64,
+                            price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
+                            ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
 
     # --- Sweep Mode (Find Best Period) ---
     if p.mode == "sweep":
@@ -5064,14 +4567,13 @@ def _run_post_handler(cancel_event):
     else:
         ind1_json = "[]"
         ind2_json = "[]"
-    return render_template_string(HTML, p=p, nav_active='backtester', chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
-                                  asset_names=ASSET_NAMES, priority_assets=PRIORITY_ASSETS, other_assets=OTHER_ASSETS, stock_assets=STOCK_ASSETS, index_assets=INDEX_ASSETS, metal_assets=METAL_ASSETS, commodity_assets=COMMODITY_ASSETS, crypto_agg_assets=CRYPTO_AGG_ASSETS, asset_starts_json=ASSET_STARTS, asset_logos=ASSET_LOGOS, asset_tickers=ASSET_TICKERS,
-                                  hide_buyhold=(p.exposure == "short-cash"),
-                                  ls_breakdown=long_short_breakdown,
-                                  equity_top=equity_top if best else 0.7, equity_bottom=equity_bottom if best else 1.0,
-                                  thumb_b64=thumb_b64 if best else '',
-                                  price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
-                                  ind1_label=best.get("ind1_label", "") if best else "", ind2_label=best.get("ind2_label", "") if best else "")
+    return _render_main(p, chart=chart_b64, best=best, table_rows=table_rows, col_header=col_header,
+                        hide_buyhold=(p.exposure == "short-cash"),
+                        ls_breakdown=long_short_breakdown,
+                        equity_top=equity_top if best else 0.7, equity_bottom=equity_bottom if best else 1.0,
+                        thumb_b64=thumb_b64 if best else '',
+                        price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
+                        ind1_label=best.get("ind1_label", "") if best else "", ind2_label=best.get("ind2_label", "") if best else "")
 
 
 # --- Community / Save / Publish Templates ---
@@ -5681,97 +5183,8 @@ COMMUNITY_HTML = """\
     </div>{# close community-layout #}
     {% endif %}
 </div>
+<script src="/static/js/nav.js"></script>
 <script>
-// Theme toggle
-(function() {
-    var saved = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', saved);
-})();
-function toggleTheme() {
-    var current = document.documentElement.getAttribute('data-theme') || 'dark';
-    var next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('theme', next);
-}
-var _swal = Swal.mixin({
-    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
-    customClass: { popup: 'swal-dark' }
-});
-// Notification bell
-function toggleNotifDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('notif-dropdown');
-    if (!dd) return;
-    var wasHidden = dd.classList.contains('hidden');
-    dd.classList.toggle('hidden');
-    var add = document.getElementById('avatar-dropdown');
-    if (add) add.classList.add('hidden');
-    if (wasHidden) {
-        // Auto-mark as read when opening
-        fetch('/api/notifications/read', { method: 'POST' });
-        var badge = document.getElementById('notif-badge');
-        if (badge) badge.classList.add('hidden');
-    }
-}
-function toggleAvatarDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('avatar-dropdown');
-    if (dd) dd.classList.toggle('hidden');
-    var ndd = document.getElementById('notif-dropdown');
-    if (ndd) ndd.classList.add('hidden');
-}
-document.addEventListener('click', function(e) {
-    var dd = document.getElementById('notif-dropdown');
-    if (dd && !dd.classList.contains('hidden')) {
-        var wrap = document.querySelector('.notif-bell-wrap');
-        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
-    }
-    var add = document.getElementById('avatar-dropdown');
-    if (add && !add.classList.contains('hidden')) {
-        var awrap = document.querySelector('.avatar-wrap');
-        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
-    }
-});
-function fetchNotifications() {
-    fetch('/api/notifications').then(function(r) { return r.json(); })
-    .then(function(data) {
-        var badge = document.getElementById('notif-badge');
-        var list = document.getElementById('notif-list');
-        if (!badge || !list) return;
-        if (data.count > 0) {
-            badge.textContent = data.count > 99 ? '99+' : data.count;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-        if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
-        } else {
-            list.innerHTML = data.notifications.map(function(n) {
-                var text, href;
-                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
-                if (n.type === 'welcome') {
-                    text = _escHtml(n.message || 'Welcome!');
-                    href = n.link || '/feedback';
-                } else {
-                    var title = n.backtest_title || 'Untitled';
-                    if (title.length > 40) title = title.substring(0, 37) + '...';
-                    text = n.type === 'reply'
-                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
-                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
-                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
-                }
-                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
-                    + '<div class="notif-item-text">' + text + '</div>'
-                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
-            }).join('');
-        }
-    }).catch(function() {});
-}
-function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-document.addEventListener('DOMContentLoaded', function() {
-    if (document.getElementById('notif-badge')) fetchNotifications();
-});
 function deleteBacktest(backtestId) {
     _swal.fire({
         title: 'Delete this backtest?', icon: 'warning',
@@ -6410,96 +5823,10 @@ DETAIL_HTML = """\
 
         </div>
 </div>
+<script src="/static/js/nav.js"></script>
+<script src="/static/js/chart.js"></script>
 <script>
-// Theme toggle
-(function() {
-    var saved = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', saved);
-})();
-function toggleTheme() {
-    var current = document.documentElement.getAttribute('data-theme') || 'dark';
-    var next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('theme', next);
-}
-var _swal = Swal.mixin({
-    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
-    customClass: { popup: 'swal-dark' }
-});
-// Notification bell
-function toggleNotifDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('notif-dropdown');
-    if (!dd) return;
-    var wasHidden = dd.classList.contains('hidden');
-    dd.classList.toggle('hidden');
-    var add = document.getElementById('avatar-dropdown');
-    if (add) add.classList.add('hidden');
-    if (wasHidden) {
-        // Auto-mark as read when opening
-        fetch('/api/notifications/read', { method: 'POST' });
-        var badge = document.getElementById('notif-badge');
-        if (badge) badge.classList.add('hidden');
-    }
-}
-function toggleAvatarDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('avatar-dropdown');
-    if (dd) dd.classList.toggle('hidden');
-    var ndd = document.getElementById('notif-dropdown');
-    if (ndd) ndd.classList.add('hidden');
-}
-document.addEventListener('click', function(e) {
-    var dd = document.getElementById('notif-dropdown');
-    if (dd && !dd.classList.contains('hidden')) {
-        var wrap = document.querySelector('.notif-bell-wrap');
-        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
-    }
-    var add = document.getElementById('avatar-dropdown');
-    if (add && !add.classList.contains('hidden')) {
-        var awrap = document.querySelector('.avatar-wrap');
-        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
-    }
-});
-function fetchNotifications() {
-    fetch('/api/notifications').then(function(r) { return r.json(); })
-    .then(function(data) {
-        var badge = document.getElementById('notif-badge');
-        var list = document.getElementById('notif-list');
-        if (!badge || !list) return;
-        if (data.count > 0) {
-            badge.textContent = data.count > 99 ? '99+' : data.count;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-        if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
-        } else {
-            list.innerHTML = data.notifications.map(function(n) {
-                var text, href;
-                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
-                if (n.type === 'welcome') {
-                    text = _escHtml(n.message || 'Welcome!');
-                    href = n.link || '/feedback';
-                } else {
-                    var title = n.backtest_title || 'Untitled';
-                    if (title.length > 40) title = title.substring(0, 37) + '...';
-                    text = n.type === 'reply'
-                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
-                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
-                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
-                }
-                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
-                    + '<div class="notif-item-text">' + text + '</div>'
-                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
-            }).join('');
-        }
-    }).catch(function() {});
-}
-function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-document.addEventListener('DOMContentLoaded', function() {
-    if (document.getElementById('notif-badge')) fetchNotifications();
+document.addEventListener("DOMContentLoaded", function() {
     activateViewFromURL();
 });
 function toggleLike(backtestId, btn) {
@@ -6735,206 +6062,8 @@ function toggleTelegram(btId, currentlyEnabled) {
         });
     }
 }
-function downloadChart() {
-    var img = document.querySelector('.chart-img');
-    if (!img) return;
-    var a = document.createElement('a');
-    a.href = img.src;
-    a.download = '{{ backtest.title or bt_params.asset or "chart" }}_backtest.png';
-    a.click();
-}
-var lwChartLoaded = false;
-var _livePriceInterval = null;
-var _liveChartActive = false;
-function startLivePolling() {
-    if (_livePriceInterval) return;
-    if (typeof __lwAsset === 'undefined') return;
-    _liveChartActive = true;
-    fetchLivePrice();
-    _livePriceInterval = setInterval(fetchLivePrice, 60000);
-}
-function stopLivePolling() {
-    _liveChartActive = false;
-    if (_livePriceInterval) { clearInterval(_livePriceInterval); _livePriceInterval = null; }
-}
-function fetchLivePrice() {
-    if (document.hidden) return;
-    if (!window._lwPriceSeries) return;
-    if (typeof __lwAsset === 'undefined') return;
-    var vsAsset = (typeof __lwVsAsset !== 'undefined') ? __lwVsAsset : '';
-    if (vsAsset) {
-        Promise.all([
-            fetch('/api/price-now/' + encodeURIComponent(__lwAsset)).then(function(r) { return r.json(); }),
-            fetch('/api/price-now/' + encodeURIComponent(vsAsset)).then(function(r) { return r.json(); })
-        ]).then(function(results) {
-            var d1 = results[0], d2 = results[1];
-            if (d1.error === 'quota' || d2.error === 'quota') { stopLivePolling(); return; }
-            if (d1.price && d2.price && d2.price > 0 && d1.time) {
-                window._lwPriceSeries.update({time: d1.time, value: d1.price / d2.price});
-            }
-        }).catch(function(){});
-    } else {
-        fetch('/api/price-now/' + encodeURIComponent(__lwAsset))
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.price && data.time) window._lwPriceSeries.update({time: data.time, value: data.price});
-                if (data.error === 'quota') stopLivePolling();
-            })
-            .catch(function(){});
-    }
-}
-document.addEventListener('visibilitychange', function() {
-    if (document.hidden) {
-        if (_livePriceInterval) { clearInterval(_livePriceInterval); _livePriceInterval = null; }
-    } else if (_liveChartActive) {
-        fetchLivePrice();
-        _livePriceInterval = setInterval(fetchLivePrice, 60000);
-    }
-});
-function switchChartTab(tab, btn) {
-    var bt = document.getElementById('backtest-chart-tab');
-    var lw = document.getElementById('livechart-tab');
-    if (!bt || !lw) return;
-    bt.style.display = tab === 'backtest' ? '' : 'none';
-    lw.style.display = tab === 'livechart' ? '' : 'none';
-    var tabs = btn.parentElement.querySelectorAll('.chart-tab');
-    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
-    btn.classList.add('active');
-    if (tab === 'livechart' && !lwChartLoaded) { loadLWChart(); }
-    if (tab === 'livechart') { startLivePolling(); } else { stopLivePolling(); }
-    var url = new URL(window.location);
-    if (tab === 'livechart') {
-        url.searchParams.set('view', 'livechart');
-    } else {
-        url.searchParams.delete('view');
-    }
-    history.replaceState(null, '', url.toString());
-}
-function activateViewFromURL() {
-    var params = new URLSearchParams(window.location.search);
-    if (params.get('view') === 'livechart') {
-        var tabs = document.querySelectorAll('.chart-tab');
-        if (tabs.length >= 2) switchChartTab('livechart', tabs[1]);
-    }
-}
-function loadLWChart() {
-    var container = document.getElementById('lw-chart-container');
-    if (!container || typeof __lwData === 'undefined') return;
-    lwChartLoaded = true;
-    container.innerHTML = '';
-    var priceData = __lwData.price || [];
-    var ind1Data = __lwData.ind1 || [];
-    var ind2Data = __lwData.ind2 || [];
-    var ind1Label = __lwData.ind1Label || '';
-    var ind2Label = __lwData.ind2Label || '';
-    if (priceData.length === 0) return;
-    function calcPriceFormat(data) {
-        if (!data || data.length === 0) return { precision: 2, minMove: 0.01 };
-        var vals = data.map(function(d) { return Math.abs(d.value); }).filter(function(v) { return v > 0; });
-        if (vals.length === 0) return { precision: 2, minMove: 0.01 };
-        var median = vals.sort(function(a,b){return a-b;})[Math.floor(vals.length/2)];
-        var prec;
-        if (median >= 1) prec = 2;
-        else if (median >= 0.1) prec = 3;
-        else if (median >= 0.01) prec = 4;
-        else if (median >= 0.001) prec = 5;
-        else if (median >= 0.0001) prec = 6;
-        else prec = 8;
-        return { precision: prec, minMove: Math.pow(10, -prec) };
-    }
-    var priceFmt = calcPriceFormat(priceData);
-    var chart = LightweightCharts.createChart(container, {
-        width: container.clientWidth, height: 600,
-        layout: { background: { color: '#161922' }, textColor: '#8890a4', fontFamily: "'DM Sans', sans-serif" },
-        grid: { vertLines: { color: '#252a3a' }, horzLines: { color: '#252a3a' } },
-        rightPriceScale: { mode: LightweightCharts.PriceScaleMode.Logarithmic, borderColor: '#252a3a' },
-        timeScale: { borderColor: '#252a3a', timeVisible: false },
-        crosshair: { horzLine: { color: '#555d74', labelBackgroundColor: '#252a3a' }, vertLine: { color: '#555d74', labelBackgroundColor: '#252a3a' } }
-    });
-    var priceSeries = chart.addSeries(LightweightCharts.LineSeries, { color: '#e8eaf0', lineWidth: 2, title: 'Price', priceLineVisible: false, priceFormat: { type: 'price', precision: priceFmt.precision, minMove: priceFmt.minMove } });
-    priceSeries.setData(priceData);
-    window._lwPriceSeries = priceSeries;
-    if (ind2Data.length > 0) {
-        var ind2Fmt = calcPriceFormat(ind2Data);
-        var ind2Series = chart.addSeries(LightweightCharts.LineSeries, { color: '#6495ED', lineWidth: 2, title: ind2Label, priceLineVisible: false, priceFormat: { type: 'price', precision: ind2Fmt.precision, minMove: ind2Fmt.minMove } });
-        ind2Series.setData(ind2Data);
-    }
-    if (ind1Data.length > 0) {
-        var ind1Fmt = calcPriceFormat(ind1Data);
-        var ind1Series = chart.addSeries(LightweightCharts.LineSeries, { color: '#f7931a', lineWidth: 2, title: ind1Label, priceLineVisible: false, priceFormat: { type: 'price', precision: ind1Fmt.precision, minMove: ind1Fmt.minMove } });
-        ind1Series.setData(ind1Data);
-    }
-    if (priceData.length > 0) {
-        var lastPoint = priceData[priceData.length - 1];
-        var lastDate = new Date(lastPoint.time);
-        var fromDate = new Date(lastDate);
-        fromDate.setFullYear(fromDate.getFullYear() - 1);
-        chart.timeScale().setVisibleRange({ from: fromDate.toISOString().split('T')[0], to: lastPoint.time });
-    } else {
-        chart.timeScale().fitContent();
-    }
-    // Ticker watermark
-    var wm = document.createElement('div');
-    wm.textContent = (typeof __lwAsset !== 'undefined' ? __lwAsset : '').toUpperCase();
-    wm.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"JetBrains Mono",monospace;font-size:80px;font-weight:700;color:rgba(255,255,255,0.04);pointer-events:none;z-index:1;user-select:none;letter-spacing:4px;white-space:nowrap;';
-    container.appendChild(wm);
-    window.addEventListener('resize', function() { chart.applyOptions({ width: container.clientWidth }); });
-    var activeTool = null, isLogScale = true;
-    var measureStart = null, measureLabel = null, measureLine = null, measureActive = false;
-    var drawStart = null, drawPreview = null, drawActive = false, drawnLines = [];
-    function removeMeasure() { if (measureLabel) { measureLabel.remove(); measureLabel = null; } if (measureLine) { measureLine.remove(); measureLine = null; } measureStart = null; measureActive = false; }
-    function cancelDraw() { if (drawPreview) { drawPreview.remove(); drawPreview = null; } drawStart = null; drawActive = false; }
-    function setTool(tool) {
-        if (activeTool === tool) activeTool = null; else activeTool = tool;
-        container.style.cursor = activeTool ? 'crosshair' : '';
-        if (activeTool !== 'measure') removeMeasure(); if (activeTool !== 'draw') cancelDraw();
-    }
-    function toggleScale() { isLogScale = !isLogScale; chart.applyOptions({ rightPriceScale: { mode: isLogScale ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal } }); }
-    function clearAll() { removeMeasure(); cancelDraw(); drawnLines.forEach(function(i) { i.remove(); }); drawnLines = []; }
-    function makeSvgOverlay() { var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;'; s.setAttribute('width', '100%'); s.setAttribute('height', '100%'); return s; }
-    function addDot(s, cx, cy, c) { var d = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); d.setAttribute('cx', cx); d.setAttribute('cy', cy); d.setAttribute('r', '4'); d.setAttribute('fill', c); s.appendChild(d); }
-    function addLine(s, x1, y1, x2, y2, c, dash) { var l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l.setAttribute('x1', x1); l.setAttribute('y1', y1); l.setAttribute('x2', x2); l.setAttribute('y2', y2); l.setAttribute('stroke', c); l.setAttribute('stroke-width', '1.5'); if (dash) l.setAttribute('stroke-dasharray', dash); l.setAttribute('opacity', '0.8'); s.appendChild(l); }
-    function createLabel(text, x, y) { var el = document.createElement('div'); el.className = 'lw-measure-label'; el.innerHTML = text; el.style.left = x + 'px'; el.style.top = y + 'px'; container.appendChild(el); var r = el.getBoundingClientRect(), cr = container.getBoundingClientRect(); if (r.right > cr.right - 4) el.style.left = (x - r.width - 8) + 'px'; if (r.bottom > cr.bottom - 4) el.style.top = (y - r.height - 8) + 'px'; return el; }
-    function fmtMeasure(sp, ep) { if (!sp || sp <= 0) return ''; var pct = ((ep-sp)/sp*100), sign = pct >= 0 ? '+' : '', color = pct >= 0 ? '#34d399' : '#ef4444'; return '<span style="color:'+color+';font-weight:600;font-size:13px">'+sign+pct.toFixed(2)+'%</span><br><span style="color:#8890a4;font-size:11px">'+(ep-sp>=0?'+':'')+(ep-sp).toFixed(priceFmt.precision)+'</span>'; }
-    container.addEventListener('click', function(e) {
-        var cr = container.getBoundingClientRect(), x = e.clientX - cr.left, y = e.clientY - cr.top;
-        if (e.shiftKey && activeTool !== 'measure') setTool('measure');
-        if (activeTool === 'measure') {
-            var price = priceSeries.coordinateToPrice(y);
-            if (!measureStart) { removeMeasure(); measureStart = { x:x, y:y, price:price }; measureActive = true; var sv = makeSvgOverlay(); addDot(sv,x,y,'#f7931a'); addLine(sv,x,y,x,y,'#f7931a','6,3'); container.appendChild(sv); measureLine = sv; }
-            else { if (measureLine) measureLine.remove(); var sv = makeSvgOverlay(); addLine(sv,measureStart.x,measureStart.y,x,y,'#f7931a','6,3'); addDot(sv,measureStart.x,measureStart.y,'#f7931a'); addDot(sv,x,y,'#f7931a'); container.appendChild(sv); measureLine = sv; if (measureStart.price&&price&&measureStart.price>0&&price>0) measureLabel = createLabel(fmtMeasure(measureStart.price,price),Math.max(measureStart.x,x)+12,Math.min(measureStart.y,y)-8); measureStart = null; measureActive = false; }
-            return;
-        }
-        if (activeTool === 'draw') {
-            if (!drawStart) { drawStart = { x:x, y:y }; drawActive = true; var sv = makeSvgOverlay(); addDot(sv,x,y,'#6495ED'); addLine(sv,x,y,x,y,'#6495ED'); container.appendChild(sv); drawPreview = sv; }
-            else { if (drawPreview) drawPreview.remove(); drawPreview = null; var sv = makeSvgOverlay(); addLine(sv,drawStart.x,drawStart.y,x,y,'#6495ED'); addDot(sv,drawStart.x,drawStart.y,'#6495ED'); addDot(sv,x,y,'#6495ED'); container.appendChild(sv); drawnLines.push(sv); drawStart = null; drawActive = false; }
-            return;
-        }
-        if (measureStart) removeMeasure();
-    });
-    container.addEventListener('mousemove', function(e) {
-        var cr = container.getBoundingClientRect(), x = e.clientX - cr.left, y = e.clientY - cr.top;
-        if (measureActive && measureStart) {
-            if (measureLine) measureLine.remove(); if (measureLabel) { measureLabel.remove(); measureLabel = null; }
-            var sv = makeSvgOverlay(); addLine(sv,measureStart.x,measureStart.y,x,y,'#f7931a','6,3'); addDot(sv,measureStart.x,measureStart.y,'#f7931a'); addDot(sv,x,y,'#f7931a'); container.appendChild(sv); measureLine = sv;
-            var price = priceSeries.coordinateToPrice(y);
-            if (measureStart.price&&price&&measureStart.price>0&&price>0) measureLabel = createLabel(fmtMeasure(measureStart.price,price),Math.max(measureStart.x,x)+12,Math.min(measureStart.y,y)-8);
-        }
-        if (drawActive && drawStart) {
-            if (drawPreview) drawPreview.remove();
-            var sv = makeSvgOverlay(); addLine(sv,drawStart.x,drawStart.y,x,y,'#6495ED'); addDot(sv,drawStart.x,drawStart.y,'#6495ED'); addDot(sv,x,y,'#6495ED'); container.appendChild(sv); drawPreview = sv;
-        }
-    });
-    document.addEventListener('keydown', function(e) {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-        var key = e.key.toLowerCase();
-        if (key === 'escape') { if (measureActive) removeMeasure(); if (drawActive) cancelDraw(); if (activeTool) setTool(null); }
-        else if (key === 'm') setTool('measure');
-        else if (key === 'd') setTool('draw');
-        else if (key === 'l') toggleScale();
-        else if (key === 'c') clearAll();
-    });
-}
+
+
 function copyLink(el) {
     navigator.clipboard.writeText(location.origin + '/s/{{ backtest.short_code }}');
     if (el) { el.classList.add('copied'); setTimeout(function(){ el.classList.remove('copied'); }, 1200); }
@@ -7301,97 +6430,8 @@ MY_BACKTESTS_HTML = """\
         {% endif %}
     </div>
 </div>
+<script src="/static/js/nav.js"></script>
 <script>
-// Theme toggle
-(function() {
-    var saved = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', saved);
-})();
-function toggleTheme() {
-    var current = document.documentElement.getAttribute('data-theme') || 'dark';
-    var next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('theme', next);
-}
-var _swal = Swal.mixin({
-    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
-    customClass: { popup: 'swal-dark' }
-});
-// Notification bell
-function toggleNotifDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('notif-dropdown');
-    if (!dd) return;
-    var wasHidden = dd.classList.contains('hidden');
-    dd.classList.toggle('hidden');
-    var add = document.getElementById('avatar-dropdown');
-    if (add) add.classList.add('hidden');
-    if (wasHidden) {
-        // Auto-mark as read when opening
-        fetch('/api/notifications/read', { method: 'POST' });
-        var badge = document.getElementById('notif-badge');
-        if (badge) badge.classList.add('hidden');
-    }
-}
-function toggleAvatarDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('avatar-dropdown');
-    if (dd) dd.classList.toggle('hidden');
-    var ndd = document.getElementById('notif-dropdown');
-    if (ndd) ndd.classList.add('hidden');
-}
-document.addEventListener('click', function(e) {
-    var dd = document.getElementById('notif-dropdown');
-    if (dd && !dd.classList.contains('hidden')) {
-        var wrap = document.querySelector('.notif-bell-wrap');
-        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
-    }
-    var add = document.getElementById('avatar-dropdown');
-    if (add && !add.classList.contains('hidden')) {
-        var awrap = document.querySelector('.avatar-wrap');
-        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
-    }
-});
-function fetchNotifications() {
-    fetch('/api/notifications').then(function(r) { return r.json(); })
-    .then(function(data) {
-        var badge = document.getElementById('notif-badge');
-        var list = document.getElementById('notif-list');
-        if (!badge || !list) return;
-        if (data.count > 0) {
-            badge.textContent = data.count > 99 ? '99+' : data.count;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-        if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
-        } else {
-            list.innerHTML = data.notifications.map(function(n) {
-                var text, href;
-                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
-                if (n.type === 'welcome') {
-                    text = _escHtml(n.message || 'Welcome!');
-                    href = n.link || '/feedback';
-                } else {
-                    var title = n.backtest_title || 'Untitled';
-                    if (title.length > 40) title = title.substring(0, 37) + '...';
-                    text = n.type === 'reply'
-                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
-                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
-                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
-                }
-                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
-                    + '<div class="notif-item-text">' + text + '</div>'
-                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
-            }).join('');
-        }
-    }).catch(function() {});
-}
-function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-document.addEventListener('DOMContentLoaded', function() {
-    if (document.getElementById('notif-badge')) fetchNotifications();
-});
 function deleteBacktest(backtestId) {
     _swal.fire({
         title: 'Delete this backtest?', icon: 'warning',
@@ -7892,97 +6932,8 @@ ADMIN_ASSETS_HTML = """\
     </div>
 </div>
 
+<script src="/static/js/nav.js"></script>
 <script>
-// Theme toggle
-(function() {
-    var saved = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', saved);
-})();
-function toggleTheme() {
-    var current = document.documentElement.getAttribute('data-theme') || 'dark';
-    var next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('theme', next);
-}
-var _swal = Swal.mixin({
-    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
-    customClass: { popup: 'swal-dark' }
-});
-// Notification bell
-function toggleNotifDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('notif-dropdown');
-    if (!dd) return;
-    var wasHidden = dd.classList.contains('hidden');
-    dd.classList.toggle('hidden');
-    var add = document.getElementById('avatar-dropdown');
-    if (add) add.classList.add('hidden');
-    if (wasHidden) {
-        // Auto-mark as read when opening
-        fetch('/api/notifications/read', { method: 'POST' });
-        var badge = document.getElementById('notif-badge');
-        if (badge) badge.classList.add('hidden');
-    }
-}
-function toggleAvatarDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('avatar-dropdown');
-    if (dd) dd.classList.toggle('hidden');
-    var ndd = document.getElementById('notif-dropdown');
-    if (ndd) ndd.classList.add('hidden');
-}
-document.addEventListener('click', function(e) {
-    var dd = document.getElementById('notif-dropdown');
-    if (dd && !dd.classList.contains('hidden')) {
-        var wrap = document.querySelector('.notif-bell-wrap');
-        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
-    }
-    var add = document.getElementById('avatar-dropdown');
-    if (add && !add.classList.contains('hidden')) {
-        var awrap = document.querySelector('.avatar-wrap');
-        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
-    }
-});
-function fetchNotifications() {
-    fetch('/api/notifications').then(function(r) { return r.json(); })
-    .then(function(data) {
-        var badge = document.getElementById('notif-badge');
-        var list = document.getElementById('notif-list');
-        if (!badge || !list) return;
-        if (data.count > 0) {
-            badge.textContent = data.count > 99 ? '99+' : data.count;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-        if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
-        } else {
-            list.innerHTML = data.notifications.map(function(n) {
-                var text, href;
-                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
-                if (n.type === 'welcome') {
-                    text = _escHtml(n.message || 'Welcome!');
-                    href = n.link || '/feedback';
-                } else {
-                    var title = n.backtest_title || 'Untitled';
-                    if (title.length > 40) title = title.substring(0, 37) + '...';
-                    text = n.type === 'reply'
-                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
-                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
-                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
-                }
-                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
-                    + '<div class="notif-item-text">' + text + '</div>'
-                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
-            }).join('');
-        }
-    }).catch(function() {});
-}
-function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-document.addEventListener('DOMContentLoaded', function() {
-    if (document.getElementById('notif-badge')) fetchNotifications();
-});
 
 // Upload
 var _uploadFile = null;
@@ -9240,13 +8191,10 @@ def backtest_detail(bt_id):
         _df_all = ASSETS[_asset].copy()
         if _vs and _vs in ASSETS:
             _df_vs = ASSETS[_vs].copy()
-            _df_all.index = _df_all.index.normalize()
-            _df_vs.index = _df_vs.index.normalize()
-            _df_all = _df_all[~_df_all.index.duplicated(keep='first')]
-            _df_vs = _df_vs[~_df_vs.index.duplicated(keep='first')]
-            _cidx = _df_all.index.intersection(_df_vs.index)
-            _df_all = _df_all.loc[_cidx]
-            _df_all["close"] = _df_all["close"] / _df_vs.loc[_cidx, "close"]
+            try:
+                _df_all = compute_ratio_prices(_df_all, _df_vs)
+            except ValueError:
+                pass  # No overlapping dates — show raw prices
         _sd = bt_params.get('start_date', '')
         if _sd:
             _df_all = _df_all[_df_all.index >= pd_mod.Timestamp(_sd, tz="UTC")]
@@ -10136,96 +9084,8 @@ ACCOUNT_HTML = """<!DOCTYPE html>
         </div>
     </div>
 </div>
+<script src="/static/js/nav.js"></script>
 <script>
-// Theme toggle
-(function() {
-    var saved = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', saved);
-})();
-function toggleTheme() {
-    var current = document.documentElement.getAttribute('data-theme') || 'dark';
-    var next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('theme', next);
-}
-var _swal = Swal.mixin({
-    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
-    customClass: { popup: 'swal-dark' }
-});
-// Notification bell
-function toggleNotifDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('notif-dropdown');
-    if (!dd) return;
-    var wasHidden = dd.classList.contains('hidden');
-    dd.classList.toggle('hidden');
-    var add = document.getElementById('avatar-dropdown');
-    if (add) add.classList.add('hidden');
-    if (wasHidden) {
-        fetch('/api/notifications/read', { method: 'POST' });
-        var badge = document.getElementById('notif-badge');
-        if (badge) badge.classList.add('hidden');
-    }
-}
-function toggleAvatarDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('avatar-dropdown');
-    if (dd) dd.classList.toggle('hidden');
-    var ndd = document.getElementById('notif-dropdown');
-    if (ndd) ndd.classList.add('hidden');
-}
-document.addEventListener('click', function(e) {
-    var dd = document.getElementById('notif-dropdown');
-    if (dd && !dd.classList.contains('hidden')) {
-        var wrap = document.querySelector('.notif-bell-wrap');
-        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
-    }
-    var add = document.getElementById('avatar-dropdown');
-    if (add && !add.classList.contains('hidden')) {
-        var awrap = document.querySelector('.avatar-wrap');
-        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
-    }
-});
-function fetchNotifications() {
-    fetch('/api/notifications').then(function(r) { return r.json(); })
-    .then(function(data) {
-        var badge = document.getElementById('notif-badge');
-        var list = document.getElementById('notif-list');
-        if (!badge || !list) return;
-        if (data.count > 0) {
-            badge.textContent = data.count > 99 ? '99+' : data.count;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-        if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
-        } else {
-            list.innerHTML = data.notifications.map(function(n) {
-                var text, href;
-                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
-                if (n.type === 'welcome') {
-                    text = _escHtml(n.message || 'Welcome!');
-                    href = n.link || '/feedback';
-                } else {
-                    var title = n.backtest_title || 'Untitled';
-                    if (title.length > 40) title = title.substring(0, 37) + '...';
-                    text = n.type === 'reply'
-                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
-                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
-                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
-                }
-                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
-                    + '<div class="notif-item-text">' + text + '</div>'
-                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
-            }).join('');
-        }
-    }).catch(function() {});
-}
-function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-document.addEventListener('DOMContentLoaded', function() {
-    if (document.getElementById('notif-badge')) fetchNotifications();
-});
 // Account settings functions
 function uploadAvatar(file) {
     if (!file) return;
@@ -10378,96 +9238,8 @@ FEEDBACK_HTML = """<!DOCTYPE html>
         <button class="feedback-btn" onclick="submitFeedback()">Send Feedback</button>
     </div>
 </div>
+<script src="/static/js/nav.js"></script>
 <script>
-// Theme toggle
-(function() {
-    var saved = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', saved);
-})();
-function toggleTheme() {
-    var current = document.documentElement.getAttribute('data-theme') || 'dark';
-    var next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('theme', next);
-}
-var _swal = Swal.mixin({
-    background: '#1e2130', color: '#e8e9ed', confirmButtonColor: '#6495ED',
-    customClass: { popup: 'swal-dark' }
-});
-// Notification bell
-function toggleNotifDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('notif-dropdown');
-    if (!dd) return;
-    var wasHidden = dd.classList.contains('hidden');
-    dd.classList.toggle('hidden');
-    var add = document.getElementById('avatar-dropdown');
-    if (add) add.classList.add('hidden');
-    if (wasHidden) {
-        fetch('/api/notifications/read', { method: 'POST' });
-        var badge = document.getElementById('notif-badge');
-        if (badge) badge.classList.add('hidden');
-    }
-}
-function toggleAvatarDropdown(e) {
-    e.stopPropagation();
-    var dd = document.getElementById('avatar-dropdown');
-    if (dd) dd.classList.toggle('hidden');
-    var ndd = document.getElementById('notif-dropdown');
-    if (ndd) ndd.classList.add('hidden');
-}
-document.addEventListener('click', function(e) {
-    var dd = document.getElementById('notif-dropdown');
-    if (dd && !dd.classList.contains('hidden')) {
-        var wrap = document.querySelector('.notif-bell-wrap');
-        if (wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
-    }
-    var add = document.getElementById('avatar-dropdown');
-    if (add && !add.classList.contains('hidden')) {
-        var awrap = document.querySelector('.avatar-wrap');
-        if (awrap && !awrap.contains(e.target)) add.classList.add('hidden');
-    }
-});
-function fetchNotifications() {
-    fetch('/api/notifications').then(function(r) { return r.json(); })
-    .then(function(data) {
-        var badge = document.getElementById('notif-badge');
-        var list = document.getElementById('notif-list');
-        if (!badge || !list) return;
-        if (data.count > 0) {
-            badge.textContent = data.count > 99 ? '99+' : data.count;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-        if (data.notifications.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
-        } else {
-            list.innerHTML = data.notifications.map(function(n) {
-                var text, href;
-                var readClass = n.is_read ? 'notif-read' : 'notif-unread';
-                if (n.type === 'welcome') {
-                    text = _escHtml(n.message || 'Welcome!');
-                    href = n.link || '/feedback';
-                } else {
-                    var title = n.backtest_title || 'Untitled';
-                    if (title.length > 40) title = title.substring(0, 37) + '...';
-                    text = n.type === 'reply'
-                        ? '<strong>' + _escHtml(n.actor_name) + '</strong> replied to your comment on <em>' + _escHtml(title) + '</em>'
-                        : '<strong>' + _escHtml(n.actor_name) + '</strong> commented on your backtest <em>' + _escHtml(title) + '</em>';
-                    href = '/backtest/' + n.backtest_id + '#comment-' + n.comment_id;
-                }
-                return '<a class="notif-item ' + readClass + '" href="' + href + '">'
-                    + '<div class="notif-item-text">' + text + '</div>'
-                    + '<div class="notif-item-time">' + _escHtml(n.time_ago) + '</div></a>';
-            }).join('');
-        }
-    }).catch(function() {});
-}
-function _escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-document.addEventListener('DOMContentLoaded', function() {
-    if (document.getElementById('notif-badge')) fetchNotifications();
-});
 // Feedback
 function submitFeedback() {
     var body = document.getElementById('feedback-body').value.trim();
