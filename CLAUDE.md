@@ -77,6 +77,13 @@ ssh root@209.97.172.76 "cd /opt/backtesting-engine && git pull && systemctl rest
 - Service: `backtesting` (Gunicorn on 127.0.0.1:5000 behind Nginx)
 - Production URL: https://analytics.the-bitcoin-strategy.com/
 
+## Testing
+
+- **Every bug fix MUST include a regression test** in `tests/test_signals.py` (or a new test file under `tests/`)
+- Pre-commit hook runs `pytest tests/` automatically — commits are blocked if tests fail
+- Run tests manually: `python -m pytest tests/ -v`
+- Tests cover: signal detection, live chart ratio mode, asset name resolution, source code invariants
+
 ## Conventions
 
 - When adding new CLI parameters or modes, update the `EXAMPLES` string constant in `backtest.py`
