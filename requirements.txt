@@ -5,3 +5,4 @@ scipy
 psycopg2-binary
 yfinance
 requests
+pytest

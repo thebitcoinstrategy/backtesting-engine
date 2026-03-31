@@ -1,0 +1,171 @@
+"""Tests for signal detection and live chart correctness."""
+
+import pandas as pd
+import numpy as np
+import sys
+import os
+import re
+
+# Ensure project root is importable
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import backtest as bt
+
+
+# ---------------------------------------------------------------------------
+# Bug fix: Telegram signal notification must detect crossover on the same day
+# (no .shift(1) in notification logic — shift is only for backtesting)
+# ---------------------------------------------------------------------------
+
+class TestSignalDetectionNoShift:
+    """Verify that check_and_send_signals logic detects crossovers immediately,
+    not one day late.  We replicate the signal detection from fetch_prices.py
+    and assert it fires on the day the crossover occurs."""
+
+    def _make_df(self, prices):
+        """Build a minimal DataFrame with a 'close' column."""
+        dates = pd.date_range("2025-01-01", periods=len(prices), freq="D", tz="UTC")
+        return pd.DataFrame({"close": prices}, index=dates)
+
+    def _detect_signal(self, df, ind1_name="price", ind1_period=None,
+                       ind2_name="sma", ind2_period=5, exposure="long-cash",
+                       reverse=False):
+        """Replicate the signal detection logic from fetch_prices.py.
+        Returns (pos_today, pos_yesterday, signal_or_none)."""
+        result = bt.run_strategy(
+            df, ind1_name, ind1_period, ind2_name, ind2_period,
+            initial_cash=10000, exposure=exposure, reverse=reverse,
+        )
+        ind1_s = result['ind1_series']
+        ind2_s = result['ind2_series']
+        above = ind1_s > ind2_s
+        if reverse:
+            above = ~above
+        # CRITICAL: no .shift(1) here — notifications detect on the day it happens
+        position = bt._apply_exposure(above, exposure).fillna(0)
+        nan_mask = ind1_s.isna() | ind2_s.isna()
+        position[nan_mask] = 0
+
+        if len(position) < 2:
+            return 0, 0, None
+
+        pos_today = position.iloc[-1]
+        pos_yesterday = position.iloc[-2]
+
+        if pos_today == pos_yesterday:
+            return pos_today, pos_yesterday, None
+        return pos_today, pos_yesterday, "BUY" if pos_today > pos_yesterday else "SELL"
+
+    def test_sell_signal_detected_on_crossover_day(self):
+        """Price drops below SMA on the last day — signal must fire immediately."""
+        # 10 days of rising prices (above SMA), then a sharp drop on day 11
+        prices = [100, 102, 104, 106, 108, 110, 112, 114, 116, 118, 90]
+        df = self._make_df(prices)
+        pos_today, pos_yesterday, signal = self._detect_signal(df, ind2_period=5)
+        assert signal == "SELL", (
+            f"Expected SELL on crossover day, got signal={signal} "
+            f"(pos_today={pos_today}, pos_yesterday={pos_yesterday})"
+        )
+
+    def test_buy_signal_detected_on_crossover_day(self):
+        """Price rises above SMA on the last day — signal must fire immediately."""
+        # 10 days of falling prices (below SMA), then a sharp rise on day 11
+        prices = [100, 98, 96, 94, 92, 90, 88, 86, 84, 82, 120]
+        df = self._make_df(prices)
+        pos_today, pos_yesterday, signal = self._detect_signal(df, ind2_period=5)
+        assert signal == "BUY", (
+            f"Expected BUY on crossover day, got signal={signal} "
+            f"(pos_today={pos_today}, pos_yesterday={pos_yesterday})"
+        )
+
+    def test_no_signal_when_position_unchanged(self):
+        """Steady uptrend with price always above SMA — no signal."""
+        prices = [100, 102, 104, 106, 108, 110, 112, 114, 116, 118, 120]
+        df = self._make_df(prices)
+        _, _, signal = self._detect_signal(df, ind2_period=5)
+        assert signal is None, f"Expected no signal, got {signal}"
+
+    def test_reverse_mode_inverts_signal(self):
+        """In reverse mode, price dropping below SMA should be a BUY."""
+        prices = [100, 102, 104, 106, 108, 110, 112, 114, 116, 118, 90]
+        df = self._make_df(prices)
+        _, _, signal = self._detect_signal(df, ind2_period=5, reverse=True)
+        assert signal == "BUY", f"Expected BUY in reverse mode, got {signal}"
+
+
+# ---------------------------------------------------------------------------
+# Bug fix: Live chart must pass __lwVsAsset for ratio charts and use
+# price division (asset_price / vs_asset_price) in fetchLivePrice()
+# ---------------------------------------------------------------------------
+
+class TestLiveChartRatioMode:
+    """Verify that the rendered HTML includes __lwVsAsset and ratio fetch logic
+    for backtests that use a vs_asset."""
+
+    def _read_app_source(self):
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def test_lwVsAsset_variable_exists_in_main_template(self):
+        """The main backtest template must declare __lwVsAsset."""
+        src = self._read_app_source()
+        assert "__lwVsAsset" in src, "app.py must define __lwVsAsset for ratio chart live updates"
+
+    def test_lwVsAsset_injected_in_backtest_detail(self):
+        """The backtest detail route must inject __lwVsAsset into cached HTML."""
+        src = self._read_app_source()
+        # The injection builds a <script> block with both __lwAsset and __lwVsAsset
+        assert re.search(r"__lwVsAsset\s*=\s*\{?json_mod\.dumps", src), (
+            "Backtest detail route must inject __lwVsAsset into cached HTML"
+        )
+
+    def test_fetchLivePrice_has_ratio_division(self):
+        """fetchLivePrice() must divide prices when vsAsset is set."""
+        src = self._read_app_source()
+        # Both instances of fetchLivePrice must contain the ratio division logic
+        matches = list(re.finditer(r"d1\.price\s*/\s*d2\.price", src))
+        assert len(matches) >= 2, (
+            f"Expected at least 2 instances of ratio division (d1.price / d2.price) "
+            f"in fetchLivePrice(), found {len(matches)}"
+        )
+
+    def test_fetchLivePrice_fetches_both_assets(self):
+        """fetchLivePrice() must fetch both asset and vsAsset prices in ratio mode."""
+        src = self._read_app_source()
+        # Must use Promise.all to fetch both prices
+        assert "Promise.all" in src, (
+            "fetchLivePrice must use Promise.all to fetch both asset prices for ratio mode"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Regression: fetch_prices.py must NOT use .shift(1) in signal detection
+# ---------------------------------------------------------------------------
+
+class TestFetchPricesNoShift:
+    """Directly check that fetch_prices.py signal detection code does not
+    apply .shift(1) — the root cause of the delayed notification bug."""
+
+    def test_no_shift_in_signal_detection(self):
+        fp_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fetch_prices.py")
+        with open(fp_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        # Find lines inside check_and_send_signals that are actual code (not comments)
+        in_func = False
+        for line in lines:
+            if "def check_and_send_signals" in line:
+                in_func = True
+                continue
+            if in_func and re.match(r"^def ", line):
+                break
+            if in_func:
+                stripped = line.strip()
+                if stripped.startswith("#"):
+                    continue  # skip comments
+                assert ".shift(1)" not in line, (
+                    f"check_and_send_signals() must NOT use .shift(1) on position — "
+                    f"this delays signal detection by one day. "
+                    f"The shift is only for backtesting (look-ahead bias), not notifications.\n"
+                    f"Offending line: {line.strip()}"
+                )
