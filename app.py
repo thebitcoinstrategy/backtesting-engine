@@ -1870,6 +1870,7 @@ HTML = """\
                 </div>
                 <script>
                 var __lwAsset = {{ p.asset|tojson }};
+                var __lwVsAsset = {{ (p.vs_asset or '')|tojson }};
                 var __lwData = {
                     price: {{ price_json|safe }},
                     ind1: {{ ind1_json|safe }},
@@ -2456,15 +2457,29 @@ function fetchLivePrice() {
     if (document.hidden) return;
     if (!window._lwPriceSeries) return;
     if (typeof __lwAsset === 'undefined') return;
-    fetch('/api/price-now/' + encodeURIComponent(__lwAsset))
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.price && data.time) {
-                window._lwPriceSeries.update({time: data.time, value: data.price});
+    var vsAsset = (typeof __lwVsAsset !== 'undefined') ? __lwVsAsset : '';
+    if (vsAsset) {
+        Promise.all([
+            fetch('/api/price-now/' + encodeURIComponent(__lwAsset)).then(function(r) { return r.json(); }),
+            fetch('/api/price-now/' + encodeURIComponent(vsAsset)).then(function(r) { return r.json(); })
+        ]).then(function(results) {
+            var d1 = results[0], d2 = results[1];
+            if (d1.error === 'quota' || d2.error === 'quota') { stopLivePolling(); return; }
+            if (d1.price && d2.price && d2.price > 0 && d1.time) {
+                window._lwPriceSeries.update({time: d1.time, value: d1.price / d2.price});
             }
-            if (data.error === 'quota') stopLivePolling();
-        })
-        .catch(function(){});
+        }).catch(function(){});
+    } else {
+        fetch('/api/price-now/' + encodeURIComponent(__lwAsset))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.price && data.time) {
+                    window._lwPriceSeries.update({time: data.time, value: data.price});
+                }
+                if (data.error === 'quota') stopLivePolling();
+            })
+            .catch(function(){});
+    }
 }
 document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
@@ -6726,13 +6741,27 @@ function fetchLivePrice() {
     if (document.hidden) return;
     if (!window._lwPriceSeries) return;
     if (typeof __lwAsset === 'undefined') return;
-    fetch('/api/price-now/' + encodeURIComponent(__lwAsset))
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.price && data.time) window._lwPriceSeries.update({time: data.time, value: data.price});
-            if (data.error === 'quota') stopLivePolling();
-        })
-        .catch(function(){});
+    var vsAsset = (typeof __lwVsAsset !== 'undefined') ? __lwVsAsset : '';
+    if (vsAsset) {
+        Promise.all([
+            fetch('/api/price-now/' + encodeURIComponent(__lwAsset)).then(function(r) { return r.json(); }),
+            fetch('/api/price-now/' + encodeURIComponent(vsAsset)).then(function(r) { return r.json(); })
+        ]).then(function(results) {
+            var d1 = results[0], d2 = results[1];
+            if (d1.error === 'quota' || d2.error === 'quota') { stopLivePolling(); return; }
+            if (d1.price && d2.price && d2.price > 0 && d1.time) {
+                window._lwPriceSeries.update({time: d1.time, value: d1.price / d2.price});
+            }
+        }).catch(function(){});
+    } else {
+        fetch('/api/price-now/' + encodeURIComponent(__lwAsset))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.price && data.time) window._lwPriceSeries.update({time: data.time, value: data.price});
+                if (data.error === 'quota') stopLivePolling();
+            })
+            .catch(function(){});
+    }
 }
 document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
@@ -9210,6 +9239,7 @@ def backtest_detail(bt_id):
             _ind2_lbl = f"{_ind2_name.upper()}({_p2})" if _p2 else _ind2_name.upper()
             # Replace the __lwData block in cached HTML (includes __lwAsset for live polling)
             _new_lw = (f'<script>\nvar __lwAsset = {json_mod.dumps(_asset)};\n'
+                       f'var __lwVsAsset = {json_mod.dumps(_vs or "")};\n'
                        f'var __lwData = {{\n'
                        f'    price: {_fresh_price},\n'
                        f'    ind1: {_fresh_ind1},\n'
@@ -9217,7 +9247,7 @@ def backtest_detail(bt_id):
                        f'    ind1Label: {json_mod.dumps(_ind1_lbl)},\n'
                        f'    ind2Label: {json_mod.dumps(_ind2_lbl)}\n'
                        f'}};\n</script>')
-            cached = re.sub(r'<script>\s*(?:var __lwAsset\s*=.*?)?var __lwData\s*=\s*\{.*?\};\s*</script>', _new_lw, cached, flags=re.DOTALL)
+            cached = re.sub(r'<script>\s*(?:var __lwAsset\s*=.*?)?(?:var __lwVsAsset\s*=.*?)?var __lwData\s*=\s*\{.*?\};\s*</script>', _new_lw, cached, flags=re.DOTALL)
     except Exception:
         pass  # If fresh data injection fails, keep original cached HTML
 
