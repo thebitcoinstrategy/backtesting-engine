@@ -52,6 +52,8 @@ python app.py                            # Flask server at http://localhost:5000
 
 ## Key Design Decisions
 
+- **No silent fallbacks**: Never substitute a default value when data is missing — show an explicit error. Wrong data is worse than an error message. This applies to asset lookups, parameter parsing, and any place where a missing value could produce incorrect results.
+- **Asset renames propagate**: When an asset is renamed, all saved backtests referencing it are updated via `db.rename_asset_in_backtests()`
 - Charts use log scale on price y-axis (BTC spans $0.08 to $80k+); USD formatter handles sub-$1 values with 2 decimal places
 - Sharpe ratio annualized with √365 (crypto = 365-day year)
 - Default trading fee: 0.1% per transaction
