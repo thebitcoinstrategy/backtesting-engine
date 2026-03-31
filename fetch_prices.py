@@ -270,12 +270,15 @@ def check_and_send_signals():
             )
 
             # Recompute position to compare last two days
+            # NOTE: Don't apply .shift(1) here — the shift is for backtesting
+            # (trade the day after signal) but for notifications we want to
+            # detect the crossover on the day it happens.
             ind1_s = result['ind1_series']
             ind2_s = result['ind2_series']
             above = ind1_s > ind2_s
             if reverse:
                 above = ~above
-            position = bt._apply_exposure(above, exposure).shift(1).fillna(0)
+            position = bt._apply_exposure(above, exposure).fillna(0)
             nan_mask = ind1_s.isna() | ind2_s.isna()
             position[nan_mask] = 0
 
