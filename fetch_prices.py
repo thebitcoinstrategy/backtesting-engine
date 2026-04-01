@@ -202,6 +202,72 @@ def main():
 # Telegram Signal Notifications
 # ---------------------------------------------------------------------------
 
+def _generate_signal_chart(df, ind1_series, ind2_series, ind1_label, ind2_label,
+                           buy_dates, sell_dates, asset_name, signal):
+    """Generate a 3-month signal chart and return PNG bytes, or None on failure."""
+    try:
+        import io
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import matplotlib.dates as mdates
+        import backtest as bt
+
+        # Trim to last 3 months for display
+        three_months_ago = df.index[-1] - pd.Timedelta(days=90)
+        df_plot = df[df.index >= three_months_ago]
+        ind1_plot = ind1_series[ind1_series.index >= three_months_ago]
+        ind2_plot = ind2_series[ind2_series.index >= three_months_ago]
+
+        t = bt._get_theme("dark")
+        fig, ax = plt.subplots(figsize=(12, 6), dpi=150)
+        bt._apply_dark_theme(fig, [ax], "dark")
+
+        ax.plot(df_plot.index, df_plot["close"], label=f"{asset_name} Price",
+                color=t["price"], linewidth=1.2)
+        ax.plot(ind1_plot.index, ind1_plot, label=ind1_label,
+                color=t["accent"], linewidth=1.1, alpha=0.9)
+        ax.plot(ind2_plot.index, ind2_plot, label=ind2_label,
+                color=t["blue"], linewidth=1.1, alpha=0.9)
+
+        for b in buy_dates:
+            if b in df_plot.index:
+                ax.annotate("BUY", xy=(b, df_plot.loc[b, "close"]),
+                            fontsize=9, fontweight="bold", color="#00ff88",
+                            ha="center", va="bottom",
+                            xytext=(0, 18), textcoords="offset points",
+                            arrowprops=dict(arrowstyle="->", color="#00ff88", lw=1.5))
+
+        for s in sell_dates:
+            if s in df_plot.index:
+                ax.annotate("SELL", xy=(s, df_plot.loc[s, "close"]),
+                            fontsize=9, fontweight="bold", color="#ff4444",
+                            ha="center", va="top",
+                            xytext=(0, -18), textcoords="offset points",
+                            arrowprops=dict(arrowstyle="->", color="#ff4444", lw=1.5))
+
+        ax.set_title(f"{asset_name} — {ind1_label} / {ind2_label} — {signal} Signal",
+                     fontsize=13, color=t["text"])
+        ax.set_ylabel("Price (USD)", color=t["text"])
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(
+            lambda x, _: f"${x:,.2f}" if x < 1 else f"${x:,.0f}"))
+        ax.legend(loc="upper right", fontsize=9, facecolor=t["panel"],
+                  edgecolor=t["grid"], labelcolor=t["text"])
+        ax.grid(True, which="major", alpha=0.3, color=t["grid"])
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+        ax.xaxis.set_major_locator(mdates.MonthLocator())
+        plt.tight_layout()
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
+        plt.close()
+        buf.seek(0)
+        return buf.read()
+    except Exception:
+        log.exception("Failed to generate signal chart for %s", asset_name)
+        return None
+
+
 def check_and_send_signals():
     """Check all telegram-enabled backtests for position changes and send signals."""
     import json as _json
@@ -329,17 +395,57 @@ def check_and_send_signals():
                 link=link
             )
 
-            # Send via Telegram
-            url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
-            payload = _json.dumps({
-                'chat_id': TELEGRAM_SIGNAL_CHAT_ID,
-                'text': message,
-                'parse_mode': 'HTML',
-                'disable_web_page_preview': False
-            }).encode('utf-8')
-            req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
-            urllib.request.urlopen(req, timeout=15)
-            log.info("Sent %s signal for backtest %s (%s)", signal, row['id'], asset)
+            # Generate signal chart (3-month view)
+            # Compute unshifted signals for chart markers
+            above_chart = ind1_s > ind2_s
+            if reverse:
+                above_chart = ~above_chart
+            pos_chart = bt._apply_exposure(above_chart, exposure).fillna(0)
+            pos_chart[ind1_s.isna() | ind2_s.isna()] = 0
+            diff_chart = pos_chart.diff()
+            chart_buys = diff_chart[diff_chart > 0].index
+            chart_sells = diff_chart[diff_chart < 0].index
+
+            asset_display = asset.replace('-', ' ').title()
+            chart_png = _generate_signal_chart(
+                df, ind1_s, ind2_s, result['ind1_label'], result['ind2_label'],
+                chart_buys, chart_sells, asset_display, signal
+            )
+
+            # Truncate caption to Telegram's 1024 char limit
+            caption = message[:1024] if len(message) > 1024 else message
+
+            # Send via Telegram — photo with caption, fallback to text
+            sent = False
+            if chart_png:
+                try:
+                    import requests as _requests
+                    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto'
+                    resp = _requests.post(url, data={
+                        'chat_id': TELEGRAM_SIGNAL_CHAT_ID,
+                        'caption': caption,
+                        'parse_mode': 'HTML',
+                    }, files={
+                        'photo': ('signal_chart.png', chart_png, 'image/png')
+                    }, timeout=30)
+                    resp.raise_for_status()
+                    sent = True
+                    log.info("Sent %s signal with chart for backtest %s (%s)", signal, row['id'], asset)
+                except Exception:
+                    log.exception("sendPhoto failed for %s, falling back to text", asset)
+
+            if not sent:
+                # Fallback: plain text message
+                url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
+                payload = _json.dumps({
+                    'chat_id': TELEGRAM_SIGNAL_CHAT_ID,
+                    'text': message,
+                    'parse_mode': 'HTML',
+                    'disable_web_page_preview': False
+                }).encode('utf-8')
+                req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+                urllib.request.urlopen(req, timeout=15)
+                log.info("Sent %s signal (text-only) for backtest %s (%s)", signal, row['id'], asset)
 
         except Exception:
             log.exception("Failed to check signals for backtest %s", row.get('id', '?'))

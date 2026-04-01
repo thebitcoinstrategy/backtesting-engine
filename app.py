@@ -6071,6 +6071,14 @@ function _renderTgPreview() {
     rendered = rendered.replace(/\\n/g, '<br>').replace(/\{asset\}/g, _tgExample.asset).replace(/\{signal\}/g, _tgPreviewSignal).replace(/\{ind1\}/g, _tgExample.ind1).replace(/\{ind2\}/g, _tgExample.ind2).replace(/\{long_lev\}/g, _tgExample.long_lev).replace(/\{short_lev\}/g, _tgExample.short_lev).replace(/\{link\}/g, _tgExample.link);
     var el = document.getElementById('tg-preview');
     if (el) el.innerHTML = rendered;
+    // Character counter — strip HTML tags to get plain text length
+    var plain = rendered.replace(/<br>/g, '\\n').replace(/<[^>]*>/g, '');
+    var charCount = plain.length;
+    var counterEl = document.getElementById('tg-char-counter');
+    if (counterEl) {
+        counterEl.textContent = charCount + ' / 1024 characters';
+        counterEl.style.color = charCount > 1024 ? '#ff4444' : charCount > 900 ? '#ffaa00' : 'var(--text-muted)';
+    }
     // Update toggle button states
     var buyBtn = document.getElementById('tg-preview-buy');
     var sellBtn = document.getElementById('tg-preview-sell');
@@ -6099,7 +6107,7 @@ function toggleTelegram(btId, currentlyEnabled) {
             title: 'Enable Telegram Signals',
             html: '<textarea id="tg-template" rows="6" style="width:100%;font-family:monospace;font-size:13px;background:var(--bg-deep);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;resize:vertical" oninput="_renderTgPreview()"></textarea>' +
                   '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:left">Placeholders: <code>{asset}</code> <code>{signal}</code> <code>{ind1}</code> <code>{ind2}</code> <code>{long_lev}</code> <code>{short_lev}</code> <code>{link}</code><br>Conditionals: <code>{if_buy}...{/if_buy}</code> <code>{if_sell}...{/if_sell}</code></p>' +
-                  '<div style="margin-top:12px;text-align:left"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:11px;color:var(--text-muted);font-weight:600">Preview:</span><button type="button" id="tg-preview-buy" onclick="_toggleTgPreviewSignal(&#39;BUY&#39;)" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text);cursor:pointer">BUY</button><button type="button" id="tg-preview-sell" onclick="_toggleTgPreviewSignal(&#39;SELL&#39;)" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text);cursor:pointer;opacity:0.5">SELL</button></div><div id="tg-preview" style="background:var(--bg-deep);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;line-height:1.5"></div></div>',
+                  '<div style="margin-top:12px;text-align:left"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:11px;color:var(--text-muted);font-weight:600">Preview:</span><button type="button" id="tg-preview-buy" onclick="_toggleTgPreviewSignal(&#39;BUY&#39;)" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text);cursor:pointer">BUY</button><button type="button" id="tg-preview-sell" onclick="_toggleTgPreviewSignal(&#39;SELL&#39;)" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text);cursor:pointer;opacity:0.5">SELL</button></div><div id="tg-preview" style="background:var(--bg-deep);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;line-height:1.5"></div><div id="tg-char-counter" style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:right">0 / 1024 characters</div></div>',
             showCancelButton: true, confirmButtonText: 'Enable',
             didOpen: function() {
                 var ta = document.getElementById('tg-template');

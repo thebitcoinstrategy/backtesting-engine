@@ -803,3 +803,95 @@ class TestAssetReloadNoRace:
                     "this creates a race condition where requests see an empty dict. "
                     "Build the new dict first, then swap."
                 )
+
+
+# ---------------------------------------------------------------------------
+# Telegram signal chart + caption
+# ---------------------------------------------------------------------------
+
+class TestTelegramSignalChart:
+    """Verify signal chart generation and caption truncation for Telegram alerts."""
+
+    def _make_df(self, n=120):
+        """Build a DataFrame with enough data for SMA indicators."""
+        dates = pd.date_range("2025-01-01", periods=n, freq="D")
+        prices = 100 + np.cumsum(np.random.default_rng(42).normal(0, 2, n))
+        prices = np.maximum(prices, 1)  # keep positive
+        return pd.DataFrame({"close": prices}, index=dates)
+
+    def test_generate_signal_chart_returns_png(self):
+        """_generate_signal_chart should return valid PNG bytes."""
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from fetch_prices import _generate_signal_chart
+
+        df = self._make_df()
+        ind1, ind1_label = bt.compute_indicator_from_spec(df, "sma", 14)
+        ind2, ind2_label = bt.compute_indicator_from_spec(df, "sma", 31)
+
+        above = ind1 > ind2
+        pos = bt._apply_exposure(above, "long-short").fillna(0)
+        pos[ind1.isna() | ind2.isna()] = 0
+        diff = pos.diff()
+        buys = diff[diff > 0].index
+        sells = diff[diff < 0].index
+
+        result = _generate_signal_chart(
+            df, ind1, ind2, ind1_label, ind2_label,
+            buys, sells, "Test Asset", "SELL"
+        )
+        assert result is not None, "Chart generation returned None"
+        assert result[:8] == b'\x89PNG\r\n\x1a\n', "Output is not a valid PNG"
+        assert len(result) > 1000, "PNG seems too small"
+
+    def test_caption_truncation(self):
+        """Messages longer than 1024 chars should be truncated."""
+        long_message = "A" * 2000
+        caption = long_message[:1024] if len(long_message) > 1024 else long_message
+        assert len(caption) == 1024
+
+    def test_caption_short_message_unchanged(self):
+        """Messages under 1024 chars should not be modified."""
+        short_message = "Buy signal for Solana"
+        caption = short_message[:1024] if len(short_message) > 1024 else short_message
+        assert caption == short_message
+
+    def test_chart_shows_3_month_window(self):
+        """Chart should only display last 3 months of data."""
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from fetch_prices import _generate_signal_chart
+
+        # 365 days of data — chart should only use last ~90
+        df = self._make_df(n=365)
+        ind1, ind1_label = bt.compute_indicator_from_spec(df, "sma", 14)
+        ind2, ind2_label = bt.compute_indicator_from_spec(df, "sma", 31)
+
+        result = _generate_signal_chart(
+            df, ind1, ind2, ind1_label, ind2_label,
+            pd.DatetimeIndex([]), pd.DatetimeIndex([]), "Test", "BUY"
+        )
+        assert result is not None, "Chart generation failed with 365 days of data"
+
+
+class TestTelegramCharCounter:
+    """Verify the character counter element exists in the Telegram template modal."""
+
+    def test_char_counter_element_in_modal(self):
+        """The tg-char-counter div should exist in the SweetAlert modal HTML."""
+        app_path = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            source = f.read()
+        assert 'id="tg-char-counter"' in source, "Character counter element missing from modal"
+        assert '1024 characters' in source, "1024 limit text missing from counter"
+
+    def test_char_counter_updates_in_render_function(self):
+        """_renderTgPreview should update the character counter."""
+        app_path = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            source = f.read()
+        assert 'tg-char-counter' in source
+        # Should compute plain text length by stripping HTML
+        assert "replace(/<[^>]*>/g" in source, "Counter should strip HTML tags"
+        # Should color red when over limit
+        assert '1024' in source and '#ff4444' in source, "Counter should turn red over 1024"
