@@ -352,12 +352,24 @@ class TestNoSilentFallbacks:
 
 
 class TestSavedBacktestPeriods:
-    """Verify that saved backtests include indicator periods from best results."""
+    """Verify that saved backtests include indicator periods from best results,
+    and that the detail page displays all backtest parameters."""
 
     def _read_app_source(self):
         app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
         with open(app_path, "r", encoding="utf-8") as f:
             return f.read()
+
+    def _extract_detail_html(self):
+        """Extract the DETAIL_HTML section from app.py source (includes NAV_HTML concat)."""
+        src = self._read_app_source()
+        # DETAIL_HTML is built with """ + NAV_HTML + """, so extract the full
+        # source region between DETAIL_HTML = and the next top-level assignment.
+        match = re.search(r'(DETAIL_HTML\s*=\s*""".*?)(?=\n[A-Z_]+_HTML\s*=)', src, re.DOTALL)
+        assert match, "DETAIL_HTML template not found in app.py"
+        return match.group(1)
+
+    # --- Save/publish mechanism: periods survive disabled form fields ---
 
     def test_best_params_element_in_results(self):
         """Results panel must include a hidden element with best ind2_period
@@ -374,7 +386,6 @@ class TestSavedBacktestPeriods:
     def test_save_merges_best_params(self):
         """saveBacktest() must call _mergeBestParams to include periods from sweep results."""
         src = self._read_app_source()
-        # Find the saveBacktest function
         func_match = re.search(
             r"function saveBacktest\(\)(.*?)(?=\nfunction \w+)",
             src, re.DOTALL
@@ -400,9 +411,90 @@ class TestSavedBacktestPeriods:
             "indicator periods from sweep/heatmap best results"
         )
 
-    def test_detail_page_shows_period2(self):
-        """Detail page template must display period2 from bt_params."""
+    # --- Detail page: all saved params must be visible ---
+
+    def test_detail_shows_asset(self):
+        """Detail page must display the asset name."""
+        html = self._extract_detail_html()
+        assert 'bt_params.asset' in html, "Detail page must show bt_params.asset"
+
+    def test_detail_shows_mode(self):
+        """Detail page must display the backtest mode."""
+        html = self._extract_detail_html()
+        assert 'bt_params.mode' in html or "bt_params.get('mode')" in html, \
+            "Detail page must show the backtest mode"
+
+    def test_detail_shows_indicator1_with_period(self):
+        """Detail page must display indicator 1 name and period."""
+        html = self._extract_detail_html()
+        assert 'bt_params.ind1_name' in html, "Detail page must show ind1_name"
+        assert "bt_params.get('period1')" in html or 'bt_params.get("period1")' in html, \
+            "Detail page must show period1 when present"
+
+    def test_detail_shows_indicator2_with_period(self):
+        """Detail page must display indicator 2 name and period."""
+        html = self._extract_detail_html()
+        assert 'bt_params.ind2_name' in html, "Detail page must show ind2_name"
+        assert "bt_params.get('period2')" in html or 'bt_params.get("period2")' in html, \
+            "Detail page must show period2 when present"
+
+    def test_detail_shows_exposure(self):
+        """Detail page must display the exposure type."""
+        html = self._extract_detail_html()
+        assert 'bt_params.exposure' in html, "Detail page must show exposure"
+
+    def test_detail_shows_leverage(self):
+        """Detail page must display leverage settings when non-default."""
+        html = self._extract_detail_html()
+        assert 'long_leverage' in html, "Detail page must show long leverage"
+        assert 'short_leverage' in html, "Detail page must show short leverage"
+
+    def test_detail_shows_date_range(self):
+        """Detail page must display start and end dates."""
+        html = self._extract_detail_html()
+        assert 'start_date' in html, "Detail page must show start_date"
+        assert 'end_date' in html, "Detail page must show end_date"
+
+    def test_detail_shows_fee(self):
+        """Detail page must display the trading fee."""
+        html = self._extract_detail_html()
+        assert 'fee' in html, "Detail page must show fee"
+
+    def test_detail_shows_capital(self):
+        """Detail page must display initial capital."""
+        html = self._extract_detail_html()
+        assert 'initial_cash' in html, "Detail page must show initial_cash"
+
+    def test_detail_shows_sizing(self):
+        """Detail page must display the position sizing mode."""
+        html = self._extract_detail_html()
+        assert 'sizing' in html, "Detail page must show sizing mode"
+
+    def test_detail_shows_oscillator_params(self):
+        """Detail page must display oscillator params when applicable."""
+        html = self._extract_detail_html()
+        assert 'osc_name' in html, "Detail page must show oscillator name when applicable"
+        assert 'osc_period' in html, "Detail page must show oscillator period when applicable"
+        assert 'buy_threshold' in html, "Detail page must show buy threshold when applicable"
+        assert 'sell_threshold' in html, "Detail page must show sell threshold when applicable"
+
+    def test_detail_shows_reverse_flag(self):
+        """Detail page must indicate when signal is reversed."""
+        html = self._extract_detail_html()
+        assert 'reverse' in html.lower(), "Detail page must show reverse signal flag"
+
+    # --- Backfill: existing backtests with missing period2 ---
+
+    def test_detail_backfills_missing_period2(self):
+        """backtest_detail() must backfill period2 from cached HTML for older saves."""
         src = self._read_app_source()
-        assert "bt_params.get('period2')" in src or 'bt_params.get("period2")' in src, (
-            "Detail page must check bt_params for period2 to display indicator periods"
+        func_match = re.search(
+            r"def backtest_detail\(bt_id\):(.*?)(?=\n@app\.route|\ndef \w+\()",
+            src, re.DOTALL
+        )
+        assert func_match, "backtest_detail() not found"
+        func_body = func_match.group(1)
+        assert "period2" in func_body and "ind2Label" in func_body or "ind2-period" in func_body, (
+            "backtest_detail must backfill missing period2 from cached HTML "
+            "so older saved backtests still show the indicator period"
         )

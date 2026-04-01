@@ -82,9 +82,11 @@ ssh root@209.97.172.76 "cd /opt/backtesting-engine && git pull && systemctl rest
 ## Testing
 
 - **Every bug fix MUST include a regression test** in `tests/test_signals.py` (or a new test file under `tests/`)
+- **Every UI change that affects saved/published backtests MUST include tests** verifying all affected params survive the save→detail round-trip (stored in params JSON AND displayed on the detail page)
+- When adding new form fields or params: add a test in `TestSavedBacktestPeriods` that the param appears in `DETAIL_HTML`
 - Pre-commit hook runs `pytest tests/` automatically — commits are blocked if tests fail
 - Run tests manually: `python -m pytest tests/ -v`
-- Tests cover: signal detection, live chart ratio mode, asset name resolution, source code invariants
+- Tests cover: signal detection, live chart ratio mode, asset name resolution, source code invariants, saved backtest param completeness
 
 ## Shared Code (Extracted from app.py)
 
