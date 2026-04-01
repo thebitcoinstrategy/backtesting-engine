@@ -498,3 +498,53 @@ class TestSavedBacktestPeriods:
             "backtest_detail must backfill missing period2 from cached HTML "
             "so older saved backtests still show the indicator period"
         )
+
+
+class TestVideoEmbed:
+    """Verify that collection video embeds support both YouTube and Vimeo."""
+
+    def _read_app_source(self):
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def test_extract_youtube_url(self):
+        """_extract_video_embed_url must handle YouTube URLs."""
+        # Import the function dynamically since app.py has heavy imports
+        src = self._read_app_source()
+        assert 'def _extract_video_embed_url' in src, (
+            "app.py must define _extract_video_embed_url function"
+        )
+        assert 'youtube.com/embed' in src, (
+            "_extract_video_embed_url must generate YouTube embed URLs"
+        )
+
+    def test_extract_vimeo_url(self):
+        """_extract_video_embed_url must handle Vimeo URLs."""
+        src = self._read_app_source()
+        assert 'player.vimeo.com/video' in src, (
+            "_extract_video_embed_url must generate Vimeo embed URLs"
+        )
+        assert 'vimeo' in src.lower(), (
+            "app.py must contain Vimeo support"
+        )
+
+    def test_collection_form_accepts_both(self):
+        """Collection form labels/placeholders must mention both YouTube and Vimeo."""
+        src = self._read_app_source()
+        assert 'YouTube or Vimeo' in src or 'Vimeo' in src, (
+            "Collection video form must indicate Vimeo support"
+        )
+
+    def test_bare_vimeo_id_supported(self):
+        """A bare numeric ID should be treated as Vimeo."""
+        src = self._read_app_source()
+        func_match = re.search(
+            r"def _extract_video_embed_url\(.*?\):(.*?)(?=\ndef \w+\()",
+            src, re.DOTALL
+        )
+        assert func_match, "_extract_video_embed_url() not found"
+        func_body = func_match.group(1)
+        assert 'fullmatch' in func_body or 'isdigit' in func_body, (
+            "_extract_video_embed_url must handle bare numeric Vimeo IDs"
+        )

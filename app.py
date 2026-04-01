@@ -6568,8 +6568,8 @@ function saveEditCollection() {
         <input type="text" id="coll-title" maxlength="120" placeholder="e.g. Bitcoin Moving Average Strategies">
         <label for="coll-desc">Description (optional)</label>
         <textarea id="coll-desc" placeholder="Describe what this collection is about..."></textarea>
-        <label for="coll-youtube">YouTube URL (optional)</label>
-        <input type="text" id="coll-youtube" placeholder="https://www.youtube.com/watch?v=...">
+        <label for="coll-youtube">Video URL (optional)</label>
+        <input type="text" id="coll-youtube" placeholder="YouTube or Vimeo URL">
         <div class="publish-modal-actions">
             <button class="action-btn" onclick="closeCollectionModal()">Cancel</button>
             <button class="action-btn" onclick="saveCollection()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent">Create Collection</button>
@@ -6587,8 +6587,8 @@ function saveEditCollection() {
         <input type="text" id="edit-coll-title" maxlength="120">
         <label for="edit-coll-desc">Description</label>
         <textarea id="edit-coll-desc"></textarea>
-        <label for="edit-coll-youtube">YouTube URL</label>
-        <input type="text" id="edit-coll-youtube" placeholder="https://www.youtube.com/watch?v=...">
+        <label for="edit-coll-youtube">Video URL</label>
+        <input type="text" id="edit-coll-youtube" placeholder="YouTube or Vimeo URL">
         <div class="publish-modal-actions">
             <button class="action-btn" onclick="closeEditCollectionModal()">Cancel</button>
             <button class="action-btn" onclick="saveEditCollection()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent">Save Changes</button>
@@ -8265,13 +8265,24 @@ def backtest_detail(bt_id):
 
 # --- Collection Routes ---
 
-def _extract_youtube_id(url):
-    """Extract YouTube video ID from various URL formats."""
+def _extract_video_embed_url(url):
+    """Build embed URL from YouTube or Vimeo URL/ID."""
     if not url:
         return None
+    url = url.strip()
     import re as re_mod
+    # Vimeo: vimeo.com/123456 or player.vimeo.com/video/123456 or just numeric ID
+    m = re_mod.search(r'vimeo\.com/(?:video/)?(\d+)', url)
+    if m:
+        return f'https://player.vimeo.com/video/{m.group(1)}'
+    if re_mod.fullmatch(r'\d+', url):
+        # Bare numeric ID — treat as Vimeo
+        return f'https://player.vimeo.com/video/{url}'
+    # YouTube: youtube.com/watch?v=..., youtu.be/..., embed/...
     m = re_mod.search(r'(?:v=|youtu\.be/|embed/)([\w-]+)', url)
-    return m.group(1) if m else None
+    if m:
+        return f'https://www.youtube.com/embed/{m.group(1)}'
+    return None
 
 
 @app.route('/collection/<collection_id>')
@@ -8296,9 +8307,8 @@ def collection_detail(collection_id):
     author_avatar_color = _avatar_color(author_uid)
     is_auth = _is_authenticated()
     is_owner = is_auth and str(session.get('user_id', '')) == str(coll['user_id'])
-    # YouTube embed
-    yt_id = _extract_youtube_id(coll.get('youtube_url'))
-    youtube_embed_url = f'https://www.youtube.com/embed/{yt_id}' if yt_id else None
+    # Video embed (YouTube or Vimeo)
+    youtube_embed_url = _extract_video_embed_url(coll.get('youtube_url'))
     # User's backtests for "Add Backtest" dropdown
     user_backtests = []
     collection_bt_ids = set()
@@ -8915,8 +8925,8 @@ document.addEventListener('click', function(e) {
         <input type="text" id="edit-coll-title" maxlength="120" value="{{ collection.title|e }}">
         <label for="edit-coll-desc">Description</label>
         <textarea id="edit-coll-desc">{{ collection.description or '' }}</textarea>
-        <label for="edit-coll-youtube">YouTube URL</label>
-        <input type="text" id="edit-coll-youtube" value="{{ collection.youtube_url or '' }}" placeholder="https://www.youtube.com/watch?v=...">
+        <label for="edit-coll-youtube">Video URL</label>
+        <input type="text" id="edit-coll-youtube" value="{{ collection.youtube_url or '' }}" placeholder="YouTube or Vimeo URL">
         <div class="publish-modal-actions">
             <button class="action-btn" onclick="closeEditModal()">Cancel</button>
             <button class="action-btn" onclick="saveEditColl()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent">Save Changes</button>

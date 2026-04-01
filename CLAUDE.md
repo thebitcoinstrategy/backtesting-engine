@@ -81,12 +81,19 @@ ssh root@209.97.172.76 "cd /opt/backtesting-engine && git pull && systemctl rest
 
 ## Testing
 
-- **Every bug fix MUST include a regression test** in `tests/test_signals.py` (or a new test file under `tests/`)
-- **Every UI change that affects saved/published backtests MUST include tests** verifying all affected params survive the save→detail round-trip (stored in params JSON AND displayed on the detail page)
-- When adding new form fields or params: add a test in `TestSavedBacktestPeriods` that the param appears in `DETAIL_HTML`
+- **Every bug fix MUST include a regression test** that would have caught the bug — no exceptions
+- **Every new feature MUST include tests** verifying the feature works correctly
+- Tests go in `tests/test_signals.py` (or a new file under `tests/`). Prefer source-code invariant tests (grep/regex on app.py) when full integration testing isn't feasible.
 - Pre-commit hook runs `pytest tests/` automatically — commits are blocked if tests fail
 - Run tests manually: `python -m pytest tests/ -v`
-- Tests cover: signal detection, live chart ratio mode, asset name resolution, source code invariants, saved backtest param completeness
+- Test classes and what they cover:
+  - `TestSignalDetectionNoShift` — signal detection timing
+  - `TestLiveChartRatioMode` — live chart ratio mode
+  - `TestAssetCaseResolution` — case-insensitive asset lookup
+  - `TestAssetRenamePropagation` — rename cascading to saved backtests
+  - `TestNoSilentFallbacks` — no silent fallback to defaults
+  - `TestSavedBacktestPeriods` — all params survive save→detail round-trip (add tests here when adding new form fields)
+  - `TestVideoEmbed` — YouTube + Vimeo embed support
 
 ## Shared Code (Extracted from app.py)
 
