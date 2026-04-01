@@ -1881,6 +1881,9 @@ HTML = """\
                 };
                 </script>
                 {% endif %}
+                {% if best %}
+                <div id="best-params" data-ind1-period="{{ best.get('ind1_period', '') }}" data-ind2-period="{{ best.get('ind2_period', '') }}" style="display:none"></div>
+                {% endif %}
                 {% if is_authenticated %}
                 <div class="action-buttons" id="backtest-actions">
                     <button class="action-btn" onclick="saveBacktest()" id="save-btn">
@@ -2607,6 +2610,12 @@ function _getChartThumbnail() {
     return el ? el.value : '';
 }
 
+function _mergeBestParams(params) {
+    var bp = document.getElementById('best-params');
+    if (!bp) return;
+    if (!params.period1 && bp.dataset.ind1Period) params.period1 = bp.dataset.ind1Period;
+    if (!params.period2 && bp.dataset.ind2Period) params.period2 = bp.dataset.ind2Period;
+}
 function saveBacktest() {
     var btn = document.getElementById('save-btn');
     btn.textContent = 'Saving...';
@@ -2614,6 +2623,7 @@ function saveBacktest() {
     var formData = new FormData(document.getElementById('form'));
     var params = {};
     formData.forEach(function(v, k) { params[k] = v; });
+    _mergeBestParams(params);
     var qs = new URLSearchParams(params).toString();
     var resultsHtml = document.getElementById('results-panel').innerHTML;
     var thumb = _getChartThumbnail();
@@ -2672,6 +2682,7 @@ function publishBacktest(visibility) {
     var formData = new FormData(document.getElementById('form'));
     var params = {};
     formData.forEach(function(v, k) { params[k] = v; });
+    _mergeBestParams(params);
     var qs = new URLSearchParams(params).toString();
     var resultsHtml = document.getElementById('results-panel').innerHTML;
     var thumb = _getChartThumbnail();
@@ -8182,6 +8193,15 @@ def backtest_detail(bt_id):
     # Inject fresh live chart data (price + indicators extended to newest date)
     import json as json_mod
     bt_params = json_mod.loads(bt_entry.get('params', '{}') or '{}')
+    # Backfill missing period2 from cached HTML (older saves from sweep mode)
+    if not bt_params.get('period2') and cached:
+        _m = re.search(r'data-ind2-period="(\d+)"', cached)
+        if not _m:
+            _ind2_upper = bt_params.get('ind2_name', '').upper()
+            if _ind2_upper:
+                _m = re.search(r'ind2Label:\s*["\']' + re.escape(_ind2_upper) + r'\((\d+)\)', cached)
+        if _m:
+            bt_params['period2'] = _m.group(1)
     try:
         import pandas as pd_mod
         _asset = _resolve_asset(bt_params.get('asset', ''))

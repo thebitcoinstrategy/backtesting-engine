@@ -349,3 +349,60 @@ class TestNoSilentFallbacks:
         assert "not found" in func_body.lower() or "not in ASSETS" in func_body, (
             "_run_post_handler must show a user-visible error when the asset is not found"
         )
+
+
+class TestSavedBacktestPeriods:
+    """Verify that saved backtests include indicator periods from best results."""
+
+    def _read_app_source(self):
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def test_best_params_element_in_results(self):
+        """Results panel must include a hidden element with best ind2_period
+        so that save/publish captures the period even when the form field is disabled."""
+        src = self._read_app_source()
+        assert 'id="best-params"' in src, (
+            "Results HTML must contain a hidden #best-params element that stores "
+            "the best result's indicator periods for save/publish"
+        )
+        assert 'data-ind2-period' in src, (
+            "#best-params must have a data-ind2-period attribute"
+        )
+
+    def test_save_merges_best_params(self):
+        """saveBacktest() must call _mergeBestParams to include periods from sweep results."""
+        src = self._read_app_source()
+        # Find the saveBacktest function
+        func_match = re.search(
+            r"function saveBacktest\(\)(.*?)(?=\nfunction \w+)",
+            src, re.DOTALL
+        )
+        assert func_match, "saveBacktest() not found"
+        func_body = func_match.group(1)
+        assert "_mergeBestParams(params)" in func_body, (
+            "saveBacktest() must call _mergeBestParams(params) to include "
+            "indicator periods from sweep/heatmap best results"
+        )
+
+    def test_publish_merges_best_params(self):
+        """publishBacktest() must call _mergeBestParams to include periods from sweep results."""
+        src = self._read_app_source()
+        func_match = re.search(
+            r"function publishBacktest\(.*?\)(.*?)(?=\nfunction \w+)",
+            src, re.DOTALL
+        )
+        assert func_match, "publishBacktest() not found"
+        func_body = func_match.group(1)
+        assert "_mergeBestParams(params)" in func_body, (
+            "publishBacktest() must call _mergeBestParams(params) to include "
+            "indicator periods from sweep/heatmap best results"
+        )
+
+    def test_detail_page_shows_period2(self):
+        """Detail page template must display period2 from bt_params."""
+        src = self._read_app_source()
+        assert "bt_params.get('period2')" in src or 'bt_params.get("period2")' in src, (
+            "Detail page must check bt_params for period2 to display indicator periods"
+        )
