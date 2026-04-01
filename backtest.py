@@ -486,7 +486,8 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
 
     # Determine financing parameters
     apply_fin = _should_apply_financing(financing_rate, exposure, long_leverage, short_leverage, sizing)
-    total_financing_cost = 0.0
+    financing_cost_long = 0.0
+    financing_cost_short = 0.0
     if apply_fin:
         fin_daily_long = _financing_daily_rate(long_leverage, financing_rate, periods_per_year)
         fin_daily_short = _financing_daily_rate(short_leverage, financing_rate, periods_per_year)
@@ -503,12 +504,12 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
         liquidated = False
         df["equity"] = equity_arr
     elif lev_mode == "set-forget":
-        equity_arr, liquidated, total_financing_cost = _compute_equity_set_and_forget(
+        equity_arr, liquidated, financing_cost_long, financing_cost_short = _compute_equity_set_and_forget(
             df["position"].values, daily_return.values, initial_cash,
             long_leverage, short_leverage, fee, fin_daily_long, fin_daily_short)
         df["equity"] = equity_arr
     elif lev_mode == "optimal":
-        equity_arr, liquidated, total_financing_cost = _compute_equity_optimal(
+        equity_arr, liquidated, financing_cost_long, financing_cost_short = _compute_equity_optimal(
             df["position"].values, daily_return.values, initial_cash,
             long_leverage, short_leverage, fee, fin_daily_long, fin_daily_short)
         df["equity"] = equity_arr
@@ -525,7 +526,9 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
         df["equity"] = equity_arr
         if apply_fin:
             eq_shifted = pd.Series(equity_arr, index=df.index).shift(1).fillna(initial_cash)
-            total_financing_cost = (df["position"] * fin_rate * eq_shifted).sum()
+            pos_fin = df["position"] * fin_rate * eq_shifted
+            financing_cost_long = pos_fin[df["position"] > 0].sum()
+            financing_cost_short = (-pos_fin[df["position"] < 0]).sum()
 
     df["buyhold"] = initial_cash * (1 + daily_return).cumprod()
 
@@ -588,7 +591,9 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
         "buyhold": df["buyhold"],
         "buy_signals": buy_signals,
         "sell_signals": sell_signals,
-        "total_financing_cost": total_financing_cost,
+        "total_financing_cost": financing_cost_long + financing_cost_short,
+        "financing_cost_long": financing_cost_long,
+        "financing_cost_short": financing_cost_short,
     }
 
 
@@ -667,7 +672,8 @@ def _compute_equity_set_and_forget(positions, daily_returns, initial_cash, long_
     cum_return = 1.0
     entry_equity = current_equity
     liquidated = False
-    total_financing = 0.0
+    financing_long = 0.0
+    financing_short = 0.0
 
     for i in range(n):
         if liquidated:
@@ -693,7 +699,7 @@ def _compute_equity_set_and_forget(positions, daily_returns, initial_cash, long_
                 fin_cost = current_equity * financing_daily_long
                 current_equity -= fin_cost
                 entry_equity -= fin_cost  # adjust entry so future cum_return calc stays correct
-                total_financing += fin_cost
+                financing_long += fin_cost
             else:
                 lev = short_leverage
                 current_equity = entry_equity * (1 + lev * (1 - cum_return))
@@ -701,7 +707,7 @@ def _compute_equity_set_and_forget(positions, daily_returns, initial_cash, long_
                 fin_cost = current_equity * financing_daily_short
                 current_equity += fin_cost
                 entry_equity += fin_cost
-                total_financing -= fin_cost
+                financing_short += fin_cost
 
         if current_equity <= 0:
             current_equity = 0.0
@@ -709,7 +715,7 @@ def _compute_equity_set_and_forget(positions, daily_returns, initial_cash, long_
 
         equity[i] = current_equity
 
-    return equity, liquidated, total_financing
+    return equity, liquidated, financing_long, financing_short
 
 
 def _compute_equity_optimal(positions, daily_returns, initial_cash, long_leverage, short_leverage, fee,
@@ -726,7 +732,8 @@ def _compute_equity_optimal(positions, daily_returns, initial_cash, long_leverag
     cum_return = 1.0
     entry_equity = current_equity
     liquidated = False
-    total_financing = 0.0
+    financing_long = 0.0
+    financing_short = 0.0
 
     for i in range(n):
         if liquidated:
@@ -747,7 +754,7 @@ def _compute_equity_optimal(positions, daily_returns, initial_cash, long_leverag
             current_equity *= (1 + dr * long_leverage)
             fin_cost = current_equity * financing_daily_long
             current_equity -= fin_cost
-            total_financing += fin_cost
+            financing_long += fin_cost
         elif current_pos < 0:
             # Short: set-and-forget
             cum_return *= (1 + dr)
@@ -755,7 +762,7 @@ def _compute_equity_optimal(positions, daily_returns, initial_cash, long_leverag
             fin_cost = current_equity * financing_daily_short
             current_equity += fin_cost
             entry_equity += fin_cost
-            total_financing -= fin_cost
+            financing_short += fin_cost
 
         if current_equity <= 0:
             current_equity = 0.0
@@ -763,7 +770,7 @@ def _compute_equity_optimal(positions, daily_returns, initial_cash, long_leverag
 
         equity[i] = current_equity
 
-    return equity, liquidated, total_financing
+    return equity, liquidated, financing_long, financing_short
 
 
 def _max_drawdown(equity_series):
@@ -902,7 +909,8 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
 
     # Determine financing parameters
     apply_fin = _should_apply_financing(financing_rate, exposure, long_leverage, short_leverage, sizing)
-    total_financing_cost = 0.0
+    financing_cost_long = 0.0
+    financing_cost_short = 0.0
     if apply_fin:
         fin_daily_long = _financing_daily_rate(long_leverage, financing_rate, periods_per_year)
         fin_daily_short = _financing_daily_rate(short_leverage, financing_rate, periods_per_year)
@@ -919,12 +927,12 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
         liquidated = False
         df["equity"] = equity_arr
     elif lev_mode == "set-forget":
-        equity_arr, liquidated, total_financing_cost = _compute_equity_set_and_forget(
+        equity_arr, liquidated, financing_cost_long, financing_cost_short = _compute_equity_set_and_forget(
             df["position"].values, daily_return.values, initial_cash,
             long_leverage, short_leverage, fee, fin_daily_long, fin_daily_short)
         df["equity"] = equity_arr
     elif lev_mode == "optimal":
-        equity_arr, liquidated, total_financing_cost = _compute_equity_optimal(
+        equity_arr, liquidated, financing_cost_long, financing_cost_short = _compute_equity_optimal(
             df["position"].values, daily_return.values, initial_cash,
             long_leverage, short_leverage, fee, fin_daily_long, fin_daily_short)
         df["equity"] = equity_arr
@@ -941,7 +949,9 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
         df["equity"] = equity_arr
         if apply_fin:
             eq_shifted = pd.Series(equity_arr, index=df.index).shift(1).fillna(initial_cash)
-            total_financing_cost = (df["position"] * fin_rate * eq_shifted).sum()
+            pos_fin = df["position"] * fin_rate * eq_shifted
+            financing_cost_long = pos_fin[df["position"] > 0].sum()
+            financing_cost_short = (-pos_fin[df["position"] < 0]).sum()
 
     df["buyhold"] = initial_cash * (1 + daily_return).cumprod()
 
@@ -1008,7 +1018,9 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
         "buyhold": df["buyhold"],
         "buy_signals": buy_signals,
         "sell_signals": sell_signals,
-        "total_financing_cost": total_financing_cost,
+        "total_financing_cost": financing_cost_long + financing_cost_short,
+        "financing_cost_long": financing_cost_long,
+        "financing_cost_short": financing_cost_short,
     }
 
 

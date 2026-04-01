@@ -1966,8 +1966,14 @@ HTML = """\
                     <tr><td class="m-label">Profit Factor <span class="m-info" data-tip="Gross profits divided by gross losses.&#10;Formula: sum of wins ÷ sum of losses">ⓘ</span></td><td class="m-val">{% if best.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(best.profit_factor) }}{% endif %}{% if ls %}<span class="m-ls"><span class="ls-l">Long {% if ls.long.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(ls.long.profit_factor) }}{% endif %}</span><br><span class="ls-s">Short {% if ls.short.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(ls.short.profit_factor) }}{% endif %}</span></span>{% endif %}</td><td class="m-val muted">&mdash;</td></tr>
                     <tr><td class="m-label">Avg Duration <span class="m-info" data-tip="Average holding period per trade.&#10;Formula: total days in trades ÷ trade count">ⓘ</span></td><td class="m-val">{{ "%.0f"|format(best.avg_trade_duration) }}d{% if ls %}<span class="m-ls"><span class="ls-l">Long {{ "%.0f"|format(ls.long.avg_trade_duration) }}d</span><br><span class="ls-s">Short {{ "%.0f"|format(ls.short.avg_trade_duration) }}d</span></span>{% endif %}</td><td class="m-val muted">&mdash;</td></tr>
                     {% if best.get('total_financing_cost', 0) != 0 %}
-                    <tr class="section-row"><td colspan="3">Costs</td></tr>
-                    <tr><td class="m-label">Financing Cost <span class="m-info" data-tip="Total financing fees paid (long) or earned (short) over the backtest period.&#10;Crypto: leverage &times; rate / 365 daily&#10;Tradfi: (leverage-1) &times; rate / trading days">ⓘ</span></td><td class="m-val negative">${{ "{:,.0f}".format(best.total_financing_cost) }}</td><td class="m-val muted">&mdash;</td></tr>
+                    <tr class="section-row"><td colspan="3">Financing</td></tr>
+                    {% if best.get('financing_cost_long', 0) > 0 %}
+                    <tr><td class="m-label">Long Cost <span class="m-info" data-tip="Financing fees paid while holding long positions.&#10;Crypto: leverage &times; rate / 365 daily&#10;Tradfi: (leverage-1) &times; rate / trading days">ⓘ</span></td><td class="m-val negative">-${{ "{:,.0f}".format(best.financing_cost_long) }}</td><td class="m-val muted">&mdash;</td></tr>
+                    {% endif %}
+                    {% if best.get('financing_cost_short', 0) > 0 %}
+                    <tr><td class="m-label">Short Revenue <span class="m-info" data-tip="Financing fees earned while holding short positions.&#10;Short positions earn the financing rate.">ⓘ</span></td><td class="m-val positive">+${{ "{:,.0f}".format(best.financing_cost_short) }}</td><td class="m-val muted">&mdash;</td></tr>
+                    {% endif %}
+                    <tr><td class="m-label">Net Financing <span class="m-info" data-tip="Net financing cost (long cost minus short revenue).&#10;Positive = net cost, negative = net income.">ⓘ</span></td><td class="m-val {% if best.total_financing_cost > 0 %}negative{% else %}positive{% endif %}">${{ "{:,.0f}".format(best.total_financing_cost) }}</td><td class="m-val muted">&mdash;</td></tr>
                     {% endif %}
                     <tr class="section-row"><td colspan="3">Annual</td></tr>
                     <tr><td class="m-label">Best Year <span class="m-info" data-tip="Highest calendar year return.&#10;Max of yearly returns">ⓘ</span></td><td class="m-val positive">{% if best.best_year[0] %}+{{ "%.1f"|format(best.best_year[1]) }}% ({{ best.best_year[0] }}){% else %}&mdash;{% endif %}</td><td class="m-val positive">{% if best.buyhold_best_year[0] %}+{{ "%.1f"|format(best.buyhold_best_year[1]) }}% ({{ best.buyhold_best_year[0] }}){% else %}&mdash;{% endif %}</td></tr>
@@ -3965,10 +3971,10 @@ def _run_post_handler(cancel_event):
                 daily_pnl[np.abs(trade_changes) > 0] -= p.initial_cash * fee
                 equity_arr = p.initial_cash + np.cumsum(daily_pnl)
             elif p.lev_mode == "set-forget":
-                equity_arr, _, _ = bt._compute_equity_set_and_forget(
+                equity_arr, _, _, _ = bt._compute_equity_set_and_forget(
                     position_base.values, daily_return.values, p.initial_cash, ll, sl, fee, _fdl, _fds)
             elif p.lev_mode == "optimal":
-                equity_arr, _, _ = bt._compute_equity_optimal(
+                equity_arr, _, _, _ = bt._compute_equity_optimal(
                     position_base.values, daily_return.values, p.initial_cash, ll, sl, fee, _fdl, _fds)
             else:
                 leverage = np.where(position_base.values > 0, ll,

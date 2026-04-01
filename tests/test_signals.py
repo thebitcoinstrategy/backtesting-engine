@@ -655,14 +655,19 @@ class TestFinancingFees:
         )
 
     def test_financing_cost_returned(self):
-        """run_strategy must return total_financing_cost in result dict."""
+        """run_strategy must return total, long, and short financing costs."""
         df = self._make_df()
         result = bt.run_strategy(df, "price", None, "sma", 20,
                                  10000, fee=0, exposure="long-short",
                                  long_leverage=2, short_leverage=2,
                                  financing_rate=0.11)
         assert "total_financing_cost" in result
+        assert "financing_cost_long" in result
+        assert "financing_cost_short" in result
         assert result["total_financing_cost"] > 0
+        assert result["financing_cost_long"] > 0
+        assert result["financing_cost_short"] > 0
+        assert abs(result["total_financing_cost"] - (result["financing_cost_long"] + result["financing_cost_short"])) < 0.01
 
     def test_no_financing_1x_long_cash(self):
         """1x long-cash should produce identical results with or without financing rate."""
@@ -729,14 +734,14 @@ class TestFinancingFees:
         )
 
     def test_financing_cost_in_summary_table(self):
-        """Summary table must show total_financing_cost when non-zero."""
+        """Summary table must show long cost, short revenue, and net financing."""
         src = self._read_app_source()
         assert "total_financing_cost" in src, (
             "Summary table must display total_financing_cost"
         )
-        assert "Financing Cost" in src, (
-            "Summary table must have 'Financing Cost' label"
-        )
+        assert "Long Cost" in src, "Summary table must have 'Long Cost' row"
+        assert "Short Revenue" in src, "Summary table must have 'Short Revenue' row"
+        assert "Net Financing" in src, "Summary table must have 'Net Financing' row"
 
     def test_togglefields_hides_financing_for_fixed(self):
         """toggleFields must hide financing-group when sizing is fixed."""
