@@ -2209,8 +2209,9 @@ function updateExplainer() {
     var ind1 = document.getElementById('ind1_name');
     var p1 = document.querySelector('#period1-group input');
     var p2 = document.querySelector('#period2-group input');
-    var label1 = ind1.value === 'price' ? 'Price' : ind1.value.toUpperCase() + (p1.value ? '(' + p1.value + ')' : '');
-    var label2 = ind2Val.toUpperCase() + (p2.value ? '(' + p2.value + ')' : '');
+    var isSweepOrHeatmap = (mode === 'sweep' || mode === 'heatmap');
+    var label1 = ind1.value === 'price' ? 'Price' : ind1.value.toUpperCase() + (!isSweepOrHeatmap && p1.value ? '(' + p1.value + ')' : '');
+    var label2 = ind2Val.toUpperCase() + (!isSweepOrHeatmap && p2.value ? '(' + p2.value + ')' : '');
     if (rev) {
         el.innerHTML = '<b>Sell</b> when <span id="explainer-ind1">' + label1 + '</span> crosses above <span id="explainer-ind2">' + label2 + '</span>. <b>Buy</b> when it crosses below.';
     } else {

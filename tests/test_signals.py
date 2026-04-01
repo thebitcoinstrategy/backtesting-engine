@@ -548,3 +548,29 @@ class TestVideoEmbed:
         assert 'fullmatch' in func_body or 'isdigit' in func_body, (
             "_extract_video_embed_url must handle bare numeric Vimeo IDs"
         )
+
+
+class TestExplainerText:
+    """Verify that the explainer text omits periods in sweep/heatmap modes."""
+
+    def _read_app_source(self):
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def test_sweep_heatmap_omit_period_in_explainer(self):
+        """In sweep/heatmap mode, explainer must not show a specific period like SMA(44)."""
+        src = self._read_app_source()
+        func_match = re.search(
+            r"function updateExplainer\(\)(.*?)(?=\n(?:document\.|function )\w)",
+            src, re.DOTALL
+        )
+        assert func_match, "updateExplainer() not found"
+        func_body = func_match.group(1)
+        # Must check for sweep/heatmap mode and suppress period in labels
+        assert 'sweep' in func_body and 'heatmap' in func_body, (
+            "updateExplainer must check for sweep/heatmap mode"
+        )
+        assert 'isSweepOrHeatmap' in func_body or ('sweep' in func_body and 'p2.value' in func_body), (
+            "updateExplainer must suppress period display in sweep/heatmap modes"
+        )
