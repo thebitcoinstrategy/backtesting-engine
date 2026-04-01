@@ -3430,22 +3430,34 @@ def _reload_assets_from_disk():
     """Full reload of ASSETS, categories, logos. Called by workers that detect a signal."""
     global ASSETS, ASSET_STARTS, ASSET_LOGOS, _CRYPTO_AGG_ASSETS, _STOCK_ASSETS, _INDEX_ASSETS, _METAL_ASSETS, _COMMODITY_ASSETS
 
-    ASSETS.clear()
-    ASSET_STARTS.clear()
+    # Build new dicts first, then swap atomically to avoid race conditions
+    # where a request thread sees an empty ASSETS dict mid-reload
+    new_assets = {}
+    new_starts = {}
     if _USE_PRICE_DB:
         for name, df in price_db.get_all_assets().items():
-            ASSETS[name] = df
-            ASSET_STARTS[name] = str(df.index[0].date())
+            new_assets[name] = df
+            new_starts[name] = str(df.index[0].date())
     else:
         for fname in sorted(os.listdir(DATA_DIR)):
             if fname.endswith(".csv"):
                 name = fname.replace(".csv", "")
                 try:
                     df = bt.load_data(os.path.join(DATA_DIR, fname))
-                    ASSETS[name] = df
-                    ASSET_STARTS[name] = str(df.index[0].date())
+                    new_assets[name] = df
+                    new_starts[name] = str(df.index[0].date())
                 except Exception:
                     pass
+    # Remove stale keys, then update — avoids the empty-dict window that
+    # clear()+update() would create (race condition with request threads)
+    for k in list(ASSETS.keys()):
+        if k not in new_assets:
+            del ASSETS[k]
+    ASSETS.update(new_assets)
+    for k in list(ASSET_STARTS.keys()):
+        if k not in new_starts:
+            del ASSET_STARTS[k]
+    ASSET_STARTS.update(new_starts)
 
     # Reload categories
     _CRYPTO_AGG_ASSETS.clear()

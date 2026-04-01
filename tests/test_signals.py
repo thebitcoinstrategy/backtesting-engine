@@ -751,3 +751,55 @@ class TestFinancingFees:
         assert re.search(r"sizing.*fixed|fixed.*sizing", src), (
             "toggleFields must check for fixed sizing to hide financing"
         )
+
+
+# ---------------------------------------------------------------------------
+# Bug fix: _reload_assets_from_disk must not clear ASSETS dict (race condition)
+# ---------------------------------------------------------------------------
+
+class TestAssetReloadNoRace:
+    """Verify that _reload_assets_from_disk does not call ASSETS.clear()
+    before repopulating — that pattern creates a window where request threads
+    see an empty dict and return 'Asset not found'."""
+
+    def _read_app_source(self):
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def test_reload_does_not_clear_then_repopulate(self):
+        """_reload_assets_from_disk must not have ASSETS.clear() before the DB query.
+        The safe pattern is: build new dict, then update in-place."""
+        src = self._read_app_source()
+        # Extract the _reload_assets_from_disk function body
+        match = re.search(
+            r"def _reload_assets_from_disk\(\):(.*?)(?=\ndef |\nclass |\n@app\.)",
+            src, re.DOTALL
+        )
+        assert match, "_reload_assets_from_disk() function not found"
+        func_body = match.group(1)
+        lines = func_body.split('\n')
+        # Find the line positions of ASSETS.clear() and the DB/file read
+        clear_line = None
+        populate_line = None
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith('#'):
+                continue
+            if 'ASSETS.clear()' in stripped:
+                clear_line = i
+            if 'ASSETS.update(' in stripped and clear_line is not None:
+                populate_line = i
+                break
+        if clear_line is not None and populate_line is not None:
+            # Check that no DB query or file read happens BETWEEN clear and update
+            between = lines[clear_line+1:populate_line]
+            for bline in between:
+                s = bline.strip()
+                if s.startswith('#'):
+                    continue
+                assert 'get_all_assets' not in s and 'load_data' not in s, (
+                    "ASSETS.clear() must not precede a slow DB/file read — "
+                    "this creates a race condition where requests see an empty dict. "
+                    "Build the new dict first, then swap."
+                )
