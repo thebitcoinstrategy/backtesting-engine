@@ -574,3 +574,175 @@ class TestExplainerText:
         assert 'isSweepOrHeatmap' in func_body or ('sweep' in func_body and 'p2.value' in func_body), (
             "updateExplainer must suppress period display in sweep/heatmap modes"
         )
+
+
+# ---------------------------------------------------------------------------
+# Feature: Financing fees for leveraged/margin positions
+# ---------------------------------------------------------------------------
+
+class TestFinancingFees:
+    """Verify financing fee logic: helper functions, equity impact, and UI."""
+
+    def _make_df(self, n=200):
+        """Build a DataFrame with gentle uptrend for stable strategy results."""
+        dates = pd.date_range("2020-01-01", periods=n, freq="D")
+        # Gentle uptrend with small noise so SMA crossover generates trades
+        close = 100 + np.arange(n) * 0.5 + np.random.RandomState(42).randn(n) * 2
+        return pd.DataFrame({"close": close}, index=dates)
+
+    # -- Helper function tests --
+
+    def test_should_apply_financing_zero_rate(self):
+        """No financing when rate is 0."""
+        assert not bt._should_apply_financing(0, "long-short", 2, 2, "compound")
+
+    def test_should_apply_financing_fixed_sizing(self):
+        """No financing for fixed sizing regardless of leverage."""
+        assert not bt._should_apply_financing(0.11, "long-short", 2, 2, "fixed")
+
+    def test_should_apply_financing_1x_long_cash(self):
+        """No financing for 1x long-cash (spot account)."""
+        assert not bt._should_apply_financing(0.11, "long-cash", 1, 1, "compound")
+
+    def test_should_apply_financing_1x_short_cash(self):
+        """No financing for 1x short-cash (spot account)."""
+        assert not bt._should_apply_financing(0.11, "short-cash", 1, 1, "compound")
+
+    def test_should_apply_financing_long_short(self):
+        """Financing always applies for long-short (margin account)."""
+        assert bt._should_apply_financing(0.11, "long-short", 1, 1, "compound")
+
+    def test_should_apply_financing_leveraged_long_cash(self):
+        """Financing applies for leveraged long-cash."""
+        assert bt._should_apply_financing(0.11, "long-cash", 2, 1, "compound")
+
+    def test_should_apply_financing_leveraged_short_cash(self):
+        """Financing applies for leveraged short-cash."""
+        assert bt._should_apply_financing(0.11, "short-cash", 1, 2, "compound")
+
+    def test_financing_daily_rate_crypto(self):
+        """Crypto uses full notional: leverage * rate / 365."""
+        rate = bt._financing_daily_rate(2, 0.11, 365)
+        expected = 2 * 0.11 / 365
+        assert abs(rate - expected) < 1e-10
+
+    def test_financing_daily_rate_tradfi(self):
+        """Tradfi uses borrowed portion: max(leverage-1, 0) * rate / periods_per_year."""
+        rate = bt._financing_daily_rate(2, 0.11, 252)
+        expected = 1 * 0.11 / 252  # leverage-1 = 1
+        assert abs(rate - expected) < 1e-10
+
+    def test_financing_daily_rate_tradfi_1x(self):
+        """Tradfi 1x leverage: no borrowed portion, rate should be 0."""
+        rate = bt._financing_daily_rate(1, 0.11, 252)
+        assert rate == 0
+
+    # -- Strategy-level tests --
+
+    def test_financing_reduces_long_equity(self):
+        """2x long-short with financing should produce lower equity than without."""
+        df = self._make_df()
+        no_fin = bt.run_strategy(df, "price", None, "sma", 20,
+                                 10000, fee=0, exposure="long-short",
+                                 long_leverage=2, short_leverage=2,
+                                 financing_rate=0)
+        with_fin = bt.run_strategy(df, "price", None, "sma", 20,
+                                   10000, fee=0, exposure="long-short",
+                                   long_leverage=2, short_leverage=2,
+                                   financing_rate=0.11)
+        assert with_fin["equity"].iloc[-1] < no_fin["equity"].iloc[-1], (
+            "Financing should reduce final equity for leveraged long-short"
+        )
+
+    def test_financing_cost_returned(self):
+        """run_strategy must return total_financing_cost in result dict."""
+        df = self._make_df()
+        result = bt.run_strategy(df, "price", None, "sma", 20,
+                                 10000, fee=0, exposure="long-short",
+                                 long_leverage=2, short_leverage=2,
+                                 financing_rate=0.11)
+        assert "total_financing_cost" in result
+        assert result["total_financing_cost"] > 0
+
+    def test_no_financing_1x_long_cash(self):
+        """1x long-cash should produce identical results with or without financing rate."""
+        df = self._make_df()
+        no_fin = bt.run_strategy(df, "price", None, "sma", 20,
+                                 10000, fee=0, exposure="long-cash",
+                                 long_leverage=1, short_leverage=1,
+                                 financing_rate=0)
+        with_rate = bt.run_strategy(df, "price", None, "sma", 20,
+                                    10000, fee=0, exposure="long-cash",
+                                    long_leverage=1, short_leverage=1,
+                                    financing_rate=0.11)
+        assert abs(with_rate["equity"].iloc[-1] - no_fin["equity"].iloc[-1]) < 0.01, (
+            "1x long-cash should have no financing cost"
+        )
+        assert with_rate["total_financing_cost"] == 0
+
+    def test_no_financing_fixed_sizing(self):
+        """Fixed sizing should have no financing regardless of leverage."""
+        df = self._make_df()
+        result = bt.run_strategy(df, "price", None, "sma", 20,
+                                 10000, fee=0, exposure="long-short",
+                                 long_leverage=2, short_leverage=2,
+                                 sizing="fixed", financing_rate=0.11)
+        assert result["total_financing_cost"] == 0
+
+    def test_sweep_passes_financing(self):
+        """sweep_periods must accept and pass financing_rate through."""
+        df = self._make_df(300)
+        results = bt.sweep_periods(df, "price", None, "sma", 20, "ind2",
+                                   10, 12, 10000, fee=0,
+                                   exposure="long-short",
+                                   long_leverage=2, short_leverage=2,
+                                   financing_rate=0.11)
+        # Should return results without error
+        assert len(results) > 0
+        # Each result should have financing cost
+        for r in results:
+            assert "total_financing_cost" in r
+
+    # -- UI tests --
+
+    def _read_app_source(self):
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def test_financing_form_field_exists(self):
+        """The financing rate input field must exist in the form."""
+        src = self._read_app_source()
+        assert 'name="financing_rate"' in src, "financing_rate input field missing from form"
+        assert 'financing-group' in src, "financing-group div missing"
+
+    def test_financing_in_cache_key(self):
+        """financing_rate must be in the cache key core set."""
+        src = self._read_app_source()
+        assert '"financing_rate"' in src, "financing_rate missing from cache key"
+
+    def test_financing_in_detail_page(self):
+        """Detail page must show financing rate when set."""
+        src = self._read_app_source()
+        assert "financing_rate" in src and "p.a." in src, (
+            "Detail page must display financing rate with 'p.a.' unit"
+        )
+
+    def test_financing_cost_in_summary_table(self):
+        """Summary table must show total_financing_cost when non-zero."""
+        src = self._read_app_source()
+        assert "total_financing_cost" in src, (
+            "Summary table must display total_financing_cost"
+        )
+        assert "Financing Cost" in src, (
+            "Summary table must have 'Financing Cost' label"
+        )
+
+    def test_togglefields_hides_financing_for_fixed(self):
+        """toggleFields must hide financing-group when sizing is fixed."""
+        src = self._read_app_source()
+        # The toggleFields function should reference both financing-group and fixed/sizing
+        assert "financing-group" in src, "financing-group not referenced in toggleFields"
+        assert re.search(r"sizing.*fixed|fixed.*sizing", src), (
+            "toggleFields must check for fixed sizing to hide financing"
+        )

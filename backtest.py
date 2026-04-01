@@ -455,7 +455,7 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
                             initial_cash, fee=0.001, exposure="long-cash",
                             long_leverage=1, short_leverage=1, lev_mode="rebalance",
                             reverse=False, sizing="compound", start_date=None,
-                            periods_per_year=365):
+                            periods_per_year=365, financing_rate=0):
     """Run strategy based on oscillator threshold signals.
     Returns dict compatible with run_strategy output.
     If start_date is given, indicators are computed on the full df for warmup,
@@ -484,6 +484,15 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
         daily_return = daily_return[mask]
         osc_data = {k: (v[mask] if hasattr(v, 'loc') else v) for k, v in osc_data.items()}
 
+    # Determine financing parameters
+    apply_fin = _should_apply_financing(financing_rate, exposure, long_leverage, short_leverage, sizing)
+    total_financing_cost = 0.0
+    if apply_fin:
+        fin_daily_long = _financing_daily_rate(long_leverage, financing_rate, periods_per_year)
+        fin_daily_short = _financing_daily_rate(short_leverage, financing_rate, periods_per_year)
+    else:
+        fin_daily_long = fin_daily_short = 0.0
+
     if sizing == "fixed":
         leverage = np.where(df["position"] > 0, long_leverage,
                    np.where(df["position"] < 0, short_leverage, 1))
@@ -494,14 +503,14 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
         liquidated = False
         df["equity"] = equity_arr
     elif lev_mode == "set-forget":
-        equity_arr, liquidated = _compute_equity_set_and_forget(
+        equity_arr, liquidated, total_financing_cost = _compute_equity_set_and_forget(
             df["position"].values, daily_return.values, initial_cash,
-            long_leverage, short_leverage, fee)
+            long_leverage, short_leverage, fee, fin_daily_long, fin_daily_short)
         df["equity"] = equity_arr
     elif lev_mode == "optimal":
-        equity_arr, liquidated = _compute_equity_optimal(
+        equity_arr, liquidated, total_financing_cost = _compute_equity_optimal(
             df["position"].values, daily_return.values, initial_cash,
-            long_leverage, short_leverage, fee)
+            long_leverage, short_leverage, fee, fin_daily_long, fin_daily_short)
         df["equity"] = equity_arr
     else:
         leverage = np.where(df["position"] > 0, long_leverage,
@@ -509,8 +518,14 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
         df["strategy_return"] = df["position"] * daily_return * leverage
         trade_mask = df["position"].diff().fillna(0).abs() > 0
         df.loc[trade_mask, "strategy_return"] -= fee
+        if apply_fin:
+            fin_rate = _financing_daily_rate(leverage, financing_rate, periods_per_year)
+            df["strategy_return"] -= df["position"] * fin_rate
         equity_arr, liquidated = _compute_equity_with_liquidation(df["strategy_return"].values, initial_cash)
         df["equity"] = equity_arr
+        if apply_fin:
+            eq_shifted = pd.Series(equity_arr, index=df.index).shift(1).fillna(initial_cash)
+            total_financing_cost = (df["position"] * fin_rate * eq_shifted).sum()
 
     df["buyhold"] = initial_cash * (1 + daily_return).cumprod()
 
@@ -573,6 +588,7 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
         "buyhold": df["buyhold"],
         "buy_signals": buy_signals,
         "sell_signals": sell_signals,
+        "total_financing_cost": total_financing_cost,
     }
 
 
@@ -597,6 +613,28 @@ def _apply_exposure(above_sma, exposure):
         return above_sma.astype(int).replace(0, -1)
 
 
+def _should_apply_financing(financing_rate, exposure, long_leverage, short_leverage, sizing):
+    """Determine if financing fees should be applied."""
+    if financing_rate <= 0 or sizing == "fixed":
+        return False
+    if exposure == "long-cash" and long_leverage == 1:
+        return False
+    if exposure == "short-cash" and short_leverage == 1:
+        return False
+    return True
+
+
+def _financing_daily_rate(leverage, financing_rate, periods_per_year):
+    """Compute daily financing rate per unit of position.
+    Crypto (>=365 periods): full notional (leverage * rate / 365).
+    Tradfi (<365 periods): borrowed portion (max(leverage-1, 0) * rate / periods_per_year).
+    """
+    if periods_per_year >= 365:
+        return leverage * financing_rate / 365
+    else:
+        return np.maximum(leverage - 1, 0) * financing_rate / periods_per_year
+
+
 def _compute_equity_with_liquidation(strategy_returns, initial_cash):
     """Compute equity series with liquidation: if equity hits 0, stay at 0."""
     equity = np.empty(len(strategy_returns))
@@ -614,7 +652,8 @@ def _compute_equity_with_liquidation(strategy_returns, initial_cash):
     return equity, liquidated
 
 
-def _compute_equity_set_and_forget(positions, daily_returns, initial_cash, long_leverage, short_leverage, fee):
+def _compute_equity_set_and_forget(positions, daily_returns, initial_cash, long_leverage, short_leverage, fee,
+                                   financing_daily_long=0, financing_daily_short=0):
     """Compute equity with set-and-forget leverage.
 
     Leverage is applied at position entry and drifts naturally until the position closes.
@@ -628,6 +667,7 @@ def _compute_equity_set_and_forget(positions, daily_returns, initial_cash, long_
     cum_return = 1.0
     entry_equity = current_equity
     liquidated = False
+    total_financing = 0.0
 
     for i in range(n):
         if liquidated:
@@ -649,9 +689,19 @@ def _compute_equity_set_and_forget(positions, daily_returns, initial_cash, long_
             if current_pos > 0:
                 lev = long_leverage
                 current_equity = entry_equity * (lev * cum_return - (lev - 1))
+                # Daily financing cost (long pays)
+                fin_cost = current_equity * financing_daily_long
+                current_equity -= fin_cost
+                entry_equity -= fin_cost  # adjust entry so future cum_return calc stays correct
+                total_financing += fin_cost
             else:
                 lev = short_leverage
                 current_equity = entry_equity * (1 + lev * (1 - cum_return))
+                # Daily financing income (short earns)
+                fin_cost = current_equity * financing_daily_short
+                current_equity += fin_cost
+                entry_equity += fin_cost
+                total_financing -= fin_cost
 
         if current_equity <= 0:
             current_equity = 0.0
@@ -659,10 +709,11 @@ def _compute_equity_set_and_forget(positions, daily_returns, initial_cash, long_
 
         equity[i] = current_equity
 
-    return equity, liquidated
+    return equity, liquidated, total_financing
 
 
-def _compute_equity_optimal(positions, daily_returns, initial_cash, long_leverage, short_leverage, fee):
+def _compute_equity_optimal(positions, daily_returns, initial_cash, long_leverage, short_leverage, fee,
+                            financing_daily_long=0, financing_daily_short=0):
     """Compute equity with optimal leverage mode.
 
     Long positions: daily rebalance (leverage reset each day).
@@ -675,6 +726,7 @@ def _compute_equity_optimal(positions, daily_returns, initial_cash, long_leverag
     cum_return = 1.0
     entry_equity = current_equity
     liquidated = False
+    total_financing = 0.0
 
     for i in range(n):
         if liquidated:
@@ -693,10 +745,17 @@ def _compute_equity_optimal(positions, daily_returns, initial_cash, long_leverag
         if current_pos > 0:
             # Long: daily rebalance
             current_equity *= (1 + dr * long_leverage)
+            fin_cost = current_equity * financing_daily_long
+            current_equity -= fin_cost
+            total_financing += fin_cost
         elif current_pos < 0:
             # Short: set-and-forget
             cum_return *= (1 + dr)
             current_equity = entry_equity * (1 + short_leverage * (1 - cum_return))
+            fin_cost = current_equity * financing_daily_short
+            current_equity += fin_cost
+            entry_equity += fin_cost
+            total_financing -= fin_cost
 
         if current_equity <= 0:
             current_equity = 0.0
@@ -704,7 +763,7 @@ def _compute_equity_optimal(positions, daily_returns, initial_cash, long_leverag
 
         equity[i] = current_equity
 
-    return equity, liquidated
+    return equity, liquidated, total_financing
 
 
 def _max_drawdown(equity_series):
@@ -810,7 +869,7 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
                  initial_cash, fee=0.001, exposure="long-cash",
                  long_leverage=1, short_leverage=1, lev_mode="rebalance",
                  reverse=False, sizing="compound", start_date=None,
-                 periods_per_year=365):
+                 periods_per_year=365, financing_rate=0):
     """Unified strategy: go long when ind1 > ind2, apply exposure mode.
     Returns dict with ind1/ind2 series, labels, and all metrics.
     If start_date is given, indicators are computed on the full df for warmup,
@@ -841,6 +900,15 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
         ind1_series = ind1_series[mask]
         ind2_series = ind2_series[mask]
 
+    # Determine financing parameters
+    apply_fin = _should_apply_financing(financing_rate, exposure, long_leverage, short_leverage, sizing)
+    total_financing_cost = 0.0
+    if apply_fin:
+        fin_daily_long = _financing_daily_rate(long_leverage, financing_rate, periods_per_year)
+        fin_daily_short = _financing_daily_rate(short_leverage, financing_rate, periods_per_year)
+    else:
+        fin_daily_long = fin_daily_short = 0.0
+
     if sizing == "fixed":
         leverage = np.where(df["position"] > 0, long_leverage,
                    np.where(df["position"] < 0, short_leverage, 1))
@@ -851,14 +919,14 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
         liquidated = False
         df["equity"] = equity_arr
     elif lev_mode == "set-forget":
-        equity_arr, liquidated = _compute_equity_set_and_forget(
+        equity_arr, liquidated, total_financing_cost = _compute_equity_set_and_forget(
             df["position"].values, daily_return.values, initial_cash,
-            long_leverage, short_leverage, fee)
+            long_leverage, short_leverage, fee, fin_daily_long, fin_daily_short)
         df["equity"] = equity_arr
     elif lev_mode == "optimal":
-        equity_arr, liquidated = _compute_equity_optimal(
+        equity_arr, liquidated, total_financing_cost = _compute_equity_optimal(
             df["position"].values, daily_return.values, initial_cash,
-            long_leverage, short_leverage, fee)
+            long_leverage, short_leverage, fee, fin_daily_long, fin_daily_short)
         df["equity"] = equity_arr
     else:
         leverage = np.where(df["position"] > 0, long_leverage,
@@ -866,8 +934,14 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
         df["strategy_return"] = df["position"] * daily_return * leverage
         trade_mask = df["position"].diff().fillna(0).abs() > 0
         df.loc[trade_mask, "strategy_return"] -= fee
+        if apply_fin:
+            fin_rate = _financing_daily_rate(leverage, financing_rate, periods_per_year)
+            df["strategy_return"] -= df["position"] * fin_rate
         equity_arr, liquidated = _compute_equity_with_liquidation(df["strategy_return"].values, initial_cash)
         df["equity"] = equity_arr
+        if apply_fin:
+            eq_shifted = pd.Series(equity_arr, index=df.index).shift(1).fillna(initial_cash)
+            total_financing_cost = (df["position"] * fin_rate * eq_shifted).sum()
 
     df["buyhold"] = initial_cash * (1 + daily_return).cumprod()
 
@@ -934,6 +1008,7 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
         "buyhold": df["buyhold"],
         "buy_signals": buy_signals,
         "sell_signals": sell_signals,
+        "total_financing_cost": total_financing_cost,
     }
 
 
@@ -971,7 +1046,8 @@ def sweep_periods(df, ind1_name, ind1_period, ind2_name, ind2_period,
                   sweep_target, sweep_min, sweep_max,
                   initial_cash, fee=0.001, exposure="long-cash",
                   long_leverage=1, short_leverage=1, lev_mode="rebalance",
-                  sizing="compound", start_date=None, periods_per_year=365):
+                  sizing="compound", start_date=None, periods_per_year=365,
+                  financing_rate=0):
     """Sweep one indicator's period across a range. sweep_target: 'ind1' or 'ind2'."""
     results = []
     for period in range(sweep_min, sweep_max + 1):
@@ -979,7 +1055,8 @@ def sweep_periods(df, ind1_name, ind1_period, ind2_name, ind2_period,
         p2 = period if sweep_target == "ind2" else ind2_period
         r = run_strategy(df, ind1_name, p1, ind2_name, p2,
                          initial_cash, fee, exposure, long_leverage, short_leverage, lev_mode,
-                         sizing=sizing, start_date=start_date, periods_per_year=periods_per_year)
+                         sizing=sizing, start_date=start_date, periods_per_year=periods_per_year,
+                         financing_rate=financing_rate)
         results.append(r)
     results.sort(key=lambda r: r["total_return"], reverse=True)
     return results

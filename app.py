@@ -155,7 +155,7 @@ def _cache_key(form_params):
     cache fragmentation from irrelevant hidden fields.
     """
     # Core params always relevant
-    core = {"mode", "asset", "vs_asset", "start_date", "end_date", "initial_cash", "fee", "sizing", "reverse", "timeframe", "theme"}
+    core = {"mode", "asset", "vs_asset", "start_date", "end_date", "initial_cash", "fee", "financing_rate", "sizing", "reverse", "timeframe", "theme"}
     mode = form_params.get("mode", "backtest")
     signal_type = form_params.get("signal_type", "crossover")
 
@@ -1696,6 +1696,10 @@ HTML = """\
                             <label>Fee per Trade (%)</label>
                             <input type="number" name="fee" value="{{ p.fee }}" step="0.01" min="0">
                         </div>
+                        <div class="form-group" id="financing-group">
+                            <label>Financing (% p.a.) <span class="m-info" data-tip="Annual financing rate for leveraged/margin positions.&#10;Long pays, short earns. Applied daily.&#10;Crypto: full notional. Stocks: borrowed portion.">ⓘ</span></label>
+                            <input type="number" name="financing_rate" value="{{ p.financing_rate }}" step="0.1" min="0">
+                        </div>
                         <div class="form-group" style="min-width:auto">
                             <label>&nbsp;</label>
                             <button type="submit" id="btn">Run Backtest</button>
@@ -1961,6 +1965,10 @@ HTML = """\
                     <tr><td class="m-label">Avg Win / Loss <span class="m-info" data-tip="Average return of winning vs losing trades.&#10;Formula: mean return of wins / losses">ⓘ</span></td><td class="m-val"><span class="positive">+{{ "%.1f"|format(best.avg_win) }}%</span> / <span class="negative">{{ "%.1f"|format(best.avg_loss) }}%</span>{% if ls %}<span class="m-ls"><span class="ls-l">Long +{{ "%.1f"|format(ls.long.avg_win) }}% / {{ "%.1f"|format(ls.long.avg_loss) }}%</span><br><span class="ls-s">Short +{{ "%.1f"|format(ls.short.avg_win) }}% / {{ "%.1f"|format(ls.short.avg_loss) }}%</span></span>{% endif %}</td><td class="m-val muted">&mdash;</td></tr>
                     <tr><td class="m-label">Profit Factor <span class="m-info" data-tip="Gross profits divided by gross losses.&#10;Formula: sum of wins ÷ sum of losses">ⓘ</span></td><td class="m-val">{% if best.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(best.profit_factor) }}{% endif %}{% if ls %}<span class="m-ls"><span class="ls-l">Long {% if ls.long.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(ls.long.profit_factor) }}{% endif %}</span><br><span class="ls-s">Short {% if ls.short.profit_factor > 9999 %}&infin;{% else %}{{ "%.2f"|format(ls.short.profit_factor) }}{% endif %}</span></span>{% endif %}</td><td class="m-val muted">&mdash;</td></tr>
                     <tr><td class="m-label">Avg Duration <span class="m-info" data-tip="Average holding period per trade.&#10;Formula: total days in trades ÷ trade count">ⓘ</span></td><td class="m-val">{{ "%.0f"|format(best.avg_trade_duration) }}d{% if ls %}<span class="m-ls"><span class="ls-l">Long {{ "%.0f"|format(ls.long.avg_trade_duration) }}d</span><br><span class="ls-s">Short {{ "%.0f"|format(ls.short.avg_trade_duration) }}d</span></span>{% endif %}</td><td class="m-val muted">&mdash;</td></tr>
+                    {% if best.get('total_financing_cost', 0) != 0 %}
+                    <tr class="section-row"><td colspan="3">Costs</td></tr>
+                    <tr><td class="m-label">Financing Cost <span class="m-info" data-tip="Total financing fees paid (long) or earned (short) over the backtest period.&#10;Crypto: leverage &times; rate / 365 daily&#10;Tradfi: (leverage-1) &times; rate / trading days">ⓘ</span></td><td class="m-val negative">${{ "{:,.0f}".format(best.total_financing_cost) }}</td><td class="m-val muted">&mdash;</td></tr>
+                    {% endif %}
                     <tr class="section-row"><td colspan="3">Annual</td></tr>
                     <tr><td class="m-label">Best Year <span class="m-info" data-tip="Highest calendar year return.&#10;Max of yearly returns">ⓘ</span></td><td class="m-val positive">{% if best.best_year[0] %}+{{ "%.1f"|format(best.best_year[1]) }}% ({{ best.best_year[0] }}){% else %}&mdash;{% endif %}</td><td class="m-val positive">{% if best.buyhold_best_year[0] %}+{{ "%.1f"|format(best.buyhold_best_year[1]) }}% ({{ best.buyhold_best_year[0] }}){% else %}&mdash;{% endif %}</td></tr>
                     <tr><td class="m-label">Worst Year <span class="m-info" data-tip="Lowest calendar year return.&#10;Min of yearly returns">ⓘ</span></td><td class="m-val negative">{% if best.worst_year[0] %}{{ "%.1f"|format(best.worst_year[1]) }}% ({{ best.worst_year[0] }}){% else %}&mdash;{% endif %}</td><td class="m-val negative">{% if best.buyhold_worst_year[0] %}{{ "%.1f"|format(best.buyhold_worst_year[1]) }}% ({{ best.buyhold_worst_year[0] }}){% else %}&mdash;{% endif %}</td></tr>
@@ -2133,6 +2141,7 @@ function toggleFields() {
         fwdRow.querySelector('input').disabled = true;
     }
 
+    var sizingVal = document.querySelector('select[name="sizing"]').value;
     var rules = [
         ['ind1-group', !isOsc && !isRegression && !isDCA],
         ['period1-group', !isOsc && !isRegression && !isDCA && ind1 !== 'price' && mode !== 'heatmap'],
@@ -2146,6 +2155,7 @@ function toggleFields() {
         ['exposure-group', !isLevSweep && !isRegression && !isDCA],
         ['lev-mode-group', !isRegression && !isDCA],
         ['sizing-group', !isRegression && !isDCA],
+        ['financing-group', !isRegression && !isDCA && sizingVal !== 'fixed'],
         ['lev-min-group', isLevSweep && !isRegression],
         ['lev-max-group', isLevSweep && !isRegression],
         ['exposure-section', !isDCA],
@@ -2224,6 +2234,7 @@ document.getElementById('ind2_name').addEventListener('change', function() { tog
 document.getElementById('buy_threshold').addEventListener('input', function() { updateExplainer(); enableBtn(); });
 document.getElementById('sell_threshold').addEventListener('input', function() { updateExplainer(); enableBtn(); });
 document.getElementById('osc_period').addEventListener('input', function() { updateExplainer(); enableBtn(); });
+document.querySelector('select[name="sizing"]').addEventListener('change', function() { toggleFields(); enableBtn(); });
 function setAllData() {
     var asset = document.getElementById('asset').value;
     document.getElementById('start_date').value = assetStarts[asset] || '';
@@ -3042,6 +3053,7 @@ class Params:
             self.end_date = form.get("end_date", "").strip()
             self.reverse = bool(form.get("reverse"))
             self.sizing = form.get("sizing", "compound")
+            self.financing_rate = float(form.get("financing_rate", 0))
             self.timeframe = form.get("timeframe", "daily")
             # Oscillator params
             self.osc_name = form.get("osc_name", "rsi")
@@ -3092,6 +3104,7 @@ class Params:
             self.end_date = str(ASSETS[DEFAULT_ASSET].index[-1].date())
             self.reverse = False
             self.sizing = "compound"
+            self.financing_rate = 11
             self.timeframe = "daily"
             # Oscillator defaults
             self.osc_name = "rsi"
@@ -3678,6 +3691,7 @@ def _run_post_handler(cancel_event):
     df = df_full[df_full.index >= pd_mod.Timestamp(p.start_date, tz="UTC")]
 
     fee = p.fee / 100
+    fin_rate = p.financing_rate / 100
 
     # Oscillator mode forces backtest (no sweep/heatmap/lev-sweep support), except regression
     if is_oscillator and p.mode not in ("backtest", "regression", "dca"):
@@ -3939,6 +3953,9 @@ def _run_post_handler(cancel_event):
             title_label = f"{p.ind1_name.upper()}({p1_str})/{p.ind2_name.upper()}({ind2_period_val})"
 
         def _sweep_ann(ll, sl):
+            _apply_fin = bt._should_apply_financing(fin_rate, p.exposure, ll, sl, p.sizing)
+            _fdl = bt._financing_daily_rate(ll, fin_rate, periods_per_year) if _apply_fin else 0.0
+            _fds = bt._financing_daily_rate(sl, fin_rate, periods_per_year) if _apply_fin else 0.0
             if p.sizing == "fixed":
                 leverage = np.where(position_base.values > 0, ll,
                            np.where(position_base.values < 0, sl, 1))
@@ -3948,11 +3965,11 @@ def _run_post_handler(cancel_event):
                 daily_pnl[np.abs(trade_changes) > 0] -= p.initial_cash * fee
                 equity_arr = p.initial_cash + np.cumsum(daily_pnl)
             elif p.lev_mode == "set-forget":
-                equity_arr, _ = bt._compute_equity_set_and_forget(
-                    position_base.values, daily_return.values, p.initial_cash, ll, sl, fee)
+                equity_arr, _, _ = bt._compute_equity_set_and_forget(
+                    position_base.values, daily_return.values, p.initial_cash, ll, sl, fee, _fdl, _fds)
             elif p.lev_mode == "optimal":
-                equity_arr, _ = bt._compute_equity_optimal(
-                    position_base.values, daily_return.values, p.initial_cash, ll, sl, fee)
+                equity_arr, _, _ = bt._compute_equity_optimal(
+                    position_base.values, daily_return.values, p.initial_cash, ll, sl, fee, _fdl, _fds)
             else:
                 leverage = np.where(position_base.values > 0, ll,
                            np.where(position_base.values < 0, sl, 1))
@@ -3960,6 +3977,9 @@ def _run_post_handler(cancel_event):
                 strat_ret = strat_ret.copy()
                 trade_changes = np.diff(position_base.values, prepend=0)
                 strat_ret[np.abs(trade_changes) > 0] -= fee
+                if _apply_fin:
+                    _fr = bt._financing_daily_rate(leverage, fin_rate, periods_per_year)
+                    strat_ret -= position_base.values * _fr
                 equity_arr, _ = bt._compute_equity_with_liquidation(strat_ret, p.initial_cash)
             equity_final = equity_arr[-1] if len(equity_arr) > 0 else p.initial_cash
             total_ret = (equity_final / p.initial_cash - 1) * 100
@@ -4058,7 +4078,7 @@ def _run_post_handler(cancel_event):
         thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
 
         best_result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, ind2_period_val,
-                                       p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+                                       p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year, financing_rate=fin_rate)
         best = _enrich_best(best_result, df, periods_per_year)
 
         combined_ann = _sweep_ann(best_long_lev, best_short_lev)
@@ -4236,7 +4256,7 @@ def _run_post_handler(cancel_event):
         thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
 
         best_result = bt.run_strategy(df_full, ind1_name, best_p1, ind2_name, best_p2,
-                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year, financing_rate=fin_rate)
         best = _enrich_best(best_result, df, periods_per_year)
 
         price_json = _series_to_lw_json(df_price_all["close"])
@@ -4268,7 +4288,7 @@ def _run_post_handler(cancel_event):
         for period in periods:
             check_cancelled(cancel_event)
             result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, period,
-                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year, financing_rate=fin_rate)
             ann = bt._annualized_return(result["total_return"], n_days, periods_per_year)
             annualized_returns.append(ann)
 
@@ -4328,7 +4348,7 @@ def _run_post_handler(cancel_event):
         thumb_b64 = "data:image/png;base64," + base64.b64encode(thumb_buf.read()).decode()
 
         best_result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, best_period,
-                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year, financing_rate=fin_rate)
         best = _enrich_best(best_result, df, periods_per_year)
 
     # --- Backtest Mode ---
@@ -4337,19 +4357,20 @@ def _run_post_handler(cancel_event):
         if is_oscillator:
             # Oscillator strategy
             result = bt.run_oscillator_strategy(df_full, p.osc_name, p.osc_period, p.buy_threshold, p.sell_threshold,
-                                                 p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+                                                 p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year, financing_rate=fin_rate)
             results = [result]
         elif p.ind2_period is not None:
             # Single run with fixed period
             result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+                                      p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year, financing_rate=fin_rate)
             results = [result]
         else:
             # Sweep ind2 period and show table
             results = bt.sweep_periods(df_full, p.ind1_name, p.ind1_period, p.ind2_name, None,
                                         "ind2", p.range_min, p.range_max,
                                         p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode,
-                                        sizing=p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+                                        sizing=p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year,
+                                        financing_rate=fin_rate)
             # For same-type crossover, filter invalid combos
             if p.ind1_name != "price" and p.ind1_name == p.ind2_name and p.ind1_period is not None:
                 results = [r for r in results if r["ind2_period"] > p.ind1_period]
@@ -4364,9 +4385,9 @@ def _run_post_handler(cancel_event):
             long_short_breakdown = None
             if not is_oscillator and p.exposure == "long-short" and p.ind2_period is not None:
                 long_only = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                             p.initial_cash, fee, "long-cash", p.long_leverage, 1, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+                                             p.initial_cash, fee, "long-cash", p.long_leverage, 1, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year, financing_rate=fin_rate)
                 short_only = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
-                                              p.initial_cash, fee, "short-cash", 1, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year)
+                                              p.initial_cash, fee, "short-cash", 1, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year, financing_rate=fin_rate)
                 long_only = _enrich_best(long_only, df, periods_per_year)
                 short_only = _enrich_best(short_only, df, periods_per_year)
                 long_short_breakdown = {"long": long_only, "short": short_only}
@@ -5670,6 +5691,9 @@ DETAIL_HTML = """\
                     <tr><td class="params-td-label">End</td><td class="params-td-value">{{ bt_params.get('end_date', '–') }}</td></tr>
                     <tr><td class="params-td-label">Capital</td><td class="params-td-value">${{ bt_params.get('initial_cash', '10,000') }}</td></tr>
                     <tr><td class="params-td-label">Fee</td><td class="params-td-value">{{ bt_params.get('fee', '0.1') }}%</td></tr>
+                    {% if bt_params.get('financing_rate', 0)|float > 0 %}
+                    <tr><td class="params-td-label">Financing</td><td class="params-td-value">{{ bt_params.get('financing_rate') }}% p.a.</td></tr>
+                    {% endif %}
                 </table>
             </div>
         </div>
