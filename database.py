@@ -156,6 +156,7 @@ def init_db():
             title TEXT NOT NULL,
             description TEXT,
             youtube_url TEXT,
+            copy_trading_url TEXT,
             visibility TEXT NOT NULL DEFAULT 'private',
             views_count INTEGER DEFAULT 0,
             sort_order INTEGER DEFAULT 0,
@@ -184,6 +185,10 @@ def init_db():
         pass
     try:
         conn.execute("ALTER TABLE backtests ADD COLUMN telegram_message_template TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE collections ADD COLUMN copy_trading_url TEXT")
     except sqlite3.OperationalError:
         pass
     conn.close()
@@ -932,7 +937,7 @@ def get_reactions_for_comments(comment_ids, user_id=None):
 
 # --- Collections ---
 
-def save_collection(user_id, email, title, description=None, youtube_url=None, visibility='private'):
+def save_collection(user_id, email, title, description=None, youtube_url=None, copy_trading_url=None, visibility='private'):
     """Save a new collection. Returns the collection dict."""
     conn = _get_conn()
     coll_id = str(uuid.uuid4())
@@ -942,10 +947,10 @@ def save_collection(user_id, email, title, description=None, youtube_url=None, v
     new_order = max_order + 1
     conn.execute(
         """INSERT INTO collections (id, short_code, user_id, user_email, title, description,
-           youtube_url, visibility, sort_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           youtube_url, copy_trading_url, visibility, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (coll_id, short_code, user_id, email, title, description,
-         youtube_url, visibility, new_order, now, now)
+         youtube_url, copy_trading_url, visibility, new_order, now, now)
     )
     conn.commit()
     row = conn.execute("SELECT * FROM collections WHERE id=?", (coll_id,)).fetchone()
@@ -979,7 +984,7 @@ def get_collection_by_short_code(code):
     return _row_to_dict(row)
 
 
-def update_collection(collection_id, user_id, title=None, description=None, youtube_url=None):
+def update_collection(collection_id, user_id, title=None, description=None, youtube_url=None, copy_trading_url=None):
     """Update a collection. Owner only. Returns updated dict or None."""
     conn = _get_conn()
     row = conn.execute("SELECT * FROM collections WHERE id=?", (collection_id,)).fetchone()
@@ -994,9 +999,10 @@ def update_collection(collection_id, user_id, title=None, description=None, yout
     new_title = title if title is not None else coll['title']
     new_desc = description if description is not None else coll['description']
     new_yt = youtube_url if youtube_url is not None else coll['youtube_url']
+    new_ct = copy_trading_url if copy_trading_url is not None else coll.get('copy_trading_url')
     conn.execute(
-        "UPDATE collections SET title=?, description=?, youtube_url=?, updated_at=? WHERE id=?",
-        (new_title, new_desc, new_yt, now, collection_id)
+        "UPDATE collections SET title=?, description=?, youtube_url=?, copy_trading_url=?, updated_at=? WHERE id=?",
+        (new_title, new_desc, new_yt, new_ct, now, collection_id)
     )
     conn.commit()
     row = conn.execute("SELECT * FROM collections WHERE id=?", (collection_id,)).fetchone()

@@ -895,3 +895,75 @@ class TestTelegramCharCounter:
         assert "replace(/<[^>]*>/g" in source, "Counter should strip HTML tags"
         # Should color red when over limit
         assert '1024' in source and '#ff4444' in source, "Counter should turn red over 1024"
+
+
+class TestCopyTradingUrl:
+    """Verify copy trading URL support on collections."""
+
+    def _read_source(self, filename):
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), filename)
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def test_database_column_exists(self):
+        """collections table must have copy_trading_url column."""
+        src = self._read_source("database.py")
+        assert 'copy_trading_url TEXT' in src, "copy_trading_url column missing from collections table"
+
+    def test_save_collection_accepts_copy_trading_url(self):
+        """save_collection must accept copy_trading_url parameter."""
+        src = self._read_source("database.py")
+        assert re.search(r'def save_collection\(.*copy_trading_url', src, re.DOTALL), (
+            "save_collection must accept copy_trading_url parameter"
+        )
+
+    def test_update_collection_accepts_copy_trading_url(self):
+        """update_collection must accept copy_trading_url parameter."""
+        src = self._read_source("database.py")
+        assert re.search(r'def update_collection\(.*copy_trading_url', src, re.DOTALL), (
+            "update_collection must accept copy_trading_url parameter"
+        )
+
+    def test_create_api_sends_copy_trading_url(self):
+        """api_create_collection must read and pass copy_trading_url."""
+        src = self._read_source("app.py")
+        assert "copy_trading_url" in src, "app.py must handle copy_trading_url"
+        # Verify the create API extracts it from request data
+        create_match = re.search(r'def api_create_collection.*?def \w+', src, re.DOTALL)
+        assert create_match, "api_create_collection not found"
+        assert 'copy_trading_url' in create_match.group(0), (
+            "api_create_collection must pass copy_trading_url"
+        )
+
+    def test_update_api_sends_copy_trading_url(self):
+        """api_update_collection must read and pass copy_trading_url."""
+        src = self._read_source("app.py")
+        update_match = re.search(r'def api_update_collection.*?return', src, re.DOTALL)
+        assert update_match, "api_update_collection not found"
+        assert 'copy_trading_url' in update_match.group(0), (
+            "api_update_collection must pass copy_trading_url"
+        )
+
+    def test_collection_detail_shows_link(self):
+        """Collection detail page must render copy_trading_url as a link."""
+        src = self._read_source("app.py")
+        assert 'collection.copy_trading_url' in src, (
+            "Collection detail must check copy_trading_url"
+        )
+        assert 'copy-trading-link' in src, (
+            "Collection detail must have copy-trading-link element"
+        )
+
+    def test_edit_modal_has_copy_trading_field(self):
+        """Collection edit modals must include copy trading URL field."""
+        src = self._read_source("app.py")
+        assert src.count('edit-coll-copytrading') >= 2, (
+            "Edit collection modal must have copy trading URL input (at least label + input)"
+        )
+
+    def test_create_modal_has_copy_trading_field(self):
+        """New collection modal must include copy trading URL field."""
+        src = self._read_source("app.py")
+        assert 'coll-copytrading' in src, (
+            "New collection modal must have copy trading URL input"
+        )

@@ -4810,6 +4810,9 @@ COMMUNITY_HTML = """\
         .collection-card-count svg { width: 12px; height: 12px; }
         .collection-yt-indicator { position: absolute; top: 12px; right: 12px; width: 24px; height: 24px; background: rgba(255,0,0,0.85); border-radius: 4px; display: flex; align-items: center; justify-content: center; z-index: 2; }
         .collection-yt-indicator svg { width: 12px; height: 12px; color: #fff; }
+        .collection-ct-indicator { position: absolute; top: 12px; right: 12px; height: 24px; padding: 0 8px; background: rgba(16,185,129,0.9); border-radius: 4px; display: flex; align-items: center; gap: 4px; z-index: 2; font-size: 0.65em; font-weight: 600; color: #fff; white-space: nowrap; }
+        .collection-ct-indicator svg { width: 12px; height: 12px; color: #fff; }
+        .collection-yt-indicator + .collection-ct-indicator, .collection-ct-indicator.has-yt { right: 42px; }
         .coll-thumb-grid { display: grid; gap: 4px; border-radius: 8px; overflow: hidden; margin-bottom: 10px; border: 1px solid var(--border); }
         .coll-thumb-grid.thumbs-1 { grid-template-columns: 1fr; }
         .coll-thumb-grid.thumbs-2 { grid-template-columns: 1fr 1fr; }
@@ -4936,6 +4939,9 @@ COMMUNITY_HTML = """\
                     {% endif %}
                     {% if bt.youtube_url %}
                     <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
+                    {% endif %}
+                    {% if bt.copy_trading_url %}
+                    <div class="collection-ct-indicator{{ ' has-yt' if bt.youtube_url else '' }}" title="Copy trading available"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Copy Trading</div>
                     {% endif %}
                     <a class="collection-card" href="{{ '/collection/' ~ bt.id if is_authenticated or loop.first else '#' }}">
                         <div class="coll-top-row">
@@ -5064,6 +5070,9 @@ COMMUNITY_HTML = """\
                 {% endif %}
                 {% if bt.youtube_url %}
                 <div class="collection-yt-indicator" title="Includes video"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg></div>
+                {% endif %}
+                {% if bt.copy_trading_url %}
+                <div class="collection-ct-indicator{{ ' has-yt' if bt.youtube_url else '' }}" title="Copy trading available"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Copy Trading</div>
                 {% endif %}
                 <a class="collection-card" href="{{ '/collection/' ~ bt.id if is_authenticated or loop.first else '#' }}">
                     <div class="coll-top-row">
@@ -6356,6 +6365,7 @@ MY_BACKTESTS_HTML = """\
                     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
                         <span class="backtest-card-tag" style="background:rgba(139,92,246,0.1);border-color:rgba(139,92,246,0.2);color:#8b5cf6">{{ coll._backtest_count }} backtest{{ 's' if coll._backtest_count != 1 }}</span>
                         {% if coll.youtube_url %}<span class="backtest-card-tag" style="background:rgba(255,0,0,0.1);border-color:rgba(255,0,0,0.2);color:#ef4444">Video</span>{% endif %}
+                        {% if coll.copy_trading_url %}<span class="backtest-card-tag" style="background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.2);color:#10b981">Copy Trading</span>{% endif %}
                         {% if coll.visibility == 'community' %}<span class="backtest-card-badge badge-community" style="margin:0">Community</span>{% elif coll.visibility == 'featured' %}<span class="backtest-card-badge badge-featured" style="margin:0">Featured</span>{% else %}<span class="backtest-card-badge badge-private" style="margin:0">Private</span>{% endif %}
                     </div>
                     <div class="backtest-card-footer">
@@ -6365,7 +6375,7 @@ MY_BACKTESTS_HTML = """\
                 </a>
                 <div class="card-actions">
                     <a class="action-btn" href="/collection/{{ coll.id }}">View</a>
-                    <button class="action-btn" onclick="event.stopPropagation();openEditCollectionModal('{{ coll.id }}', '{{ coll.title|e }}', '{{ (coll.description or '')|e }}', '{{ (coll.youtube_url or '')|e }}')">Edit</button>
+                    <button class="action-btn" onclick="event.stopPropagation();openEditCollectionModal('{{ coll.id }}', '{{ coll.title|e }}', '{{ (coll.description or '')|e }}', '{{ (coll.youtube_url or '')|e }}', '{{ (coll.copy_trading_url or '')|e }}')">Edit</button>
                     <button class="action-btn danger" onclick="event.stopPropagation();deleteCollection('{{ coll.id }}')">Delete</button>
                 </div>
             </div>
@@ -6539,15 +6549,17 @@ function closeCollectionModal() {
     document.getElementById('coll-title').value = '';
     document.getElementById('coll-desc').value = '';
     document.getElementById('coll-youtube').value = '';
+    document.getElementById('coll-copytrading').value = '';
 }
 function saveCollection() {
     var title = document.getElementById('coll-title').value.trim();
     if (!title) { _swal.fire({icon:'warning', title:'Title required'}); return; }
     var desc = document.getElementById('coll-desc').value.trim();
     var yt = document.getElementById('coll-youtube').value.trim();
+    var ct = document.getElementById('coll-copytrading').value.trim();
     fetch('/api/collection/create', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({title: title, description: desc, youtube_url: yt})
+        body: JSON.stringify({title: title, description: desc, youtube_url: yt, copy_trading_url: ct})
     }).then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.error) throw new Error(data.error);
@@ -6565,11 +6577,12 @@ function deleteCollection(collId) {
         .then(function() { location.reload(); });
     });
 }
-function openEditCollectionModal(id, title, desc, yt) {
+function openEditCollectionModal(id, title, desc, yt, ct) {
     document.getElementById('edit-coll-id').value = id;
     document.getElementById('edit-coll-title').value = title || '';
     document.getElementById('edit-coll-desc').value = desc || '';
     document.getElementById('edit-coll-youtube').value = yt || '';
+    document.getElementById('edit-coll-copytrading').value = ct || '';
     document.getElementById('edit-coll-modal-overlay').classList.add('open');
     document.getElementById('edit-coll-title').focus();
 }
@@ -6581,9 +6594,10 @@ function saveEditCollection() {
     var title = document.getElementById('edit-coll-title').value.trim();
     var desc = document.getElementById('edit-coll-desc').value.trim();
     var yt = document.getElementById('edit-coll-youtube').value.trim();
+    var ct = document.getElementById('edit-coll-copytrading').value.trim();
     fetch('/api/collection/' + id + '/update', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({title: title, description: desc, youtube_url: yt})
+        body: JSON.stringify({title: title, description: desc, youtube_url: yt, copy_trading_url: ct})
     }).then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.error) throw new Error(data.error);
@@ -6621,6 +6635,8 @@ function saveEditCollection() {
         <textarea id="coll-desc" placeholder="Describe what this collection is about..."></textarea>
         <label for="coll-youtube">Video URL (optional)</label>
         <input type="text" id="coll-youtube" placeholder="YouTube or Vimeo URL">
+        <label for="coll-copytrading">Copy Trading URL (optional)</label>
+        <input type="text" id="coll-copytrading" placeholder="https://the-bitcoin-strategy.com/automatic-copy-trading">
         <div class="publish-modal-actions">
             <button class="action-btn" onclick="closeCollectionModal()">Cancel</button>
             <button class="action-btn" onclick="saveCollection()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent">Create Collection</button>
@@ -6640,6 +6656,8 @@ function saveEditCollection() {
         <textarea id="edit-coll-desc"></textarea>
         <label for="edit-coll-youtube">Video URL</label>
         <input type="text" id="edit-coll-youtube" placeholder="YouTube or Vimeo URL">
+        <label for="edit-coll-copytrading">Copy Trading URL</label>
+        <input type="text" id="edit-coll-copytrading" placeholder="https://the-bitcoin-strategy.com/automatic-copy-trading">
         <div class="publish-modal-actions">
             <button class="action-btn" onclick="closeEditCollectionModal()">Cancel</button>
             <button class="action-btn" onclick="saveEditCollection()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent">Save Changes</button>
@@ -8407,9 +8425,10 @@ def api_create_collection():
         return jsonify(error='Title is required'), 400
     description = (data.get('description') or '').strip() or None
     youtube_url = (data.get('youtube_url') or '').strip() or None
+    copy_trading_url = (data.get('copy_trading_url') or '').strip() or None
     user_id = session.get('user_id')
     email = session.get('email', '')
-    coll = db.save_collection(user_id, email, title, description, youtube_url)
+    coll = db.save_collection(user_id, email, title, description, youtube_url, copy_trading_url)
     return jsonify(ok=True, id=coll['id'], short_code=coll['short_code'])
 
 
@@ -8422,7 +8441,8 @@ def api_update_collection(collection_id):
     title = data.get('title')
     description = data.get('description')
     youtube_url = data.get('youtube_url')
-    updated = db.update_collection(collection_id, user_id, title=title, description=description, youtube_url=youtube_url)
+    copy_trading_url = data.get('copy_trading_url')
+    updated = db.update_collection(collection_id, user_id, title=title, description=description, youtube_url=youtube_url, copy_trading_url=copy_trading_url)
     if not updated:
         return jsonify(error='Not found or not authorized'), 404
     return jsonify(ok=True)
@@ -8560,6 +8580,9 @@ COLLECTION_DETAIL_HTML = """\
         .action-btn.danger:hover { background: rgba(239,68,68,0.1); }
         .yt-embed { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px; margin-bottom: 24px; border: 1px solid var(--border); }
         .yt-embed iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+        .copy-trading-link { display: flex; align-items: center; gap: 10px; padding: 14px 20px; background: linear-gradient(135deg, rgba(16,185,129,0.1), rgba(16,185,129,0.05)); border: 1px solid rgba(16,185,129,0.3); border-radius: 12px; margin-bottom: 24px; color: #10b981; font-weight: 600; font-size: 0.95em; text-decoration: none; transition: all 0.2s ease; }
+        .copy-trading-link:hover { background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(16,185,129,0.08)); border-color: rgba(16,185,129,0.5); transform: translateY(-1px); }
+        .copy-trading-link svg:last-child { margin-left: auto; opacity: 0.6; }
         .coll-desc { font-size: 0.95em; color: var(--text-muted); line-height: 1.6; margin-bottom: 24px; white-space: pre-wrap; }
         .section-divider { display: flex; align-items: center; gap: 12px; margin: 24px 0 16px; }
         .section-divider span { font-size: 0.85em; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
@@ -8726,6 +8749,14 @@ COLLECTION_DETAIL_HTML = """\
     <div class="yt-embed">
         <iframe src="{{ youtube_embed_url }}" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
     </div>
+    {% endif %}
+
+    {% if collection.copy_trading_url %}
+    <a href="{{ collection.copy_trading_url }}" target="_blank" rel="noopener" class="copy-trading-link">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        Automatic Copy Trading — Trade this strategy automatically
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+    </a>
     {% endif %}
 
     {% if collection.description %}
@@ -8901,9 +8932,10 @@ function saveEditColl() {
     var title = document.getElementById('edit-coll-title').value.trim();
     var desc = document.getElementById('edit-coll-desc').value.trim();
     var yt = document.getElementById('edit-coll-youtube').value.trim();
+    var ct = document.getElementById('edit-coll-copytrading').value.trim();
     fetch('/api/collection/' + collId + '/update', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({title: title, description: desc, youtube_url: yt})
+        body: JSON.stringify({title: title, description: desc, youtube_url: yt, copy_trading_url: ct})
     }).then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.error) throw new Error(data.error);
@@ -8978,6 +9010,8 @@ document.addEventListener('click', function(e) {
         <textarea id="edit-coll-desc">{{ collection.description or '' }}</textarea>
         <label for="edit-coll-youtube">Video URL</label>
         <input type="text" id="edit-coll-youtube" value="{{ collection.youtube_url or '' }}" placeholder="YouTube or Vimeo URL">
+        <label for="edit-coll-copytrading">Copy Trading URL</label>
+        <input type="text" id="edit-coll-copytrading" value="{{ collection.copy_trading_url or '' }}" placeholder="https://the-bitcoin-strategy.com/automatic-copy-trading">
         <div class="publish-modal-actions">
             <button class="action-btn" onclick="closeEditModal()">Cancel</button>
             <button class="action-btn" onclick="saveEditColl()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-color:transparent">Save Changes</button>
