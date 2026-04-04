@@ -85,17 +85,10 @@ def _user_initial(display_name, email):
 
 def _send_email_async(to_email, subject, html_body):
     """Send email in a background thread so it doesn't block the request."""
+    from helpers import send_email as _helpers_send_email
     def _send():
         try:
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = subject
-            msg['From'] = SMTP_FROM
-            msg['To'] = to_email
-            msg.attach(MIMEText(html_body, 'html'))
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASS)
-                server.send_message(msg)
+            _helpers_send_email(to_email, subject, html_body)
         except Exception as e:
             print(f"[EMAIL ERROR] Failed to send to {to_email}: {e}")
     threading.Thread(target=_send, daemon=True).start()
@@ -5739,13 +5732,14 @@ DETAIL_HTML = """\
             <button class="action-btn danger" onclick="deleteThisBacktest()">Delete</button>
             {% endif %}
             {% if is_admin %}
-            {% if backtest.visibility != 'featured' %}
-            <button class="action-btn primary" onclick="featureBacktest('{{ backtest.id }}')">Feature</button>
-            {% endif %}
             <button class="action-btn {{ 'primary' if backtest.telegram_enabled else '' }}" onclick="toggleTelegram('{{ backtest.id }}', {{ 'true' if backtest.telegram_enabled else 'false' }})">Telegram {{ 'ON' if backtest.telegram_enabled else 'OFF' }}</button>
             {% endif %}
+            {% if is_authenticated %}
+            <button class="action-btn {{ 'primary' if has_email_alert else '' }}" onclick="toggleEmailAlert('{{ backtest.id }}', {{ 'true' if has_email_alert else 'false' }})" title="Get email alerts when this strategy generates a BUY or SELL signal">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Alert {{ 'ON' if has_email_alert else 'OFF' }}
+            </button>
+            {% endif %}
         </div>
-        {% endif %}
     </div>
 
     {% if not is_authenticated %}
@@ -6135,6 +6129,37 @@ function toggleTelegram(btId, currentlyEnabled) {
 }
 
 
+function toggleEmailAlert(btId, currentlyEnabled) {
+    if (currentlyEnabled) {
+        _swal.fire({
+            title: 'Disable email alerts?',
+            text: 'You will no longer receive email notifications when this strategy generates a signal.',
+            icon: 'warning', showCancelButton: true, confirmButtonText: 'Disable'
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+            fetch('/api/backtest/' + btId + '/email-alert', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: false})
+            }).then(function(r) { return r.json(); }).then(function() { location.reload(); });
+        });
+    } else {
+        _swal.fire({
+            title: 'Enable email alerts?',
+            html: 'You will receive an email whenever this strategy generates a <b>BUY</b> or <b>SELL</b> signal.<br><br><span style="font-size:13px;color:var(--text-muted)">Alerts are checked daily after price data is updated.</span>',
+            icon: 'info', showCancelButton: true, confirmButtonText: 'Enable'
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+            fetch('/api/backtest/' + btId + '/email-alert', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: true})
+            }).then(function(r) { return r.json(); }).then(function(data) {
+                if (data.ok) { location.reload(); }
+                else { _swal.fire({icon:'error', title:'Error', text: data.error || 'Failed to enable alert'}); }
+            });
+        });
+    }
+}
+
 function copyLink(el) {
     navigator.clipboard.writeText(location.origin + '/s/{{ backtest.short_code }}');
     if (el) { el.classList.add('copied'); setTimeout(function(){ el.classList.remove('copied'); }, 1200); }
@@ -6390,6 +6415,7 @@ MY_BACKTESTS_HTML = """\
             <div class="backtest-card">
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
                     {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
+                    {% if bt.id in alerted_ids %}<span class="backtest-card-badge" style="background:rgba(52,211,153,0.15);color:var(--green);right:auto;left:10px" title="Email alert active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>{% endif %}
                     <div class="backtest-card-head">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                         <div class="backtest-card-head-text">
@@ -6446,6 +6472,7 @@ MY_BACKTESTS_HTML = """\
             <div class="backtest-card">
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
                     <span class="backtest-card-badge badge-private">Private</span>
+                    {% if bt.id in alerted_ids %}<span class="backtest-card-badge" style="background:rgba(52,211,153,0.15);color:var(--green);right:auto;left:10px" title="Email alert active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>{% endif %}
                     <div class="backtest-card-head">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                         <div class="backtest-card-head-text">
@@ -7423,6 +7450,52 @@ def api_toggle_telegram(bt_id):
     return jsonify({'ok': True, 'telegram_enabled': enabled})
 
 
+@app.route('/api/backtest/<bt_id>/email-alert', methods=['POST'])
+def api_toggle_email_alert(bt_id):
+    """Toggle email signal alert for the current user on a backtest."""
+    user_id, email = _require_auth_api()
+    data = request.get_json(force=True)
+    enabled = bool(data.get('enabled', False))
+    # Verify backtest exists and is accessible
+    bt_entry = db.get_backtest(bt_id)
+    if not bt_entry:
+        abort(404)
+    is_own = str(bt_entry['user_id']) == str(user_id)
+    is_public = bt_entry['visibility'] in ('community', 'featured')
+    if not is_own and not is_public:
+        abort(403)
+    if enabled:
+        try:
+            db.create_email_alert(user_id, bt_id)
+        except ValueError as e:
+            return jsonify({'ok': False, 'error': str(e)}), 400
+        return jsonify({'ok': True, 'enabled': True})
+    else:
+        db.delete_email_alert(user_id, bt_id)
+        return jsonify({'ok': True, 'enabled': False})
+
+
+@app.route('/api/my-email-alerts')
+def api_my_email_alerts():
+    """List all active email alerts for the current user."""
+    user_id, email = _require_auth_api()
+    alerts = db.list_user_email_alerts(user_id)
+    count = len(alerts)
+    limit = db.MAX_EMAIL_ALERTS_PER_USER
+    return jsonify({'ok': True, 'alerts': alerts, 'count': count, 'limit': limit})
+
+
+@app.route('/unsubscribe/<token>')
+def unsubscribe_email_alert(token):
+    """One-click unsubscribe from an email alert (no login required)."""
+    alert = db.get_email_alert_by_token(token)
+    if not alert or not alert.get('is_active'):
+        return render_template_string(UNSUBSCRIBE_HTML, success=False)
+    db.deactivate_email_alert_by_token(token)
+    return render_template_string(UNSUBSCRIBE_HTML, success=True,
+        backtest_title=alert.get('backtest_title', 'this backtest'))
+
+
 @app.route('/api/reorder-mixed', methods=['POST'])
 def api_reorder_mixed():
     """Admin: reorder mixed backtests and collections."""
@@ -8192,6 +8265,9 @@ def my_backtests():
     saved = [b for b in all_bt if b['visibility'] == 'private']
     _enrich_backtest_cards(published)
     _enrich_backtest_cards(saved)
+    # Email alert indicators
+    all_bt_ids = [b['id'] for b in all_bt]
+    alerted_ids = db.get_user_alerted_backtest_ids(user_id, all_bt_ids)
     # Collections
     user_collections = db.list_user_collections(user_id)
     _enrich_collection_cards(user_collections)
@@ -8201,7 +8277,7 @@ def my_backtests():
     return render_template_string(MY_BACKTESTS_HTML,
         nav_active='my-backtests',
         published=published, saved=saved, collections=user_collections,
-        time_ago=_time_ago,
+        time_ago=_time_ago, alerted_ids=alerted_ids,
         display_name=display_name, email_prefix=email_prefix)
 
 
@@ -8319,6 +8395,10 @@ def backtest_detail(bt_id):
 
     bt_entry = dict(bt_entry)
     bt_entry['cached_html'] = cached
+    # Check if current user has an email alert on this backtest
+    has_email_alert = False
+    if is_auth:
+        has_email_alert = bool(db.get_email_alert(session.get('user_id', ''), bt_id))
     nav = bt_entry.get('visibility', '')
     if nav not in ('featured', 'community'):
         nav = ''
@@ -8326,7 +8406,7 @@ def backtest_detail(bt_id):
         nav_active=nav,
         backtest=bt_entry, comments=comments, bt_params=bt_params,
         is_authenticated=is_auth, is_admin=_is_admin(),
-        has_liked=liked, time_ago=_time_ago,
+        has_liked=liked, has_email_alert=has_email_alert, time_ago=_time_ago,
         display_name=author_display_name,
         author_avatar=author_avatar, author_initial=author_initial,
         author_avatar_color=author_avatar_color)
@@ -9024,6 +9104,40 @@ document.addEventListener('click', function(e) {
 """
 
 
+UNSUBSCRIBE_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unsubscribe — Bitcoin Strategy Analytics</title>
+<style>
+body { margin:0; padding:0; background:#0d1117; color:#e6edf3; font-family:'DM Sans',-apple-system,sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; }
+.card { background:#161b22; border:1px solid #30363d; border-radius:16px; padding:48px; max-width:480px; text-align:center; }
+.card h1 { font-size:24px; margin:0 0 16px; }
+.card p { color:#8b949e; line-height:1.6; margin:0 0 24px; }
+.card a { color:#58a6ff; text-decoration:none; }
+.card a:hover { text-decoration:underline; }
+.icon { font-size:48px; margin-bottom:16px; }
+</style>
+</head>
+<body>
+<div class="card">
+{% if success %}
+<div class="icon">&#x2705;</div>
+<h1>Unsubscribed</h1>
+<p>You will no longer receive email alerts for <b>{{ backtest_title }}</b>.</p>
+<p>You can re-enable alerts from the backtest page, or manage all alerts in your <a href="https://analytics.the-bitcoin-strategy.com/account">account settings</a>.</p>
+{% else %}
+<div class="icon">&#x26A0;&#xFE0F;</div>
+<h1>Alert Not Found</h1>
+<p>This alert has already been unsubscribed or does not exist.</p>
+{% endif %}
+<p><a href="https://analytics.the-bitcoin-strategy.com/">Back to Bitcoin Strategy Analytics</a></p>
+</div>
+</body>
+</html>"""
+
+
 ACCOUNT_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9197,10 +9311,64 @@ ACCOUNT_HTML = """<!DOCTYPE html>
                 </label>
             </div>
         </div>
+
+        <div class="setting-group">
+            <div class="setting-label">Signal Email Alerts <span id="alert-count" style="color:var(--text-muted);font-weight:400;font-size:14px"></span></div>
+            <div id="email-alerts-list" style="color:var(--text-muted);font-size:14px">Loading...</div>
+        </div>
     </div>
 </div>
 <script src="/static/js/nav.js"></script>
 <script>
+// Load email alerts
+(function() {
+    fetch('/api/my-email-alerts')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (!data.ok) return;
+        var container = document.getElementById('email-alerts-list');
+        var counter = document.getElementById('alert-count');
+        counter.textContent = '(' + data.count + ' / ' + data.limit + ')';
+        if (!data.alerts.length) {
+            container.innerHTML = '<p style="color:var(--text-muted);margin:8px 0">No active signal alerts. You can enable alerts from any backtest detail page.</p>';
+            return;
+        }
+        var html = '';
+        data.alerts.forEach(function(a) {
+            var params = {};
+            try { params = JSON.parse(a.params || '{}'); } catch(e) {}
+            var asset = (params.asset || 'Unknown').replace(/^./, function(c) { return c.toUpperCase(); });
+            var label = a.title || asset;
+            html += '<div class="toggle-row" style="padding:10px 0;border-bottom:1px solid var(--border)">' +
+                '<div class="toggle-info">' +
+                '<div class="toggle-title"><a href="/backtest/' + a.backtest_id + '" style="color:var(--text);text-decoration:none">' + label + '</a></div>' +
+                '<div class="toggle-desc">' + asset + '</div>' +
+                '</div>' +
+                '<button class="action-btn danger" style="font-size:12px;padding:4px 12px" onclick="removeEmailAlert(\'' + a.backtest_id + '\', this)">Remove</button>' +
+                '</div>';
+        });
+        container.innerHTML = html;
+    })
+    .catch(function() {
+        document.getElementById('email-alerts-list').innerHTML = '<p style="color:var(--text-muted)">Failed to load alerts.</p>';
+    });
+})();
+function removeEmailAlert(btId, btn) {
+    btn.disabled = true;
+    btn.textContent = '...';
+    fetch('/api/backtest/' + btId + '/email-alert', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled: false})
+    }).then(function(r) { return r.json(); }).then(function() {
+        btn.closest('.toggle-row').remove();
+        // Update count
+        var remaining = document.querySelectorAll('#email-alerts-list .toggle-row').length;
+        document.getElementById('alert-count').textContent = '(' + remaining + ' / 20)';
+        if (remaining === 0) {
+            document.getElementById('email-alerts-list').innerHTML = '<p style="color:var(--text-muted);margin:8px 0">No active signal alerts. You can enable alerts from any backtest detail page.</p>';
+        }
+    }).catch(function() { btn.disabled = false; btn.textContent = 'Remove'; });
+}
 // Account settings functions
 function uploadAvatar(file) {
     if (!file) return;

@@ -268,18 +268,153 @@ def _generate_signal_chart(df, ind1_series, ind2_series, ind1_label, ind2_label,
         return None
 
 
+def _compute_signal(params, bt_id, bt_module, price_db_module):
+    """Compute signal for a backtest. Returns dict with signal info or None if no signal.
+    Shared by both Telegram and email alert processing."""
+    import json as _json
+
+    asset = params.get('asset', 'bitcoin')
+    vs_asset = params.get('vs_asset', '')
+
+    df = price_db_module.get_asset_df(asset)
+    if df.empty or len(df) < 2:
+        return None
+
+    if vs_asset:
+        df_vs = price_db_module.get_asset_df(vs_asset)
+        if not df_vs.empty:
+            try:
+                df = compute_ratio_prices(df, df_vs)
+            except ValueError:
+                return None
+
+    ind1_name = params.get('ind1_name', 'price')
+    ind2_name = params.get('ind2_name', 'sma')
+    ind1_period = int(params.get('period1', 0) or 0) or None
+    ind2_period = int(params.get('period2', 0) or 0) or None
+    exposure = params.get('exposure', 'long-cash')
+    reverse = params.get('reverse', '') in ('true', 'True', '1', True)
+    start_date = params.get('start_date', None)
+
+    result = bt_module.run_strategy(
+        df, ind1_name, ind1_period, ind2_name, ind2_period,
+        initial_cash=10000, exposure=exposure, reverse=reverse,
+        start_date=start_date
+    )
+
+    # Detect crossover (no shift — detect on the day it happens)
+    ind1_s = result['ind1_series']
+    ind2_s = result['ind2_series']
+    above = ind1_s > ind2_s
+    if reverse:
+        above = ~above
+    position = bt_module._apply_exposure(above, exposure).fillna(0)
+    position[ind1_s.isna() | ind2_s.isna()] = 0
+
+    if len(position) < 2:
+        return None
+
+    pos_today = position.iloc[-1]
+    pos_yesterday = position.iloc[-2]
+
+    if pos_today == pos_yesterday:
+        return None
+
+    signal = "BUY" if pos_today > pos_yesterday else "SELL"
+
+    # Chart markers
+    above_chart = ind1_s > ind2_s
+    if reverse:
+        above_chart = ~above_chart
+    pos_chart = bt_module._apply_exposure(above_chart, exposure).fillna(0)
+    pos_chart[ind1_s.isna() | ind2_s.isna()] = 0
+    diff_chart = pos_chart.diff()
+    chart_buys = diff_chart[diff_chart > 0].index
+    chart_sells = diff_chart[diff_chart < 0].index
+
+    asset_display = asset.replace('-', ' ').title()
+    chart_png = _generate_signal_chart(
+        df, ind1_s, ind2_s, result['ind1_label'], result['ind2_label'],
+        chart_buys, chart_sells, asset_display, signal
+    )
+
+    return {
+        'signal': signal,
+        'asset': asset,
+        'asset_display': asset_display,
+        'result': result,
+        'params': params,
+        'chart_png': chart_png,
+        'bt_id': bt_id,
+    }
+
+
+def _build_signal_email_html(signal, asset_display, ind1_label, ind2_label,
+                              backtest_id, backtest_title, unsubscribe_token):
+    """Build the HTML body for a signal alert email."""
+    SITE_URL = 'https://analytics.the-bitcoin-strategy.com'
+    link = f"{SITE_URL}/backtest/{backtest_id}?view=livechart"
+    unsub_link = f"{SITE_URL}/unsubscribe/{unsubscribe_token}"
+    account_link = f"{SITE_URL}/account"
+
+    signal_color = '#34d399' if signal == 'BUY' else '#f87171'
+    signal_bg = 'rgba(52,211,153,0.15)' if signal == 'BUY' else 'rgba(248,113,113,0.15)'
+    signal_icon = '&#x25B2;' if signal == 'BUY' else '&#x25BC;'
+    title = backtest_title or f"{asset_display} Strategy"
+    from datetime import datetime
+    date_str = datetime.utcnow().strftime('%B %d, %Y')
+
+    return f"""\
+<div style="max-width:600px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;background:#0d1117;color:#e6edf3;border-radius:12px;overflow:hidden;border:1px solid #30363d">
+    <div style="background:#161b22;padding:24px 32px;border-bottom:1px solid #30363d;text-align:center">
+        <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;display:inline-block">
+            <span style="background:linear-gradient(135deg,#6495ED,#4a7dd6);color:#fff;padding:4px 10px;display:inline-block">Bitcoin</span><span style="background:#1c2030;color:#e8eaf0;padding:4px 10px;display:inline-block;border:1px solid #30363d;border-left:none">Strategy Analytics</span>
+        </div>
+    </div>
+
+    <div style="padding:32px">
+        <div style="text-align:center;margin-bottom:24px">
+            <div style="display:inline-block;background:{signal_bg};color:{signal_color};font-size:28px;font-weight:700;padding:12px 32px;border-radius:12px;letter-spacing:0.05em">
+                {signal_icon} {signal}
+            </div>
+        </div>
+
+        <h2 style="font-size:18px;margin:0 0 8px;text-align:center">{title}</h2>
+        <p style="color:#8b949e;text-align:center;margin:0 0 24px;font-size:14px">{date_str}</p>
+
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:24px">
+            <table style="width:100%;border-collapse:collapse;font-size:14px">
+                <tr><td style="color:#8b949e;padding:6px 0">Asset</td><td style="text-align:right;font-weight:600">{asset_display}</td></tr>
+                <tr><td style="color:#8b949e;padding:6px 0">Signal</td><td style="text-align:right;font-weight:600;color:{signal_color}">{signal}</td></tr>
+                <tr><td style="color:#8b949e;padding:6px 0">Indicator 1</td><td style="text-align:right;font-weight:600">{ind1_label}</td></tr>
+                <tr><td style="color:#8b949e;padding:6px 0">Indicator 2</td><td style="text-align:right;font-weight:600">{ind2_label}</td></tr>
+            </table>
+        </div>
+
+        <div style="margin-bottom:24px;text-align:center">
+            <img src="cid:signal_chart" alt="Signal Chart" style="max-width:100%;border-radius:8px;border:1px solid #30363d">
+        </div>
+
+        <div style="text-align:center;margin-bottom:24px">
+            <a href="{link}" style="display:inline-block;background:#6495ED;color:#fff;text-decoration:none;padding:12px 32px;border-radius:8px;font-weight:600;font-size:15px">View Live Chart</a>
+        </div>
+    </div>
+
+    <div style="background:#161b22;padding:16px 32px;border-top:1px solid #30363d;text-align:center;font-size:12px;color:#8b949e">
+        <p style="margin:0 0 8px">You're receiving this because you enabled email alerts for this strategy.</p>
+        <p style="margin:0"><a href="{unsub_link}" style="color:#58a6ff;text-decoration:none">Unsubscribe from this alert</a> &middot; <a href="{account_link}" style="color:#58a6ff;text-decoration:none">Manage all alerts</a></p>
+    </div>
+</div>"""
+
+
 def check_and_send_signals():
-    """Check all telegram-enabled backtests for position changes and send signals."""
+    """Check all telegram-enabled backtests and email alerts for position changes and send signals."""
     import json as _json
     import urllib.request
 
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
     TELEGRAM_SIGNAL_CHAT_ID = os.environ.get('TELEGRAM_SIGNAL_CHAT_ID', '')
     SITE_URL = 'https://analytics.the-bitcoin-strategy.com'
-
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_SIGNAL_CHAT_ID:
-        log.info("TELEGRAM_BOT_TOKEN or TELEGRAM_SIGNAL_CHAT_ID not set, skipping signal check")
-        return
 
     # Import backtest engine and database
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -288,167 +423,168 @@ def check_and_send_signals():
     import database as db
 
     db.init_db()
-    rows = db.list_telegram_enabled_backtests()
 
-    if not rows:
-        log.info("No telegram-enabled backtests found")
-        return
+    # --- Telegram signal alerts ---
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_SIGNAL_CHAT_ID:
+        log.info("TELEGRAM_BOT_TOKEN or TELEGRAM_SIGNAL_CHAT_ID not set, skipping Telegram signal check")
+    else:
+        rows = db.list_telegram_enabled_backtests()
+        if not rows:
+            log.info("No telegram-enabled backtests found")
+        else:
+            log.info("Checking %d telegram-enabled backtests for signals...", len(rows))
 
-    log.info("Checking %d telegram-enabled backtests for signals...", len(rows))
-
-    for row in rows:
-        try:
-            params = _json.loads(row.get('params', '{}') or '{}')
-            asset = params.get('asset', 'bitcoin')
-            vs_asset = params.get('vs_asset', '')
-
-            # Load price data from PostgreSQL
-            df = price_db.get_asset_df(asset)
-            if df.empty or len(df) < 2:
-                log.warning("Insufficient data for %s, skipping", asset)
-                continue
-
-            # Handle vs_asset (ratio mode)
-            if vs_asset:
-                df_vs = price_db.get_asset_df(vs_asset)
-                if not df_vs.empty:
-                    try:
-                        df = compute_ratio_prices(df, df_vs)
-                    except ValueError:
-                        log.warning("No overlapping dates for %s / %s", asset, vs_asset)
+            for row in rows:
+                try:
+                    params = _json.loads(row.get('params', '{}') or '{}')
+                    sig_info = _compute_signal(params, row['id'], bt, price_db)
+                    if not sig_info:
                         continue
 
-            # Extract strategy params
-            ind1_name = params.get('ind1_name', 'price')
-            ind2_name = params.get('ind2_name', 'sma')
-            ind1_period = int(params.get('period1', 0) or 0) or None
-            ind2_period = int(params.get('period2', 0) or 0) or None
-            exposure = params.get('exposure', 'long-cash')
-            reverse = params.get('reverse', '') in ('true', 'True', '1', True)
-            start_date = params.get('start_date', None)
+                    signal = sig_info['signal']
+                    asset = sig_info['asset']
+                    asset_display = sig_info['asset_display']
+                    result = sig_info['result']
+                    chart_png = sig_info['chart_png']
 
-            # Run strategy
-            result = bt.run_strategy(
-                df, ind1_name, ind1_period, ind2_name, ind2_period,
-                initial_cash=10000, exposure=exposure, reverse=reverse,
-                start_date=start_date
-            )
+                    # Build link to live chart
+                    link = f"{SITE_URL}/backtest/{row['id']}?view=livechart"
 
-            # Recompute position to compare last two days
-            # NOTE: Don't apply .shift(1) here — the shift is for backtesting
-            # (trade the day after signal) but for notifications we want to
-            # detect the crossover on the day it happens.
-            ind1_s = result['ind1_series']
-            ind2_s = result['ind2_series']
-            above = ind1_s > ind2_s
-            if reverse:
-                above = ~above
-            position = bt._apply_exposure(above, exposure).fillna(0)
-            nan_mask = ind1_s.isna() | ind2_s.isna()
-            position[nan_mask] = 0
+                    # Format message from template
+                    default_template = (
+                        '\u26a0\ufe0f This is a <b>{signal}</b> Signal for {asset}.\n'
+                        '\n'
+                        'We are changing our position for {asset} since the moving averages have crossed: {ind1} / {ind2}\n'
+                        '\n'
+                        '{if_buy}For long signals, we use {long_lev}x leverage in {asset}.{/if_buy}'
+                        '{if_sell}For short signals, we use {short_lev}x leverage in {asset}.{/if_sell}\n'
+                        '\n'
+                        '<a href="{link}">View Live Chart</a>'
+                    )
+                    template = row.get('telegram_message_template') or default_template
+                    long_lev = params.get('long_leverage', '1')
+                    short_lev = params.get('short_leverage', '1')
 
-            if len(position) < 2:
-                continue
+                    # Process conditionals
+                    import re as _re
+                    if signal == 'BUY':
+                        template = _re.sub(r'\{if_buy\}(.*?)\{/if_buy\}', r'\1', template, flags=_re.DOTALL)
+                        template = _re.sub(r'\{if_sell\}.*?\{/if_sell\}', '', template, flags=_re.DOTALL)
+                    else:
+                        template = _re.sub(r'\{if_sell\}(.*?)\{/if_sell\}', r'\1', template, flags=_re.DOTALL)
+                        template = _re.sub(r'\{if_buy\}.*?\{/if_buy\}', '', template, flags=_re.DOTALL)
 
-            pos_today = position.iloc[-1]
-            pos_yesterday = position.iloc[-2]
+                    message = template.format(
+                        asset=asset_display,
+                        signal=signal,
+                        ind1=result['ind1_label'],
+                        ind2=result['ind2_label'],
+                        long_lev=long_lev,
+                        short_lev=short_lev,
+                        link=link
+                    )
 
-            if pos_today == pos_yesterday:
-                continue  # No signal change
+                    # Truncate caption to Telegram's 1024 char limit
+                    caption = message[:1024] if len(message) > 1024 else message
 
-            signal = "BUY" if pos_today > pos_yesterday else "SELL"
+                    # Send via Telegram — photo with caption, fallback to text
+                    sent = False
+                    if chart_png:
+                        try:
+                            import requests as _requests
+                            url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto'
+                            resp = _requests.post(url, data={
+                                'chat_id': TELEGRAM_SIGNAL_CHAT_ID,
+                                'caption': caption,
+                                'parse_mode': 'HTML',
+                            }, files={
+                                'photo': ('signal_chart.png', chart_png, 'image/png')
+                            }, timeout=30)
+                            resp.raise_for_status()
+                            sent = True
+                            log.info("Sent %s signal with chart for backtest %s (%s)", signal, row['id'], asset)
+                        except Exception:
+                            log.exception("sendPhoto failed for %s, falling back to text", asset)
 
-            # Build link to live chart
-            link = f"{SITE_URL}/backtest/{row['id']}?view=livechart"
+                    if not sent:
+                        # Fallback: plain text message
+                        url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
+                        payload = _json.dumps({
+                            'chat_id': TELEGRAM_SIGNAL_CHAT_ID,
+                            'text': message,
+                            'parse_mode': 'HTML',
+                            'disable_web_page_preview': False
+                        }).encode('utf-8')
+                        req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+                        urllib.request.urlopen(req, timeout=15)
+                        log.info("Sent %s signal (text-only) for backtest %s (%s)", signal, row['id'], asset)
 
-            # Format message from template
-            default_template = (
-                '\u26a0\ufe0f This is a <b>{signal}</b> Signal for {asset}.\n'
-                '\n'
-                'We are changing our position for {asset} since the moving averages have crossed: {ind1} / {ind2}\n'
-                '\n'
-                '{if_buy}For long signals, we use {long_lev}x leverage in {asset}.{/if_buy}'
-                '{if_sell}For short signals, we use {short_lev}x leverage in {asset}.{/if_sell}\n'
-                '\n'
-                '<a href="{link}">View Live Chart</a>'
-            )
-            template = row.get('telegram_message_template') or default_template
-            long_lev = params.get('long_leverage', '1')
-            short_lev = params.get('short_leverage', '1')
-
-            # Process conditionals
-            import re as _re
-            if signal == 'BUY':
-                template = _re.sub(r'\{if_buy\}(.*?)\{/if_buy\}', r'\1', template, flags=_re.DOTALL)
-                template = _re.sub(r'\{if_sell\}.*?\{/if_sell\}', '', template, flags=_re.DOTALL)
-            else:
-                template = _re.sub(r'\{if_sell\}(.*?)\{/if_sell\}', r'\1', template, flags=_re.DOTALL)
-                template = _re.sub(r'\{if_buy\}.*?\{/if_buy\}', '', template, flags=_re.DOTALL)
-
-            message = template.format(
-                asset=asset.replace('-', ' ').title(),
-                signal=signal,
-                ind1=result['ind1_label'],
-                ind2=result['ind2_label'],
-                long_lev=long_lev,
-                short_lev=short_lev,
-                link=link
-            )
-
-            # Generate signal chart (3-month view)
-            # Compute unshifted signals for chart markers
-            above_chart = ind1_s > ind2_s
-            if reverse:
-                above_chart = ~above_chart
-            pos_chart = bt._apply_exposure(above_chart, exposure).fillna(0)
-            pos_chart[ind1_s.isna() | ind2_s.isna()] = 0
-            diff_chart = pos_chart.diff()
-            chart_buys = diff_chart[diff_chart > 0].index
-            chart_sells = diff_chart[diff_chart < 0].index
-
-            asset_display = asset.replace('-', ' ').title()
-            chart_png = _generate_signal_chart(
-                df, ind1_s, ind2_s, result['ind1_label'], result['ind2_label'],
-                chart_buys, chart_sells, asset_display, signal
-            )
-
-            # Truncate caption to Telegram's 1024 char limit
-            caption = message[:1024] if len(message) > 1024 else message
-
-            # Send via Telegram — photo with caption, fallback to text
-            sent = False
-            if chart_png:
-                try:
-                    import requests as _requests
-                    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto'
-                    resp = _requests.post(url, data={
-                        'chat_id': TELEGRAM_SIGNAL_CHAT_ID,
-                        'caption': caption,
-                        'parse_mode': 'HTML',
-                    }, files={
-                        'photo': ('signal_chart.png', chart_png, 'image/png')
-                    }, timeout=30)
-                    resp.raise_for_status()
-                    sent = True
-                    log.info("Sent %s signal with chart for backtest %s (%s)", signal, row['id'], asset)
                 except Exception:
-                    log.exception("sendPhoto failed for %s, falling back to text", asset)
+                    log.exception("Failed to check signals for backtest %s", row.get('id', '?'))
 
-            if not sent:
-                # Fallback: plain text message
-                url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
-                payload = _json.dumps({
-                    'chat_id': TELEGRAM_SIGNAL_CHAT_ID,
-                    'text': message,
-                    'parse_mode': 'HTML',
-                    'disable_web_page_preview': False
-                }).encode('utf-8')
-                req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
-                urllib.request.urlopen(req, timeout=15)
-                log.info("Sent %s signal (text-only) for backtest %s (%s)", signal, row['id'], asset)
+    # --- Email signal alerts ---
+    try:
+        all_alerts = db.list_active_email_alerts_grouped()
+        if not all_alerts:
+            log.info("No active email alerts found")
+        else:
+            log.info("Checking %d email alert subscriptions...", len(all_alerts))
+            from collections import defaultdict
+            alerts_by_bt = defaultdict(list)
+            for alert in all_alerts:
+                alerts_by_bt[alert['backtest_id']].append(alert)
 
-        except Exception:
-            log.exception("Failed to check signals for backtest %s", row.get('id', '?'))
+            email_batch = []
+
+            for bt_id, user_alerts in alerts_by_bt.items():
+                try:
+                    row = user_alerts[0]
+                    params = _json.loads(row.get('backtest_params', '{}') or '{}')
+                    sig_info = _compute_signal(params, bt_id, bt, price_db)
+                    if not sig_info:
+                        continue
+
+                    signal = sig_info['signal']
+                    asset_display = sig_info['asset_display']
+                    result = sig_info['result']
+                    chart_png = sig_info['chart_png']
+
+                    for alert in user_alerts:
+                        try:
+                            html_body = _build_signal_email_html(
+                                signal=signal,
+                                asset_display=asset_display,
+                                ind1_label=result['ind1_label'],
+                                ind2_label=result['ind2_label'],
+                                backtest_id=bt_id,
+                                backtest_title=alert.get('backtest_title', ''),
+                                unsubscribe_token=alert['unsubscribe_token']
+                            )
+                            attachments = []
+                            if chart_png:
+                                attachments.append({
+                                    'content': chart_png,
+                                    'content_type': 'image/png',
+                                    'filename': 'signal_chart.png',
+                                    'content_id': 'signal_chart'
+                                })
+                            email_batch.append({
+                                'to': alert['user_email'],
+                                'subject': f"{signal} Signal: {asset_display} \u2014 {result['ind1_label']} / {result['ind2_label']}",
+                                'html_body': html_body,
+                                'attachments': attachments or None,
+                            })
+                        except Exception:
+                            log.exception("Failed to build email for alert %s", alert.get('alert_id', '?'))
+                except Exception:
+                    log.exception("Failed to process email alerts for backtest %s", bt_id)
+
+            if email_batch:
+                from helpers import send_emails_batch
+                sent, failed = send_emails_batch(email_batch)
+                log.info("Email alerts: %d sent, %d failed", sent, failed)
+    except Exception:
+        log.exception("Email alert check failed")
 
 
 if __name__ == "__main__":

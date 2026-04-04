@@ -191,6 +191,22 @@ def init_db():
         conn.execute("ALTER TABLE collections ADD COLUMN copy_trading_url TEXT")
     except sqlite3.OperationalError:
         pass
+    # Email alerts table (per-user signal notifications)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS email_alerts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            backtest_id TEXT NOT NULL REFERENCES backtests(id) ON DELETE CASCADE,
+            unsubscribe_token TEXT NOT NULL UNIQUE,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, backtest_id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_email_alerts_user ON email_alerts(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_email_alerts_backtest ON email_alerts(backtest_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_email_alerts_token ON email_alerts(unsubscribe_token)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_email_alerts_active ON email_alerts(is_active, backtest_id)")
     conn.close()
 
 
@@ -1299,6 +1315,154 @@ def get_backtests_in_published_collections(visibility):
            JOIN collections c ON cb.collection_id = c.id
            WHERE c.visibility=?""",
         (visibility,)
+    ).fetchall()
+    conn.close()
+    return {r['backtest_id'] for r in rows}
+
+
+# --- Email alerts (per-user signal notifications) ---
+
+MAX_EMAIL_ALERTS_PER_USER = 20
+
+
+def create_email_alert(user_id, backtest_id):
+    """Create an email alert for a user on a backtest. Returns alert dict.
+    Raises ValueError if the user has reached the alert limit."""
+    conn = _get_conn()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM email_alerts WHERE user_id=? AND is_active=1",
+        (user_id,)
+    ).fetchone()[0]
+    if count >= MAX_EMAIL_ALERTS_PER_USER:
+        conn.close()
+        raise ValueError(f"Maximum {MAX_EMAIL_ALERTS_PER_USER} email alerts allowed")
+    alert_id = str(uuid.uuid4())
+    token = str(uuid.uuid4())
+    now = datetime.utcnow().isoformat()
+    try:
+        conn.execute(
+            """INSERT INTO email_alerts (id, user_id, backtest_id, unsubscribe_token, is_active, created_at)
+               VALUES (?, ?, ?, ?, 1, ?)""",
+            (alert_id, user_id, backtest_id, token, now)
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        # Already exists — reactivate if inactive
+        conn.execute(
+            "UPDATE email_alerts SET is_active=1, unsubscribe_token=? WHERE user_id=? AND backtest_id=?",
+            (token, user_id, backtest_id)
+        )
+        conn.commit()
+    row = conn.execute(
+        "SELECT * FROM email_alerts WHERE user_id=? AND backtest_id=?",
+        (user_id, backtest_id)
+    ).fetchone()
+    conn.close()
+    return _row_to_dict(row)
+
+
+def delete_email_alert(user_id, backtest_id):
+    """Hard-delete an email alert (authenticated UI removal)."""
+    conn = _get_conn()
+    conn.execute(
+        "DELETE FROM email_alerts WHERE user_id=? AND backtest_id=?",
+        (user_id, backtest_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_email_alert(user_id, backtest_id):
+    """Check if user has an active email alert on a backtest. Returns alert dict or None."""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT * FROM email_alerts WHERE user_id=? AND backtest_id=? AND is_active=1",
+        (user_id, backtest_id)
+    ).fetchone()
+    conn.close()
+    return _row_to_dict(row) if row else None
+
+
+def get_email_alert_by_token(token):
+    """Look up an email alert by unsubscribe token. Returns alert dict joined with backtest title, or None."""
+    conn = _get_conn()
+    row = conn.execute(
+        """SELECT ea.*, b.title as backtest_title, b.params as backtest_params
+           FROM email_alerts ea
+           JOIN backtests b ON ea.backtest_id = b.id
+           WHERE ea.unsubscribe_token=?""",
+        (token,)
+    ).fetchone()
+    conn.close()
+    return _row_to_dict(row) if row else None
+
+
+def deactivate_email_alert_by_token(token):
+    """Deactivate an email alert by unsubscribe token. Returns True if found and deactivated."""
+    conn = _get_conn()
+    cursor = conn.execute(
+        "UPDATE email_alerts SET is_active=0 WHERE unsubscribe_token=? AND is_active=1",
+        (token,)
+    )
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
+
+
+def list_user_email_alerts(user_id):
+    """List all active email alerts for a user, joined with backtest info."""
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT ea.id, ea.backtest_id, ea.created_at,
+                  b.title, b.params, b.short_code, b.visibility
+           FROM email_alerts ea
+           JOIN backtests b ON ea.backtest_id = b.id
+           WHERE ea.user_id=? AND ea.is_active=1
+           ORDER BY ea.created_at DESC""",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    return [_row_to_dict(r) for r in rows]
+
+
+def count_user_email_alerts(user_id):
+    """Count active email alerts for a user."""
+    conn = _get_conn()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM email_alerts WHERE user_id=? AND is_active=1",
+        (user_id,)
+    ).fetchone()[0]
+    conn.close()
+    return count
+
+
+def list_active_email_alerts_grouped():
+    """Return all active email alerts joined with backtest params and user email.
+    Used by the cron job to send signal emails."""
+    conn = _get_conn()
+    rows = conn.execute(
+        """SELECT ea.id as alert_id, ea.user_id, ea.backtest_id, ea.unsubscribe_token,
+                  b.params as backtest_params, b.title as backtest_title,
+                  u.email as user_email
+           FROM email_alerts ea
+           JOIN backtests b ON ea.backtest_id = b.id
+           JOIN users u ON ea.user_id = u.user_id
+           WHERE ea.is_active=1"""
+    ).fetchall()
+    conn.close()
+    return [_row_to_dict(r) for r in rows]
+
+
+def get_user_alerted_backtest_ids(user_id, backtest_ids):
+    """Get set of backtest IDs that user has active email alerts on, from a list."""
+    if not backtest_ids:
+        return set()
+    conn = _get_conn()
+    placeholders = ','.join('?' * len(backtest_ids))
+    rows = conn.execute(
+        f"SELECT backtest_id FROM email_alerts WHERE user_id=? AND is_active=1 AND backtest_id IN ({placeholders})",
+        [user_id] + list(backtest_ids)
     ).fetchall()
     conn.close()
     return {r['backtest_id'] for r in rows}

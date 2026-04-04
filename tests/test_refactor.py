@@ -188,16 +188,17 @@ class TestRatioCodePresence:
             "backtest_detail must contain ratio computation (inline or via helper)"
 
     def test_ratio_in_fetch_prices(self):
-        """fetch_prices.py check_and_send_signals must have ratio logic."""
+        """fetch_prices.py signal logic must have ratio logic (in check_and_send_signals or its helper _compute_signal)."""
         src = _read_file("fetch_prices.py")
+        # Check either check_and_send_signals or _compute_signal for the ratio pattern
         func = re.search(
-            r'def check_and_send_signals\(.*?\):(.*?)(?=\ndef \w+\(|\Z)',
+            r'def (?:check_and_send_signals|_compute_signal)\(.*?\):(.*?)(?=\ndef \w+\(|\Z)',
             src, re.DOTALL
         )
-        assert func, "check_and_send_signals not found"
+        assert func, "check_and_send_signals or _compute_signal not found"
         body = func.group(1)
         assert self._has_ratio_pattern(body) or self._has_helper_call(body), \
-            "check_and_send_signals must contain ratio computation (inline or via helper)"
+            "signal logic in fetch_prices.py must contain ratio computation (inline or via helper)"
 
     def test_ratio_in_backtest_main(self):
         """backtest.py main must have ratio logic."""
