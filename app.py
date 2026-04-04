@@ -6416,13 +6416,13 @@ MY_BACKTESTS_HTML = """\
             <div class="backtest-card">
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
                     {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
-                    {% if bt.id in alerted_ids %}<span class="backtest-card-badge" style="background:rgba(52,211,153,0.15);color:var(--green);right:auto;left:10px" title="Email alert active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><rect width="20" x="2" y="4" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>{% endif %}
                     <div class="backtest-card-head">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                         <div class="backtest-card-head-text">
                             <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Untitled' }}</div>
                             <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
                         </div>
+                        {% if bt.id in alerted_ids %}<div style="color:var(--green);flex-shrink:0;display:flex;align-items:center;margin-right:4px" title="Email alert active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" x="2" y="4" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></div>{% endif %}
                         <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
                     </div>
                     {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
@@ -6473,13 +6473,13 @@ MY_BACKTESTS_HTML = """\
             <div class="backtest-card">
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
                     <span class="backtest-card-badge badge-private">Private</span>
-                    {% if bt.id in alerted_ids %}<span class="backtest-card-badge" style="background:rgba(52,211,153,0.15);color:var(--green);right:auto;left:10px" title="Email alert active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><rect width="20" x="2" y="4" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>{% endif %}
                     <div class="backtest-card-head">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                         <div class="backtest-card-head-text">
                             <div class="backtest-card-title">{{ bt.title|title if bt.title else 'Saved Backtest' }}</div>
                             <div class="backtest-card-asset-name">{{ bt._asset_display }}</div>
                         </div>
+                        {% if bt.id in alerted_ids %}<div style="color:var(--green);flex-shrink:0;display:flex;align-items:center;margin-right:4px" title="Email alert active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" x="2" y="4" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></div>{% endif %}
                         <div class="backtest-card-mode-icon" title="{{ bt._mode_label }}">{{ bt._mode_svg|safe }}</div>
                     </div>
                     {% if bt.thumbnail %}<img class="backtest-card-thumb" src="{{ bt.thumbnail }}" alt="Chart">{% endif %}
@@ -7865,6 +7865,7 @@ MODE_SVGS = {
     'heatmap': '<svg width="18" height="18" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="6" height="6" rx="1" fill="currentColor" opacity="0.6"/><rect x="11" y="3" width="6" height="6" rx="1" fill="currentColor" opacity="0.3"/><rect x="19" y="3" width="6" height="6" rx="1" fill="currentColor" opacity="0.15"/><rect x="3" y="11" width="6" height="6" rx="1" fill="currentColor" opacity="0.3"/><rect x="11" y="11" width="6" height="6" rx="1" fill="currentColor" opacity="0.8"/><rect x="19" y="11" width="6" height="6" rx="1" fill="currentColor" opacity="0.4"/><rect x="3" y="19" width="6" height="6" rx="1" fill="currentColor" opacity="0.15"/><rect x="11" y="19" width="6" height="6" rx="1" fill="currentColor" opacity="0.4"/><rect x="19" y="19" width="6" height="6" rx="1" fill="currentColor" opacity="0.6"/></svg>',
     'sweep-lev': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
     'regression': '<svg width="18" height="18" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="20" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/><circle cx="10" cy="16" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/><circle cx="16" cy="12" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/><circle cx="22" cy="8" r="1.5" fill="currentColor" stroke="none" opacity="0.5"/><line x1="4" y1="23" x2="25" y2="5" opacity="0.6"/></svg>',
+    'dca': '<svg width="18" height="18" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v20" opacity="0.4"/><path d="M8 10l6-6 6 6"/><circle cx="7" cy="18" r="2" fill="currentColor" stroke="none" opacity="0.5"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none" opacity="0.5"/><circle cx="21" cy="18" r="2" fill="currentColor" stroke="none" opacity="0.5"/></svg>',
 }
 
 MODE_LABELS = {
@@ -7873,6 +7874,7 @@ MODE_LABELS = {
     'heatmap': 'Heatmap',
     'sweep-lev': 'Leverage',
     'regression': 'Regression',
+    'dca': 'DCA',
 }
 
 
