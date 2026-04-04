@@ -5740,6 +5740,7 @@ DETAIL_HTML = """\
             </button>
             {% endif %}
         </div>
+        {% endif %}
     </div>
 
     {% if not is_authenticated %}

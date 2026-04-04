@@ -569,6 +569,24 @@ class TestTemplateStructure:
             tpl_src = _get_template_source(src, tpl_name)
             assert "<script" in tpl_src, f"{tpl_name} must have <script> tags"
 
+    def test_templates_have_balanced_jinja_blocks(self):
+        """All templates must have matching {% if %}/{% endif %} and {% for %}/{% endfor %} counts."""
+        src = _app_source()
+        for tpl_name in self.TEMPLATES_WITH_DOCTYPE:
+            tpl_src = _get_template_source(src, tpl_name)
+            if not tpl_src:
+                continue
+            ifs = len(re.findall(r'\{%-?\s*if[\s(]', tpl_src))
+            endifs = len(re.findall(r'\{%-?\s*endif', tpl_src))
+            assert ifs == endifs, (
+                f"{tpl_name} has {ifs} {{% if %}} but {endifs} {{% endif %}} — mismatched by {ifs - endifs}"
+            )
+            fors = len(re.findall(r'\{%-?\s*for\s', tpl_src))
+            endfors = len(re.findall(r'\{%-?\s*endfor', tpl_src))
+            assert fors == endfors, (
+                f"{tpl_name} has {fors} {{% for %}} but {endfors} {{% endfor %}} — mismatched by {fors - endfors}"
+            )
+
 
 # ===========================================================================
 # 10. STATIC FILE TESTS (for post-refactor verification)
