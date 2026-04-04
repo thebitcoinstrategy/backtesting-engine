@@ -9314,49 +9314,26 @@ ACCOUNT_HTML = """<!DOCTYPE html>
         </div>
 
         <div class="setting-group">
-            <div class="setting-label">Signal Email Alerts <span id="alert-count" style="color:var(--text-muted);font-weight:400;font-size:14px"></span></div>
-            <div id="email-alerts-list" style="color:var(--text-muted);font-size:14px">Loading...</div>
+            <div class="setting-label">Signal Email Alerts <span style="color:var(--text-muted);font-weight:400;font-size:14px">({{ email_alert_count }} / {{ email_alert_limit }})</span></div>
+            <div id="email-alerts-list" style="color:var(--text-muted);font-size:14px">
+                {% if email_alerts %}
+                {% for a in email_alerts %}
+                <div class="toggle-row" style="padding:10px 0;border-bottom:1px solid var(--border)" data-bt-id="{{ a.backtest_id }}">
+                    <div class="toggle-info">
+                        <div class="toggle-title"><a href="/backtest/{{ a.backtest_id }}" style="color:var(--text);text-decoration:none">{{ a.title or 'Untitled' }}</a></div>
+                    </div>
+                    <button class="action-btn danger" style="font-size:12px;padding:4px 12px" onclick="removeEmailAlert('{{ a.backtest_id }}', this)">Remove</button>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p style="color:var(--text-muted);margin:8px 0">No active signal alerts. You can enable alerts from any backtest detail page.</p>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>
 <script src="/static/js/nav.js"></script>
 <script>
-// Load email alerts
-(function() {
-    fetch('/api/my-email-alerts')
-    .then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-    })
-    .then(function(data) {
-        if (!data.ok) throw new Error(data.error || 'Unknown error');
-        var container = document.getElementById('email-alerts-list');
-        var counter = document.getElementById('alert-count');
-        counter.textContent = '(' + data.count + ' / ' + data.limit + ')';
-        if (!data.alerts.length) {
-            container.innerHTML = '<p style="color:var(--text-muted);margin:8px 0">No active signal alerts. You can enable alerts from any backtest detail page.</p>';
-            return;
-        }
-        var html = '';
-        data.alerts.forEach(function(a) {
-            var params = {};
-            try { params = JSON.parse(a.params || '{}'); } catch(e) {}
-            var asset = (params.asset || 'Unknown').replace(/^./, function(c) { return c.toUpperCase(); });
-            var label = a.title || asset;
-            html += '<div class="toggle-row" style="padding:10px 0;border-bottom:1px solid var(--border)">' +
-                '<div class="toggle-info">' +
-                '<div class="toggle-title"><a href="/backtest/' + a.backtest_id + '" style="color:var(--text);text-decoration:none">' + label + '</a></div>' +
-                '<div class="toggle-desc">' + asset + '</div>' +
-                '</div>' +
-                '<button class="action-btn danger" style="font-size:12px;padding:4px 12px" onclick="removeEmailAlert(\'' + a.backtest_id + '\', this)">Remove</button>' +
-                '</div>';
-        });
-        container.innerHTML = html;
-    })
-    .catch(function() {
-        document.getElementById('email-alerts-list').innerHTML = '<p style="color:var(--text-muted)">Failed to load alerts.</p>';
-    });
-})();
 function removeEmailAlert(btId, btn) {
     btn.disabled = true;
     btn.textContent = '...';
@@ -9365,9 +9342,8 @@ function removeEmailAlert(btId, btn) {
         body: JSON.stringify({enabled: false})
     }).then(function(r) { return r.json(); }).then(function() {
         btn.closest('.toggle-row').remove();
-        // Update count
         var remaining = document.querySelectorAll('#email-alerts-list .toggle-row').length;
-        document.getElementById('alert-count').textContent = '(' + remaining + ' / 20)';
+        document.querySelector('.setting-label span').textContent = '(' + remaining + ' / {{ email_alert_limit }})';
         if (remaining === 0) {
             document.getElementById('email-alerts-list').innerHTML = '<p style="color:var(--text-muted);margin:8px 0">No active signal alerts. You can enable alerts from any backtest detail page.</p>';
         }
@@ -9555,6 +9531,9 @@ def account_page():
     display_name = db.get_display_name(user_id)
     avatar = db.get_user_avatar(user_id)
     prefs = db.get_notification_prefs(user_id)
+    email_alerts = db.list_user_email_alerts(user_id)
+    email_alert_count = len(email_alerts)
+    email_alert_limit = db.MAX_EMAIL_ALERTS_PER_USER
     return render_template_string(ACCOUNT_HTML,
         nav_active='account',
         display_name=display_name,
@@ -9564,7 +9543,10 @@ def account_page():
         avatar_color=_avatar_color(user_id),
         initial=_user_initial(display_name, email),
         notify_comments=prefs['notify_comments'],
-        notify_replies=prefs['notify_replies'])
+        notify_replies=prefs['notify_replies'],
+        email_alerts=email_alerts,
+        email_alert_count=email_alert_count,
+        email_alert_limit=email_alert_limit)
 
 
 @app.route('/feedback')
