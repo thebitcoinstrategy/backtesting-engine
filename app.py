@@ -5736,7 +5736,7 @@ DETAIL_HTML = """\
             {% endif %}
             {% if is_authenticated %}
             <button class="action-btn {{ 'primary' if has_email_alert else '' }}" onclick="toggleEmailAlert('{{ backtest.id }}', {{ 'true' if has_email_alert else 'false' }})" title="Get email alerts when this strategy generates a BUY or SELL signal">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Alert {{ 'ON' if has_email_alert else 'OFF' }}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect width="20" x="2" y="4" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>{{ 'Email Alerts ON' if has_email_alert else 'Email Signal Alerts' }}
             </button>
             {% endif %}
         </div>
@@ -6416,7 +6416,7 @@ MY_BACKTESTS_HTML = """\
             <div class="backtest-card">
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
                     {% if bt.visibility == 'community' %}<span class="backtest-card-badge badge-community">Community</span>{% endif %}
-                    {% if bt.id in alerted_ids %}<span class="backtest-card-badge" style="background:rgba(52,211,153,0.15);color:var(--green);right:auto;left:10px" title="Email alert active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>{% endif %}
+                    {% if bt.id in alerted_ids %}<span class="backtest-card-badge" style="background:rgba(52,211,153,0.15);color:var(--green);right:auto;left:10px" title="Email alert active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><rect width="20" x="2" y="4" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>{% endif %}
                     <div class="backtest-card-head">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                         <div class="backtest-card-head-text">
@@ -6473,7 +6473,7 @@ MY_BACKTESTS_HTML = """\
             <div class="backtest-card">
                 <a href="/backtest/{{ bt.id }}" style="text-decoration:none;color:inherit">
                     <span class="backtest-card-badge badge-private">Private</span>
-                    {% if bt.id in alerted_ids %}<span class="backtest-card-badge" style="background:rgba(52,211,153,0.15);color:var(--green);right:auto;left:10px" title="Email alert active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>{% endif %}
+                    {% if bt.id in alerted_ids %}<span class="backtest-card-badge" style="background:rgba(52,211,153,0.15);color:var(--green);right:auto;left:10px" title="Email alert active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><rect width="20" x="2" y="4" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>{% endif %}
                     <div class="backtest-card-head">
                         {% if bt._asset_logo %}<img class="backtest-card-asset-logo" src="/static/logos/{{ bt._asset_logo }}" alt="{{ bt._asset_display }}">{% else %}<div class="backtest-card-asset-fallback">{{ bt._asset_display[:1] }}</div>{% endif %}
                         <div class="backtest-card-head-text">
