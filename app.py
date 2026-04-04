@@ -9324,9 +9324,12 @@ ACCOUNT_HTML = """<!DOCTYPE html>
 // Load email alerts
 (function() {
     fetch('/api/my-email-alerts')
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    })
     .then(function(data) {
-        if (!data.ok) return;
+        if (!data.ok) throw new Error(data.error || 'Unknown error');
         var container = document.getElementById('email-alerts-list');
         var counter = document.getElementById('alert-count');
         counter.textContent = '(' + data.count + ' / ' + data.limit + ')';
