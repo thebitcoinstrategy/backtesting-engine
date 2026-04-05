@@ -14,6 +14,10 @@ Fetches latest daily close prices from:
     - yfinance for stocks, indices, commodities
 """
 
+import base64
+import hashlib
+import hmac as hmac_mod
+import json as _json_top
 import logging
 import os
 import sys
@@ -123,12 +127,41 @@ def fetch_yfinance(ticker, period="5d"):
 SIGNAL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "_asset_signal")
 
 
+def _send_test_signal_email():
+    """Send a test signal email to admin for visual verification."""
+    import uuid
+    import database as db
+    from helpers import send_email
+
+    admin_email = db.ADMIN_EMAIL
+    dummy_token = str(uuid.uuid4())
+    html_body = _build_signal_email_html(
+        signal='BUY',
+        asset_display='Bitcoin',
+        ind1_label='SMA(50)',
+        ind2_label='SMA(200)',
+        backtest_id='test-000',
+        backtest_title='Golden Cross — BTC/USD',
+        unsubscribe_token=dummy_token,
+        user_id='admin',
+        user_email=admin_email,
+    )
+    send_email(admin_email, 'TEST — BUY Signal: Bitcoin — SMA(50) / SMA(200)', html_body)
+    log.info("Test signal email sent to %s", admin_email)
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Fetch latest daily prices")
     parser.add_argument("--backfill", type=int, default=0,
                         help="Backfill N days of history (e.g., --backfill 30)")
+    parser.add_argument("--test-email", action="store_true",
+                        help="Send a test signal email to admin and exit")
     args = parser.parse_args()
+
+    if args.test_email:
+        _send_test_signal_email()
+        return
 
     cg_days = max(args.backfill, 2)
     yf_period = f"{max(args.backfill, 5)}d" if args.backfill > 5 else "5d"
@@ -349,13 +382,38 @@ def _compute_signal(params, bt_id, bt_module, price_db_module):
     }
 
 
+def _generate_email_login_token(user_id, email):
+    """Generate an HMAC-signed login token for use in email links.
+    30-day expiry, no nonce (replayable), purpose-scoped to 'email_login'."""
+    secret = os.environ.get('ANALYTICS_SHARED_SECRET', '')
+    if not secret:
+        return ''
+    payload = {
+        'user_id': str(user_id),
+        'email': email,
+        'exp': int(time.time()) + 30 * 86400,
+        'purpose': 'email_login',
+    }
+    payload_bytes = _json_top.dumps(payload, sort_keys=True, separators=(',', ':')).encode()
+    sig = hmac_mod.new(secret.encode(), payload_bytes, hashlib.sha256).hexdigest()
+    payload['sig'] = sig
+    token = base64.urlsafe_b64encode(_json_top.dumps(payload).encode()).decode().rstrip('=')
+    return token
+
+
 def _build_signal_email_html(signal, asset_display, ind1_label, ind2_label,
-                              backtest_id, backtest_title, unsubscribe_token):
+                              backtest_id, backtest_title, unsubscribe_token,
+                              user_id=None, user_email=None):
     """Build the HTML body for a signal alert email."""
     SITE_URL = 'https://analytics.the-bitcoin-strategy.com'
     link = f"{SITE_URL}/backtest/{backtest_id}?view=livechart"
     unsub_link = f"{SITE_URL}/unsubscribe/{unsubscribe_token}"
-    account_link = f"{SITE_URL}/account"
+    # Generate login token so "Manage all alerts" link auto-authenticates
+    if user_id and user_email:
+        login_token = _generate_email_login_token(user_id, user_email)
+        account_link = f"{SITE_URL}/account?token={login_token}" if login_token else f"{SITE_URL}/account"
+    else:
+        account_link = f"{SITE_URL}/account"
 
     signal_color = '#34d399' if signal == 'BUY' else '#f87171'
     signal_bg = 'rgba(52,211,153,0.15)' if signal == 'BUY' else 'rgba(248,113,113,0.15)'
@@ -400,9 +458,12 @@ def _build_signal_email_html(signal, asset_display, ind1_label, ind2_label,
         </div>
     </div>
 
-    <div style="background:#161b22;padding:16px 32px;border-top:1px solid #30363d;text-align:center;font-size:12px;color:#8b949e">
-        <p style="margin:0 0 8px">You're receiving this because you enabled email alerts for this strategy.</p>
-        <p style="margin:0"><a href="{unsub_link}" style="color:#58a6ff;text-decoration:none">Unsubscribe from this alert</a> &middot; <a href="{account_link}" style="color:#58a6ff;text-decoration:none">Manage all alerts</a></p>
+    <div style="background:#161b22;padding:24px 32px;border-top:1px solid #30363d;text-align:center">
+        <p style="margin:0 0 16px;font-size:13px;color:#8b949e">You're receiving this because you enabled email alerts for this strategy.</p>
+        <div style="margin-bottom:12px">
+            <a href="{unsub_link}" style="display:inline-block;background:transparent;color:#f87171;text-decoration:none;padding:10px 28px;border-radius:6px;font-weight:600;font-size:14px;border:1px solid #f87171">Unsubscribe from this alert</a>
+        </div>
+        <p style="margin:0;font-size:13px"><a href="{account_link}" style="color:#58a6ff;text-decoration:none">Manage all alerts</a></p>
     </div>
 </div>"""
 
@@ -558,7 +619,9 @@ def check_and_send_signals():
                                 ind2_label=result['ind2_label'],
                                 backtest_id=bt_id,
                                 backtest_title=alert.get('backtest_title', ''),
-                                unsubscribe_token=alert['unsubscribe_token']
+                                unsubscribe_token=alert['unsubscribe_token'],
+                                user_id=alert['user_id'],
+                                user_email=alert['user_email']
                             )
                             attachments = []
                             if chart_png:

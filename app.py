@@ -305,6 +305,37 @@ def _validate_token(token):
     return data
 
 
+def _validate_email_token(token):
+    """Validate an email login token (no nonce/replay check, purpose-scoped).
+    Returns payload dict or None."""
+    if not ANALYTICS_SECRET:
+        return None
+    try:
+        padded = token + '=' * (4 - len(token) % 4) if len(token) % 4 else token
+        raw = base64.urlsafe_b64decode(padded)
+        data = json.loads(raw)
+    except Exception:
+        return None
+
+    signature = data.pop('sig', None)
+    if not signature:
+        return None
+
+    payload_bytes = json.dumps(data, sort_keys=True, separators=(',', ':')).encode()
+    expected = hmac.new(ANALYTICS_SECRET.encode(), payload_bytes, hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(expected, signature):
+        return None
+
+    if time.time() > data.get('exp', 0):
+        return None
+
+    if data.get('purpose') != 'email_login':
+        return None
+
+    return data
+
+
 def require_auth(f):
     """Decorator: require valid token or active session, else redirect to Laravel login."""
     @functools.wraps(f)
@@ -313,13 +344,15 @@ def require_auth(f):
         token = request.args.get('token')
         if token:
             payload = _validate_token(token)
+            if not payload:
+                payload = _validate_email_token(token)
             if payload:
                 session.permanent = True
                 session['user_id'] = str(payload.get('user_id', ''))
                 session['email'] = payload.get('email')
                 session['auth_time'] = time.time()
                 # Redirect to clean URL (strip token from query string)
-                return redirect('/backtester', code=302)
+                return redirect(request.path, code=302)
             # Invalid token — fall through to session check
 
         # Check existing session
@@ -338,6 +371,8 @@ def _try_token_auth():
     token = request.args.get('token')
     if token:
         payload = _validate_token(token)
+        if not payload:
+            payload = _validate_email_token(token)
         if payload:
             session.permanent = True
             session['user_id'] = str(payload.get('user_id', ''))

@@ -329,3 +329,132 @@ class TestEmailAlertAccessControl:
         assert 'community' in func_src and 'featured' in func_src, \
             "Should check for community/featured visibility"
         assert '403' in func_src, "Should return 403 for unauthorized access"
+
+
+class TestEmailLoginToken:
+    """Tests for email login token generation and validation."""
+
+    def _generate_token(self, user_id='u1', email='test@example.com', secret='test-secret', exp_offset=30*86400):
+        """Generate a token using the same logic as fetch_prices._generate_email_login_token."""
+        import base64, hashlib, hmac, time
+        payload = {
+            'user_id': str(user_id),
+            'email': email,
+            'exp': int(time.time()) + exp_offset,
+            'purpose': 'email_login',
+        }
+        payload_bytes = json.dumps(payload, sort_keys=True, separators=(',', ':')).encode()
+        sig = hmac.new(secret.encode(), payload_bytes, hashlib.sha256).hexdigest()
+        payload['sig'] = sig
+        return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip('=')
+
+    def _validate_token(self, token, secret='test-secret'):
+        """Validate using the same logic as app._validate_email_token."""
+        import base64, hashlib, hmac, time
+        try:
+            padded = token + '=' * (4 - len(token) % 4) if len(token) % 4 else token
+            raw = base64.urlsafe_b64decode(padded)
+            data = json.loads(raw)
+        except Exception:
+            return None
+        signature = data.pop('sig', None)
+        if not signature:
+            return None
+        payload_bytes = json.dumps(data, sort_keys=True, separators=(',', ':')).encode()
+        expected = hmac.new(secret.encode(), payload_bytes, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, signature):
+            return None
+        if time.time() > data.get('exp', 0):
+            return None
+        if data.get('purpose') != 'email_login':
+            return None
+        return data
+
+    def test_generate_and_validate_roundtrip(self):
+        token = self._generate_token(user_id='u42', email='alice@example.com')
+        payload = self._validate_token(token)
+        assert payload is not None
+        assert payload['user_id'] == 'u42'
+        assert payload['email'] == 'alice@example.com'
+        assert payload['purpose'] == 'email_login'
+
+    def test_expired_token_rejected(self):
+        token = self._generate_token(exp_offset=-100)
+        payload = self._validate_token(token)
+        assert payload is None
+
+    def test_wrong_secret_rejected(self):
+        token = self._generate_token(secret='secret-a')
+        payload = self._validate_token(token, secret='secret-b')
+        assert payload is None
+
+    def test_replayable(self):
+        """Email tokens should work when validated multiple times (no nonce)."""
+        token = self._generate_token()
+        assert self._validate_token(token) is not None
+        assert self._validate_token(token) is not None
+
+
+class TestEmailTemplateTokenLinks:
+    """Verify the email template includes token-authenticated links and prominent unsubscribe."""
+
+    def _read_fetch_prices(self):
+        fp = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'fetch_prices.py')
+        with open(fp, 'r', encoding='utf-8') as f:
+            return f.read()
+
+    def test_account_link_has_login_token_param(self):
+        """The email template should build account_link with ?token= when user info is provided."""
+        src = self._read_fetch_prices()
+        assert '/account?token=' in src, "Account link should include login token query param"
+
+    def test_unsubscribe_button_styling(self):
+        """Unsubscribe link should be styled as a prominent button (border, padding)."""
+        src = self._read_fetch_prices()
+        # Find the unsubscribe link in the email template
+        assert 'border:1px solid #f87171' in src, "Unsubscribe should have red border styling"
+        assert 'padding:10px 28px' in src, "Unsubscribe should have button padding"
+
+    def test_unsubscribe_link_present(self):
+        src = self._read_fetch_prices()
+        assert 'unsub_link' in src, "Email template should include unsubscribe link"
+
+    def test_build_fn_accepts_user_params(self):
+        """_build_signal_email_html should accept user_id and user_email params."""
+        src = self._read_fetch_prices()
+        assert re.search(r'def _build_signal_email_html\(.*user_id', src, re.DOTALL), \
+            "_build_signal_email_html should accept user_id parameter"
+
+
+class TestRequireAuthRedirect:
+    """Verify require_auth redirects to current path, not hardcoded /backtester."""
+
+    def _read_app(self):
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app.py')
+        with open(app_path, 'r', encoding='utf-8') as f:
+            return f.read()
+
+    def test_redirects_to_request_path(self):
+        """After token auth, should redirect to request.path, not /backtester."""
+        src = self._read_app()
+        # Find the require_auth function
+        match = re.search(r'def require_auth.*?return decorated', src, re.DOTALL)
+        assert match, "require_auth function should exist"
+        func_src = match.group()
+        assert 'request.path' in func_src, \
+            "require_auth should redirect to request.path after token validation"
+        assert "redirect('/backtester'" not in func_src, \
+            "require_auth should NOT hardcode redirect to /backtester"
+
+    def test_validate_email_token_exists(self):
+        """_validate_email_token function should exist in app.py."""
+        src = self._read_app()
+        assert 'def _validate_email_token(' in src, "_validate_email_token should be defined"
+
+    def test_email_token_fallback_in_require_auth(self):
+        """require_auth should try _validate_email_token as fallback."""
+        src = self._read_app()
+        match = re.search(r'def require_auth.*?return decorated', src, re.DOTALL)
+        assert match
+        assert '_validate_email_token' in match.group(), \
+            "require_auth should call _validate_email_token as fallback"
