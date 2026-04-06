@@ -1817,13 +1817,15 @@ HTML = """\
                                 if (typeof Plotly === 'undefined') { setTimeout(renderAnimated, 200); return; }
                                 var periods = data.periods;
                                 var frames = data.frames;
-                                var zmin = data.zmin, zmax = data.zmax;
-                                // Initial frame (first window)
+                                // Red-green diverging scale centered at 0
+                                var rgScale = [[0,'#d32f2f'],[0.35,'#ef5350'],[0.5,'#424242'],[0.65,'#66bb6a'],[1,'#2e7d32']];
+                                // Initial frame — scale symmetric around 0
                                 var initZ = frames[0].z;
+                                var initMax = frames[0].zmax || 100;
                                 var trace = {
                                     x: periods, y: periods, z: initZ,
-                                    type: 'heatmap', colorscale: 'RdYlGn', showscale: true,
-                                    zmin: zmin, zmax: zmax,
+                                    type: 'heatmap', colorscale: rgScale, showscale: true,
+                                    zmin: -initMax, zmax: initMax, zmid: 0,
                                     colorbar: { title: {text: data.metric_label, font:{color:'#8890a4'}}, tickfont: {color:'#8890a4'} },
                                     hovertemplate: data.ind1_name + '(%{y}) / ' + data.ind2_name + '(%{x})<br>' + data.metric_label + ': %{z:.1f}<extra></extra>'
                                 };
@@ -1838,12 +1840,13 @@ HTML = """\
                                         type:'scatter', marker:{size:14, color:'#34d399', symbol:'star', line:{color:'white',width:2}},
                                         hovertemplate:'Best avg: '+data.ind1_name+'('+data.best_p1+')/'+data.ind2_name+'('+data.best_p2+')<extra></extra>', showlegend:false});
                                 }
-                                // Build animation frames
+                                // Build animation frames with per-window scale
                                 var plotlyFrames = [];
                                 for (var i = 0; i < frames.length; i++) {
+                                    var fm = frames[i].zmax || 100;
                                     plotlyFrames.push({
                                         name: frames[i].label,
-                                        data: [{z: frames[i].z}]
+                                        data: [{z: frames[i].z, zmin: -fm, zmax: fm}]
                                     });
                                 }
                                 var sliderSteps = [];
@@ -4460,24 +4463,18 @@ def _run_post_handler(cancel_event):
             periods_anim = dual_sweep["periods"]
             per_window = dual_sweep["per_window_matrices"]
             window_labels = dual_sweep["window_labels"]
-            # Build frames: one heatmap per window
+            # Build frames: one heatmap per window with per-frame scale
             frames_json = []
-            all_vals = []
             for wi, (mat, label) in enumerate(zip(per_window, window_labels)):
                 z_frame = [[None if np.isnan(v) else round(float(v), 2) for v in row] for row in mat]
-                frames_json.append({"label": label, "z": z_frame})
-                for row in mat:
-                    for v in row:
-                        if not np.isnan(v):
-                            all_vals.append(v)
-            # Shared color scale across all frames
-            zmin = round(float(min(all_vals)), 2) if all_vals else 0
-            zmax = round(float(max(all_vals)), 2) if all_vals else 100
+                frame_vals = [v for row in mat for v in row if not np.isnan(v)]
+                fmax = round(float(max(abs(v) for v in frame_vals)), 2) if frame_vals else 100
+                frames_json.append({"label": label, "z": z_frame, "zmax": fmax})
             # dtick for axes: auto based on period count
             dtick = max(1, len(periods_anim) // 15) * (periods_anim[1] - periods_anim[0]) if len(periods_anim) > 1 else 1
             plotly_data = json_mod.dumps({
                 "periods": periods_anim, "frames": frames_json,
-                "zmin": zmin, "zmax": zmax, "dtick": dtick,
+                "dtick": dtick,
                 "selected_p1": p.ind1_period, "selected_p2": p.ind2_period,
                 "best_p1": int(dual_sweep["best_p1"]), "best_p2": int(dual_sweep["best_p2"]),
                 "best_val": round(float(dual_sweep["best_val"]), 2),
