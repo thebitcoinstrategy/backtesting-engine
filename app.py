@@ -1860,6 +1860,8 @@ HTML = """\
                                 Plotly.newPlot('plotly-anim-b', makeTrace(d, 0).traces, makeLayout(d, t.label), {responsive:true});
                                 document.getElementById('anim-slider').max = d.frames.length - 1;
                                 document.getElementById('anim-window-label').textContent = 'Window: ' + t.label;
+                                // Auto-play on load
+                                setTimeout(function() { toggleHeatmapPlay(); }, 500);
                             }
                             if (typeof Plotly === 'undefined') {
                                 var s = document.createElement('script');
@@ -1916,7 +1918,7 @@ HTML = """\
                                 _animTimer = setInterval(function() {
                                     _animFrame = (_animFrame + 1) % _animData.frames.length;
                                     goToHeatmapFrame(_animFrame, false);
-                                }, 2200);
+                                }, 1600);
                             }
                         }
                         </script>
