@@ -2366,8 +2366,12 @@ def generate_rolling_equity_overlay(window_results, strategy_label, theme="dark"
     return base64.b64encode(buf.read()).decode()
 
 
-def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark"):
-    """2D heatmap: rows=windows, columns=periods, color=metric. Returns base64 PNG."""
+def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark",
+                             selected_period=None, sweep_ind_label=None):
+    """2D heatmap: rows=windows, columns=periods, color=metric.
+    selected_period: highlight the user's chosen period column.
+    sweep_ind_label: axis label like 'SMA Period' instead of generic 'Period'.
+    Returns base64 PNG."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -2383,6 +2387,7 @@ def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark"):
 
     metric_names = {"total_return": "Total Return %", "alpha": "Alpha %", "sharpe": "Sharpe Ratio"}
     metric_label = metric_names.get(metric, metric)
+    x_label = sweep_ind_label or "Period"
 
     fig, ax = plt.subplots(figsize=(max(10, n_per * 0.4), max(4, n_win * 0.7)), dpi=150)
     im = ax.imshow(matrix, aspect="auto", cmap="RdYlGn", interpolation="nearest")
@@ -2394,10 +2399,19 @@ def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark"):
     ax.set_xticklabels(periods, fontsize=max(6, min(9, 200 // n_per)), rotation=45)
     ax.set_yticks(range(n_win))
     ax.set_yticklabels(win_labels, fontsize=9)
-    ax.set_xlabel("Period", fontsize=11, color=t["muted"])
+    ax.set_xlabel(x_label, fontsize=11, color=t["muted"])
     ax.set_ylabel("Window", fontsize=11, color=t["muted"])
-    ax.set_title(f"{strategy_label} — Period Performance Over Time\n{metric_label}",
+    ax.set_title(f"{strategy_label} — {x_label} Performance Over Time\n{metric_label}",
                  fontsize=13, color=t["text"], pad=12)
+
+    # Highlight the selected strategy's period column
+    if selected_period is not None and selected_period in periods:
+        sel_j = periods.index(selected_period)
+        # Draw a vertical highlight band behind the data
+        ax.axvline(x=sel_j, color=t["accent"], linewidth=2, alpha=0.7)
+        # Mark the column header
+        ax.text(sel_j, -0.7, f"\u25BC {selected_period}", ha="center", va="bottom",
+                fontsize=8, fontweight="bold", color=t["accent"])
 
     # Mark best period per window with a star
     for i, (best_p, best_v) in enumerate(best_per_window):
