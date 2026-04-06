@@ -174,6 +174,9 @@ def _cache_key(form_params):
     elif mode == "dca":
         relevant.update(["dca_frequency", "dca_amount", "dca_signal_type", "dca_signal_name",
                          "dca_signal_period", "dca_max_multiplier", "dca_show_lump_sum", "dca_reverse"])
+    elif mode == "rolling":
+        relevant.update(["range_min", "range_max", "step", "exposure", "long_leverage", "short_leverage",
+                         "lev_mode", "window_size", "step_size", "rolling_metric"])
     else:  # backtest
         relevant.update(["exposure", "long_leverage", "short_leverage", "lev_mode"])
 
