@@ -4429,7 +4429,6 @@ def _run_post_handler(cancel_event):
 
         # Generate windows
         try:
-            import sys; print(f"[ROLLING] window_size={p.window_size} step_size={p.step_size} windows will use {p.window_size}yr window", file=sys.stderr, flush=True)
             windows = bt.generate_rolling_windows(df_full, p.window_size, p.step_size, periods_per_year,
                                                      start_date=p.start_date, end_date=p.end_date)
         except ValueError as e:
