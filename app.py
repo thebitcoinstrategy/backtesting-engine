@@ -676,7 +676,7 @@ HTML = """\
         /* Mode selector cards */
         .mode-selector {
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
+            grid-template-columns: repeat(7, 1fr);
             gap: 8px;
             margin-bottom: 14px;
         }
