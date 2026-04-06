@@ -1100,6 +1100,225 @@ def sweep_sma_periods(df, sma_min, sma_max, initial_cash, mode, fast_sma, fee=0.
     return results
 
 
+# --- Rolling Window Analysis ---
+
+def generate_rolling_windows(df, window_years, step_years, periods_per_year=365):
+    """Generate (start, end) date pairs for rolling windows across the dataset.
+    Raises ValueError if dataset is shorter than one window."""
+    data_start = df.index.min()
+    data_end = df.index.max()
+    window_offset = pd.DateOffset(years=window_years)
+    step_offset = pd.DateOffset(years=step_years)
+
+    # Check dataset can fit at least one window
+    if data_start + window_offset > data_end:
+        data_span = (data_end - data_start).days / 365.25
+        raise ValueError(
+            f"Dataset spans {data_span:.1f} years but window requires {window_years} years. "
+            f"Need at least one full window.")
+
+    windows = []
+    start = data_start
+    expected_days = window_years * periods_per_year
+    while start + window_offset <= data_end:
+        end = start + window_offset
+        # Discard partial windows (<80% of expected data)
+        actual_days = len(df[(df.index >= start) & (df.index < end)])
+        if actual_days >= expected_days * 0.8:
+            if window_years == 1:
+                label = str(start.year)
+            else:
+                label = f"{start.year}-{end.year}"
+            windows.append({"start": start, "end": end, "label": label})
+        start = start + step_offset
+    if not windows:
+        raise ValueError("No valid windows could be generated from this dataset.")
+    return windows
+
+
+def rolling_window_evaluate(df, windows, ind1_name, ind1_period, ind2_name, ind2_period,
+                            initial_cash, fee=0.001, exposure="long-cash",
+                            long_leverage=1, short_leverage=1, lev_mode="rebalance",
+                            reverse=False, sizing="compound", periods_per_year=365,
+                            financing_rate=0):
+    """Run a fixed strategy across all windows. Indicators computed once on full df."""
+    df = df.copy()
+    ind1_series, ind1_label = compute_indicator_from_spec(df, ind1_name, ind1_period)
+    ind2_series, ind2_label = compute_indicator_from_spec(df, ind2_name, ind2_period)
+
+    above = ind1_series > ind2_series
+    if reverse:
+        above = ~above
+    position = _apply_exposure(above, exposure).shift(1).fillna(0)
+    nan_mask = ind1_series.isna() | ind2_series.isna()
+    position[nan_mask] = 0
+    daily_return = df["close"].pct_change().fillna(0)
+
+    results = []
+    for w in windows:
+        mask = (df.index >= w["start"]) & (df.index < w["end"])
+        w_pos = position[mask]
+        w_ret = daily_return[mask]
+        if len(w_pos) < 2:
+            continue
+
+        # Compute equity for this window
+        leverage = np.where(w_pos > 0, long_leverage,
+                   np.where(w_pos < 0, short_leverage, 1))
+        strat_ret = w_pos * w_ret * leverage
+        trade_mask_arr = np.abs(np.diff(w_pos.values, prepend=0)) > 0
+        strat_ret_arr = strat_ret.values.copy()
+        strat_ret_arr[trade_mask_arr] -= fee
+
+        equity_arr, _ = _compute_equity_with_liquidation(strat_ret_arr, initial_cash)
+        equity = pd.Series(equity_arr, index=w_pos.index)
+
+        # Buy-and-hold for this window
+        bh = initial_cash * (1 + w_ret).cumprod()
+
+        n_days = len(w_pos)
+        total_return = (equity.iloc[-1] / initial_cash - 1) * 100
+        buyhold_return = (bh.iloc[-1] / initial_cash - 1) * 100
+        alpha = total_return - buyhold_return
+        annualized = _annualized_return(total_return, n_days, periods_per_year)
+
+        eq_returns = pd.Series(equity_arr).pct_change().fillna(0)
+        std_d = eq_returns.std()
+        sharpe = (eq_returns.mean() / std_d * np.sqrt(periods_per_year)) if std_d > 0 else 0.0
+        max_dd = _max_drawdown(equity)
+
+        results.append({
+            "window": w,
+            "total_return": total_return,
+            "buyhold_return": buyhold_return,
+            "alpha": alpha,
+            "annualized": annualized,
+            "sharpe": sharpe,
+            "max_drawdown": max_dd,
+            "equity": equity,
+        })
+    return results
+
+
+def compute_consistency_score(window_results, metric="total_return"):
+    """Compute a 0-100 consistency score based on the given metric.
+    Returns (score, label) where label is Excellent/Good/Fair/Poor."""
+    if not window_results:
+        return 0.0, "Poor"
+
+    values = [r[metric] for r in window_results]
+    n = len(values)
+
+    # Threshold for "positive"
+    threshold = 0.5 if metric == "sharpe" else 0.0
+    positive_count = sum(1 for v in values if v > threshold)
+    positive_ratio = positive_count / n
+
+    # Coefficient of variation penalty
+    mean_val = np.mean(values)
+    std_val = np.std(values)
+    cv = (std_val / abs(mean_val)) if abs(mean_val) > 1e-9 else 1.0
+    cv = min(cv, 1.0)
+
+    score = positive_ratio * 100 * (1 - 0.3 * cv)
+    score = max(0.0, min(100.0, score))
+
+    if score >= 80:
+        label = "Excellent"
+    elif score >= 60:
+        label = "Good"
+    elif score >= 40:
+        label = "Fair"
+    else:
+        label = "Poor"
+    return score, label
+
+
+def rolling_window_sweep(df, windows, ind1_name, ind1_period, ind2_name,
+                         sweep_target, sweep_min, sweep_max, sweep_step,
+                         initial_cash, fee=0.001, exposure="long-cash",
+                         long_leverage=1, short_leverage=1, lev_mode="rebalance",
+                         reverse=False, sizing="compound", periods_per_year=365,
+                         financing_rate=0, metric="total_return"):
+    """Sweep one indicator's period across all windows.
+    Returns dict with windows, periods, matrix (n_windows x n_periods), best_per_window."""
+    periods = list(range(sweep_min, sweep_max + 1, sweep_step))
+    df = df.copy()
+    daily_return = df["close"].pct_change().fillna(0)
+
+    # Pre-compute all indicator series and position arrays
+    position_cache = {}
+    for period in periods:
+        p1 = period if sweep_target == "ind1" else ind1_period
+        p2 = period if sweep_target == "ind2" else ind2_period
+        i1_name = ind1_name
+        i2_name = ind2_name
+        s1, _ = compute_indicator_from_spec(df, i1_name, p1)
+        s2, _ = compute_indicator_from_spec(df, i2_name, p2)
+        above = s1 > s2
+        if reverse:
+            above = ~above
+        pos = _apply_exposure(above, exposure).shift(1).fillna(0)
+        nan_mask = s1.isna() | s2.isna()
+        pos[nan_mask] = 0
+        position_cache[period] = pos
+
+    n_windows = len(windows)
+    n_periods = len(periods)
+    matrix = np.full((n_windows, n_periods), np.nan)
+    best_per_window = []
+
+    for i, w in enumerate(windows):
+        mask = (df.index >= w["start"]) & (df.index < w["end"])
+        w_ret = daily_return[mask]
+        if len(w_ret) < 2:
+            best_per_window.append((None, None))
+            continue
+        n_days = len(w_ret)
+        best_val = -np.inf
+        best_p = periods[0]
+
+        for j, period in enumerate(periods):
+            w_pos = position_cache[period][mask]
+            leverage = np.where(w_pos > 0, long_leverage,
+                       np.where(w_pos < 0, short_leverage, 1))
+            strat_ret = w_pos * w_ret * leverage
+            trade_mask_arr = np.abs(np.diff(w_pos.values, prepend=0)) > 0
+            strat_ret_arr = strat_ret.values.copy()
+            strat_ret_arr[trade_mask_arr] -= fee
+            equity_arr, _ = _compute_equity_with_liquidation(strat_ret_arr, initial_cash)
+
+            total_return = (equity_arr[-1] / initial_cash - 1) * 100
+
+            if metric == "total_return":
+                val = total_return
+            elif metric == "alpha":
+                bh_return = ((1 + w_ret).cumprod().iloc[-1] - 1) * 100
+                val = total_return - bh_return
+            elif metric == "sharpe":
+                eq_rets = np.diff(equity_arr, prepend=initial_cash) / np.maximum(np.abs(np.concatenate([[initial_cash], equity_arr[:-1]])), 1e-10)
+                std_d = np.std(eq_rets)
+                val = (np.mean(eq_rets) / std_d * np.sqrt(periods_per_year)) if std_d > 0 else 0.0
+            elif metric == "annualized":
+                val = _annualized_return(total_return, n_days, periods_per_year)
+            else:
+                val = total_return
+
+            matrix[i, j] = val
+            if val > best_val:
+                best_val = val
+                best_p = period
+
+        best_per_window.append((best_p, best_val))
+
+    return {
+        "windows": [w["label"] for w in windows],
+        "periods": periods,
+        "matrix": matrix,
+        "best_per_window": best_per_window,
+    }
+
+
 # --- DCA Functions ---
 
 DCA_SIGNAL_TYPES = {
@@ -2026,6 +2245,214 @@ def generate_dual_sweep_heatmap(df, ind1_name, ind2_name,
     print(f"Chart saved to {output_path}")
 
     return matrix, periods, best_p1, best_p2, best_ann
+
+
+# --- Rolling Window Chart Generation ---
+
+def generate_rolling_timeline_chart(window_results, metric, strategy_label, score, score_label, theme="dark"):
+    """Horizontal bar chart: one bar per window, green/red by metric sign. Returns base64 PNG."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from io import BytesIO
+    import base64
+
+    t = _get_theme(theme)
+    labels = [r["window"]["label"] for r in window_results]
+    values = [r[metric] for r in window_results]
+    colors = [t["green"] if v > (0.5 if metric == "sharpe" else 0) else t["red"] for v in values]
+
+    metric_names = {"total_return": "Total Return %", "alpha": "Alpha vs Buy & Hold %", "sharpe": "Sharpe Ratio"}
+    metric_label = metric_names.get(metric, metric)
+
+    fig, ax = plt.subplots(figsize=(12, max(4, len(labels) * 0.6)), dpi=150)
+    y_pos = range(len(labels))
+    bars = ax.barh(y_pos, values, color=colors, height=0.6, edgecolor='none', alpha=0.85)
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels, fontsize=10)
+    ax.set_xlabel(metric_label, fontsize=11, color=t["muted"])
+    ax.axvline(x=(0.5 if metric == "sharpe" else 0), color=t["muted"], linewidth=0.8, linestyle="--", alpha=0.5)
+    ax.set_title(f"{strategy_label} — Rolling Window Consistency\n"
+                 f"Score: {score:.0f}/100 ({score_label})  |  {metric_label}",
+                 fontsize=13, color=t["text"], pad=12)
+
+    # Value labels on bars
+    for bar, val in zip(bars, values):
+        x_pos = bar.get_width()
+        ha = "left" if x_pos >= 0 else "right"
+        offset = abs(max(values) - min(values)) * 0.02 if values else 1
+        ax.text(x_pos + (offset if x_pos >= 0 else -offset), bar.get_y() + bar.get_height()/2,
+                f"{val:.1f}", va="center", ha=ha, fontsize=9, color=t["text"])
+
+    ax.invert_yaxis()
+    ax.grid(axis="x", color=t["grid"], alpha=0.3)
+    _apply_dark_theme(fig, ax, theme)
+    plt.tight_layout()
+
+    buf = BytesIO()
+    plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
+    plt.close()
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
+
+
+def generate_rolling_equity_overlay(window_results, strategy_label, theme="dark"):
+    """Overlay per-window equity curves normalized to 100. Returns base64 PNG."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from io import BytesIO
+    import base64
+
+    t = _get_theme(theme)
+    n = len(window_results)
+    cmap = plt.cm.viridis
+
+    fig, ax = plt.subplots(figsize=(14, 7), dpi=150)
+    for i, r in enumerate(window_results):
+        eq = r["equity"]
+        normalized = eq / eq.iloc[0] * 100
+        alpha = 0.3 + 0.7 * (i / max(n - 1, 1))
+        lw = 1.0 + 1.5 * (i / max(n - 1, 1))
+        color = cmap(i / max(n - 1, 1))
+        ax.plot(normalized.index, normalized.values, color=color, alpha=alpha,
+                linewidth=lw, label=r["window"]["label"])
+
+    ax.axhline(y=100, color=t["muted"], linewidth=0.8, linestyle="--", alpha=0.4)
+    ax.set_ylabel("Normalized Equity (start = 100)", fontsize=11, color=t["muted"])
+    ax.set_title(f"{strategy_label} — Equity Curves Per Window", fontsize=13, color=t["text"], pad=12)
+    ax.legend(loc="upper left", fontsize=8, framealpha=0.7)
+    ax.grid(color=t["grid"], alpha=0.3)
+    _apply_dark_theme(fig, ax, theme)
+    plt.tight_layout()
+
+    buf = BytesIO()
+    plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
+    plt.close()
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
+
+
+def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark"):
+    """2D heatmap: rows=windows, columns=periods, color=metric. Returns base64 PNG."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from io import BytesIO
+    import base64
+
+    t = _get_theme(theme)
+    matrix = sweep_data["matrix"]
+    win_labels = sweep_data["windows"]
+    periods = sweep_data["periods"]
+    best_per_window = sweep_data["best_per_window"]
+    n_win, n_per = matrix.shape
+
+    metric_names = {"total_return": "Total Return %", "alpha": "Alpha %", "sharpe": "Sharpe Ratio"}
+    metric_label = metric_names.get(metric, metric)
+
+    fig, ax = plt.subplots(figsize=(max(10, n_per * 0.4), max(4, n_win * 0.7)), dpi=150)
+    im = ax.imshow(matrix, aspect="auto", cmap="RdYlGn", interpolation="nearest")
+    cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
+    cbar.set_label(metric_label, fontsize=10, color=t["muted"])
+    cbar.ax.tick_params(colors=t["muted"])
+
+    ax.set_xticks(range(n_per))
+    ax.set_xticklabels(periods, fontsize=max(6, min(9, 200 // n_per)), rotation=45)
+    ax.set_yticks(range(n_win))
+    ax.set_yticklabels(win_labels, fontsize=9)
+    ax.set_xlabel("Period", fontsize=11, color=t["muted"])
+    ax.set_ylabel("Window", fontsize=11, color=t["muted"])
+    ax.set_title(f"{strategy_label} — Period Performance Over Time\n{metric_label}",
+                 fontsize=13, color=t["text"], pad=12)
+
+    # Mark best period per window with a star
+    for i, (best_p, best_v) in enumerate(best_per_window):
+        if best_p is not None and best_p in periods:
+            j = periods.index(best_p)
+            ax.plot(j, i, marker="*", color="white", markersize=12, markeredgecolor="black", markeredgewidth=0.5)
+
+    # Annotate values if grid is small enough
+    if n_win * n_per <= 200:
+        for i in range(n_win):
+            for j in range(n_per):
+                val = matrix[i, j]
+                if not np.isnan(val):
+                    color = "black" if val > np.nanmedian(matrix) else "white"
+                    ax.text(j, i, f"{val:.0f}" if abs(val) >= 10 else f"{val:.1f}",
+                            ha="center", va="center", fontsize=max(5, min(7, 150 // max(n_win, n_per))), color=color)
+
+    _apply_dark_theme(fig, ax, theme)
+    plt.tight_layout()
+
+    buf = BytesIO()
+    plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
+    plt.close()
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
+
+
+def generate_rolling_3d_surface(sweep_data, metric, strategy_label, theme="dark"):
+    """3D surface: X=window, Y=period, Z=metric. Returns base64 PNG."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+    from io import BytesIO
+    import base64
+
+    t = _get_theme(theme)
+    matrix = sweep_data["matrix"]
+    win_labels = sweep_data["windows"]
+    periods = sweep_data["periods"]
+    n_win, n_per = matrix.shape
+
+    metric_names = {"total_return": "Return %", "alpha": "Alpha %", "sharpe": "Sharpe"}
+    metric_label = metric_names.get(metric, metric)
+
+    fig = plt.figure(figsize=(14, 9), dpi=150)
+    ax = fig.add_subplot(111, projection="3d")
+
+    X, Y = np.meshgrid(range(n_win), range(n_per), indexing="ij")
+    Z = np.nan_to_num(matrix, nan=0.0)
+
+    surf = ax.plot_surface(X, Y, Z, cmap="RdYlGn", rstride=1, cstride=1,
+                           alpha=0.85, edgecolor="none", antialiased=True)
+    fig.colorbar(surf, ax=ax, shrink=0.5, pad=0.08, label=metric_label)
+
+    ax.set_xticks(range(n_win))
+    ax.set_xticklabels(win_labels, fontsize=7, rotation=20)
+    ax.set_yticks(range(0, n_per, max(1, n_per // 8)))
+    ax.set_yticklabels([periods[i] for i in range(0, n_per, max(1, n_per // 8))], fontsize=7)
+    ax.set_xlabel("Window", fontsize=9, color=t["muted"], labelpad=10)
+    ax.set_ylabel("Period", fontsize=9, color=t["muted"], labelpad=10)
+    ax.set_zlabel(metric_label, fontsize=9, color=t["muted"], labelpad=8)
+    ax.set_title(f"{strategy_label} — 3D Performance Surface\n{metric_label} by Window & Period",
+                 fontsize=13, color=t["text"], pad=20)
+
+    ax.view_init(elev=25, azim=-45)
+
+    # Theme the 3D axes
+    fig.patch.set_facecolor(t["panel"])
+    ax.set_facecolor(t["bg"])
+    ax.tick_params(colors=t["muted"])
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+    ax.xaxis.pane.set_edgecolor(t["grid"])
+    ax.yaxis.pane.set_edgecolor(t["grid"])
+    ax.zaxis.pane.set_edgecolor(t["grid"])
+    fig.text(0.98, 0.01, "the-bitcoin-strategy.com", fontsize=9,
+             color=t["branding_color"], alpha=t["branding_alpha"],
+             ha="right", va="bottom", transform=fig.transFigure)
+
+    fig.subplots_adjust(left=0.05, right=0.92, top=0.92, bottom=0.08)
+
+    buf = BytesIO()
+    plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
+    plt.close()
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
 
 
 # --- CLI ---

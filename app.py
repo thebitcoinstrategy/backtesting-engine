@@ -1008,6 +1008,20 @@ HTML = """\
             animation: fadeUp 0.6s ease-out 0.3s both;
         }
 
+        /* Rolling Window Mode */
+        .rolling-results { animation: fadeUp 0.5s ease-out both; }
+        .rolling-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+        .consistency-badge { display:inline-block; padding:8px 16px; border-radius:8px; font-weight:700; font-size:0.95em; font-family:'JetBrains Mono',monospace; }
+        .consistency-badge.excellent { background:rgba(52,211,153,0.15); color:#34d399; }
+        .consistency-badge.good { background:rgba(100,149,237,0.15); color:#6495ED; }
+        .consistency-badge.fair { background:rgba(247,147,26,0.15); color:#f7931a; }
+        .consistency-badge.poor { background:rgba(239,68,68,0.15); color:#ef4444; }
+        .rolling-tabs { display:flex; gap:4px; margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:8px; overflow-x:auto; }
+        .rolling-tab-btn { padding:8px 16px; background:transparent; border:1px solid var(--border); border-radius:8px 8px 0 0; color:var(--text-dim); cursor:pointer; font-size:0.85em; font-weight:500; transition:all 0.2s; white-space:nowrap; }
+        .rolling-tab-btn:hover { color:var(--text); background:var(--bg-surface); }
+        .rolling-tab-btn.active { background:var(--bg-surface); color:var(--accent); border-bottom-color:var(--bg-surface); }
+        .rolling-tab-content.hidden { display:none; }
+
         .chart-download-btn {
             position: absolute; top: 12px; right: 12px;
             background: var(--bg-surface); color: var(--text-secondary);
@@ -1426,6 +1440,16 @@ HTML = """\
                             </svg>
                             <span class="mode-card-label">DCA Optimization</span>
                         </div>
+                        <div class="mode-card {{ 'active' if p.mode=='rolling' }}" data-mode="rolling" onclick="selectMode('rolling', this)">
+                            <svg class="mode-card-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="8" width="10" height="6" rx="1" opacity="0.4"/>
+                                <rect x="7" y="11" width="10" height="6" rx="1" opacity="0.6"/>
+                                <rect x="11" y="14" width="10" height="6" rx="1" opacity="0.8"/>
+                                <rect x="15" y="17" width="10" height="6" rx="1" opacity="1"/>
+                                <path d="M5 7 L23 7" stroke-width="1" opacity="0.3" stroke-dasharray="2 2"/>
+                            </svg>
+                            <span class="mode-card-label">Rolling Window</span>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group" id="range-min-group">
@@ -1441,6 +1465,33 @@ HTML = """\
                             <input type="number" name="step" value="{{ p.step }}" min="1">
                         </div>
                     </div>
+                    <div class="form-row hidden" id="rolling-params-row">
+                        <div class="form-group">
+                            <label>Window Size (years)</label>
+                            <select name="window_size">
+                                {% for y in [1,2,3,4,5] %}
+                                <option value="{{ y }}" {{ 'selected' if p.window_size == y }}>{{ y }} year{{ 's' if y > 1 }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Step Size (years)</label>
+                            <select name="step_size">
+                                {% for y in [1,2,3] %}
+                                <option value="{{ y }}" {{ 'selected' if p.step_size == y }}>{{ y }} year{{ 's' if y > 1 }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Metric</label>
+                            <select name="rolling_metric">
+                                <option value="total_return" {{ 'selected' if p.rolling_metric == 'total_return' }}>Total Return</option>
+                                <option value="alpha" {{ 'selected' if p.rolling_metric == 'alpha' }}>Alpha vs B&H</option>
+                                <option value="sharpe" {{ 'selected' if p.rolling_metric == 'sharpe' }}>Sharpe Ratio</option>
+                            </select>
+                        </div>
+                    </div>
+                    <input type="hidden" name="rolling_metric" id="rolling-metric-hidden" value="{{ p.rolling_metric }}">
                 </div>
                 <div class="form-section">
                     <div class="section-title">Asset</div>
@@ -1739,6 +1790,27 @@ HTML = """\
         <div class="panel" id="results-panel">
             {% if error|default(none) %}
                 <div class="placeholder" style="color:var(--accent)">{{ error }}</div>
+            {% elif rolling_charts|default(none) %}
+                <div class="rolling-results">
+                    <div class="rolling-header">
+                        <div class="consistency-badge {{ rolling_score_label|lower }}">
+                            Consistency: {{ "%.0f"|format(rolling_score) }}/100 ({{ rolling_score_label }})
+                        </div>
+                        <div style="font-size:0.85em;color:var(--text-dim)">
+                            {{ rolling_windows }} windows  &middot;  {{ rolling_strategy }}
+                        </div>
+                    </div>
+                    <div class="rolling-tabs">
+                        <button class="rolling-tab-btn active" onclick="switchRollingTab('timeline', this)">Timeline</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('surface', this)">3D Surface</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('heatmap', this)">Heatmap</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('equity', this)">Equity Overlay</button>
+                    </div>
+                    <div class="rolling-tab-content" id="rtab-timeline"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.timeline }}"/></div>
+                    <div class="rolling-tab-content hidden" id="rtab-surface"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.surface }}"/></div>
+                    <div class="rolling-tab-content hidden" id="rtab-heatmap"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap }}"/></div>
+                    <div class="rolling-tab-content hidden" id="rtab-equity"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.equity }}"/></div>
+                </div>
             {% elif chart %}
                 {% if regression|default(none) %}
                 {# Regression analysis results #}
@@ -2028,6 +2100,12 @@ function selectMode(mode, el) {
     el.classList.add('active');
     toggleFields();
 }
+function switchRollingTab(name, btn) {
+    document.querySelectorAll('.rolling-tab-content').forEach(function(el) { el.classList.add('hidden'); });
+    document.getElementById('rtab-' + name).classList.remove('hidden');
+    document.querySelectorAll('.rolling-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+}
 var oscDefaults = {
     rsi:        { period: 14, buy: 30, sell: 70, desc: 'Relative Strength Index \u2014 buy when dropping below 30 (oversold/cheap), sell when rising above 70 (overbought/expensive). Hold between thresholds.' },
     macd:       { period: 9, buy: 0, sell: 0, desc: 'MACD \u2014 buy when MACD crosses above signal line, sell when below. Period controls signal line smoothing.' },
@@ -2175,15 +2253,21 @@ function toggleFields() {
         fwdRow.querySelector('input').disabled = true;
     }
 
+    var isRolling = mode === 'rolling';
+    var rollingRow = document.getElementById('rolling-params-row');
+    if (isRolling) { rollingRow.classList.remove('hidden'); } else { rollingRow.classList.add('hidden'); }
+    var rInputs = rollingRow.querySelectorAll('input,select');
+    for (var ri = 0; ri < rInputs.length; ri++) rInputs[ri].disabled = !isRolling;
+
     var sizingVal = document.querySelector('select[name="sizing"]').value;
     var rules = [
         ['ind1-group', !isOsc && !isRegression && !isDCA],
         ['period1-group', !isOsc && !isRegression && !isDCA && ind1 !== 'price' && mode !== 'heatmap'],
         ['ind-sep', !isOsc && !isRegression && !isDCA],
-        ['period2-group', !isOsc && !isRegression && !isDCA && (mode === 'backtest' || mode === 'sweep-lev')],
-        ['range-min-group', !isOsc && !isRegression && !isDCA && (mode === 'sweep' || mode === 'heatmap')],
-        ['range-max-group', !isOsc && !isRegression && !isDCA && (mode === 'sweep' || mode === 'heatmap')],
-        ['step-group', !isOsc && !isRegression && !isDCA && mode === 'heatmap'],
+        ['period2-group', !isOsc && !isRegression && !isDCA && (mode === 'backtest' || mode === 'sweep-lev' || isRolling)],
+        ['range-min-group', !isOsc && !isRegression && !isDCA && (mode === 'sweep' || mode === 'heatmap' || isRolling)],
+        ['range-max-group', !isOsc && !isRegression && !isDCA && (mode === 'sweep' || mode === 'heatmap' || isRolling)],
+        ['step-group', !isOsc && !isRegression && !isDCA && (mode === 'heatmap' || isRolling)],
         ['long-lev-group', !isLevSweep && !isRegression && !isDCA],
         ['short-lev-group', !isLevSweep && !isRegression && !isDCA],
         ['exposure-group', !isLevSweep && !isRegression && !isDCA],
@@ -3113,6 +3197,10 @@ class Params:
             self.theme = form.get("theme", "dark")
             if self.theme not in ("dark", "light"):
                 self.theme = "dark"
+            # Rolling window params
+            self.window_size = int(form.get("window_size", 2))
+            self.step_size = int(form.get("step_size", 1))
+            self.rolling_metric = form.get("rolling_metric", "total_return")
         else:
             self.asset = DEFAULT_ASSET
             self.vs_asset = None
@@ -3156,6 +3244,10 @@ class Params:
             self.dca_show_lump_sum = False
             self.dca_reverse = False
             self.dca_sweep_param = "multiplier"
+            # Rolling window defaults
+            self.window_size = 2
+            self.step_size = 1
+            self.rolling_metric = "total_return"
 
 
 # Load data once at startup
@@ -4150,6 +4242,68 @@ def _run_post_handler(cancel_event):
                             hide_buyhold=(p.exposure == "short-cash"), lev_sweep=lev_sweep_info, thumb_b64=thumb_b64,
                             price_json=price_json, ind1_json=ind1_json, ind2_json=ind2_json,
                             ind1_label=best.get("ind1_label", ""), ind2_label=best.get("ind2_label", ""))
+
+    # --- Rolling Window Mode ---
+    if p.mode == "rolling":
+        import matplotlib
+        matplotlib.use("Agg")
+        import numpy as np
+
+        # Validate: need a fixed strategy period
+        if p.ind2_period is None:
+            return _render_main(p, chart=None, best=None, table_rows=None, col_header=col_header,
+                                error="Rolling window requires a fixed strategy. Please set Period 2.",
+                                price_json=None, ind1_json="[]", ind2_json="[]",
+                                ind1_label="", ind2_label="")
+
+        # Generate windows
+        try:
+            windows = bt.generate_rolling_windows(df_full, p.window_size, p.step_size, periods_per_year)
+        except ValueError as e:
+            return _render_main(p, chart=None, best=None, table_rows=None, col_header=col_header,
+                                error=str(e),
+                                price_json=None, ind1_json="[]", ind2_json="[]",
+                                ind1_label="", ind2_label="")
+
+        # Fixed strategy evaluation (for timeline + equity overlay)
+        fixed_results = bt.rolling_window_evaluate(
+            df_full, windows, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
+            p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage,
+            p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate)
+
+        # Consistency score
+        score, score_label = bt.compute_consistency_score(fixed_results, p.rolling_metric)
+
+        # Strategy label
+        if p.ind1_name != "price":
+            strategy_label = f"{p.ind1_name.upper()}({p.ind1_period})/{p.ind2_name.upper()}({p.ind2_period})"
+        else:
+            strategy_label = f"Price/{p.ind2_name.upper()}({p.ind2_period})"
+
+        # Sweep evaluation (for 3D surface + heatmap)
+        sweep_data = bt.rolling_window_sweep(
+            df_full, windows, p.ind1_name, p.ind1_period, p.ind2_name,
+            "ind2", p.range_min, p.range_max, p.step,
+            p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage,
+            p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate,
+            metric=p.rolling_metric)
+
+        # Generate all 4 charts
+        chart_timeline = bt.generate_rolling_timeline_chart(
+            fixed_results, p.rolling_metric, strategy_label, score, score_label, p.theme)
+        chart_3d = bt.generate_rolling_3d_surface(sweep_data, p.rolling_metric, strategy_label, p.theme)
+        chart_heatmap = bt.generate_rolling_heatmap(sweep_data, p.rolling_metric, strategy_label, p.theme)
+        chart_equity = bt.generate_rolling_equity_overlay(fixed_results, strategy_label, p.theme)
+
+        return _render_main(p, chart=chart_timeline,
+                            rolling_charts={"timeline": chart_timeline, "surface": chart_3d,
+                                            "heatmap": chart_heatmap, "equity": chart_equity},
+                            rolling_score=score, rolling_score_label=score_label,
+                            rolling_metric=p.rolling_metric, rolling_windows=len(windows),
+                            rolling_strategy=strategy_label,
+                            best=None, table_rows=None, col_header=col_header,
+                            price_json=None, ind1_json="[]", ind2_json="[]",
+                            ind1_label="", ind2_label="")
 
     # --- Heatmap Mode ---
     if p.mode == "heatmap":

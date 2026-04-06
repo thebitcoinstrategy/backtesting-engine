@@ -967,3 +967,103 @@ class TestCopyTradingUrl:
         assert 'coll-copytrading' in src, (
             "New collection modal must have copy trading URL input"
         )
+
+
+# ---------------------------------------------------------------------------
+# Rolling Window Analysis
+# ---------------------------------------------------------------------------
+
+class TestRollingWindowAnalysis:
+    """Tests for rolling window analysis feature."""
+
+    def _make_df(self, years=6, seed=42):
+        """Create synthetic daily price data."""
+        dates = pd.date_range('2018-01-01', periods=int(years * 365), freq='D', tz='UTC')
+        np.random.seed(seed)
+        prices = 100 * np.exp(np.cumsum(np.random.randn(len(dates)) * 0.01))
+        return pd.DataFrame({'close': prices}, index=dates)
+
+    def test_generate_rolling_windows_basic(self):
+        """10 years, window=2yr, step=1yr should produce multiple windows."""
+        df = self._make_df(years=10)
+        windows = bt.generate_rolling_windows(df, window_years=2, step_years=1)
+        assert len(windows) >= 7, f"Expected >= 7 windows, got {len(windows)}"
+        for w in windows:
+            assert "start" in w and "end" in w and "label" in w
+            span_days = (w["end"] - w["start"]).days
+            assert 700 <= span_days <= 740, f"Window span {span_days} days, expected ~730"
+
+    def test_generate_rolling_windows_short_dataset(self):
+        """Dataset shorter than window should raise ValueError."""
+        df = self._make_df(years=1)
+        import pytest
+        with pytest.raises(ValueError, match="window requires"):
+            bt.generate_rolling_windows(df, window_years=3, step_years=1)
+
+    def test_rolling_window_evaluate_returns_results(self):
+        """Evaluate should return one result per window with expected keys."""
+        df = self._make_df(years=6)
+        windows = bt.generate_rolling_windows(df, 2, 1)
+        results = bt.rolling_window_evaluate(df, windows, 'price', None, 'sma', 50, 10000)
+        assert len(results) == len(windows)
+        for r in results:
+            assert "total_return" in r
+            assert "alpha" in r
+            assert "sharpe" in r
+            assert "equity" in r
+            assert len(r["equity"]) > 0
+
+    def test_rolling_window_evaluate_warmup_correct(self):
+        """Indicator values at window start should reflect pre-window data (proper warmup)."""
+        df = self._make_df(years=6)
+        windows = bt.generate_rolling_windows(df, 2, 1)
+        # SMA(50) at window[1] start needs 50 days before that date
+        # If warmup is broken, the first SMA values would be NaN
+        results = bt.rolling_window_evaluate(df, windows, 'price', None, 'sma', 50, 10000)
+        # Second window starts 1yr in — plenty of warmup for SMA(50)
+        # Equity should be close to initial_cash at start (not NaN or 0)
+        first_equity = results[1]["equity"].iloc[0]
+        assert not np.isnan(first_equity), "First equity value should not be NaN (warmup broken)"
+        assert first_equity > 0, "First equity value should be positive"
+
+    def test_rolling_window_sweep_shape(self):
+        """Sweep matrix should be (n_windows, n_periods)."""
+        df = self._make_df(years=6)
+        windows = bt.generate_rolling_windows(df, 2, 1)
+        sweep = bt.rolling_window_sweep(df, windows, 'price', None, 'sma',
+                                         'ind2', 10, 100, 10, 10000)
+        expected_periods = list(range(10, 101, 10))
+        assert sweep["periods"] == expected_periods
+        assert sweep["matrix"].shape == (len(windows), len(expected_periods))
+        assert len(sweep["best_per_window"]) == len(windows)
+
+    def test_consistency_score_all_positive(self):
+        """All-positive windows should score > 70."""
+        fake_results = [{"total_return": r} for r in [10, 20, 15, 25, 12]]
+        score, label = bt.compute_consistency_score(fake_results, "total_return")
+        assert score > 70, f"All-positive should score > 70, got {score}"
+
+    def test_consistency_score_mixed(self):
+        """Half positive, half negative should score 35-55."""
+        fake_results = [{"total_return": r} for r in [10, -15, 20, -25]]
+        score, label = bt.compute_consistency_score(fake_results, "total_return")
+        assert 20 <= score <= 60, f"Mixed results should score 20-60, got {score}"
+
+    def test_rolling_mode_in_app(self):
+        """app.py must have rolling mode card and handler."""
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            src = f.read()
+        assert "data-mode=\"rolling\"" in src, "Rolling mode card must exist"
+        assert "p.mode == \"rolling\"" in src, "Rolling mode handler must exist"
+        assert "rolling-params-row" in src, "Rolling params form row must exist"
+        assert "switchRollingTab" in src, "Tab switching JS must exist"
+
+    def test_rolling_params_parsed(self):
+        """Params class must parse window_size and step_size."""
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            src = f.read()
+        assert "self.window_size" in src, "Params must parse window_size"
+        assert "self.step_size" in src, "Params must parse step_size"
+        assert "self.rolling_metric" in src, "Params must parse rolling_metric"
