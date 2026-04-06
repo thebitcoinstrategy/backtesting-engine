@@ -2565,8 +2565,12 @@ def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark",
                  fontsize=13, color=t["text"], pad=12)
 
     # Highlight the selected strategy's period column
-    if selected_period is not None and selected_period in periods:
-        sel_j = periods.index(selected_period)
+    if selected_period is not None:
+        if selected_period in periods:
+            sel_j = periods.index(selected_period)
+        else:
+            # Find nearest period in the list
+            sel_j = min(range(len(periods)), key=lambda i: abs(periods[i] - selected_period))
         # Draw a vertical highlight band behind the data
         ax.axvline(x=sel_j, color=t["accent"], linewidth=2, alpha=0.7)
         # Mark the column header
