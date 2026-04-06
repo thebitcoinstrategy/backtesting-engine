@@ -1802,13 +1802,11 @@ HTML = """\
                     </div>
                     {% if rolling_is_dual|default(false) %}
                     <div class="rolling-tabs">
-                        <button class="rolling-tab-btn active" onclick="switchRollingTab('single-col', this)">Strategy Over Time</button>
-                        <button class="rolling-tab-btn" onclick="switchRollingTab('animated', this)">Heatmap Over Time</button>
+                        <button class="rolling-tab-btn active" onclick="switchRollingTab('animated', this)">Heatmap Over Time</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('timeline', this)">Timeline</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('equity', this)">Equity Overlay</button>
                     </div>
-                    <div class="rolling-tab-content" id="rtab-single-col"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.single_col }}"/></div>
-                    <div class="rolling-tab-content hidden" id="rtab-animated">
+                    <div class="rolling-tab-content" id="rtab-animated">
                         <div id="plotly-animated-container" style="width:100%;height:650px;border-radius:12px;border:1px solid var(--border);background:var(--bg-deep)"></div>
                         <script>
                         (function() {
@@ -4446,11 +4444,7 @@ def _run_post_handler(cancel_event):
         metric_display = metric_names.get(p.rolling_metric, p.rolling_metric)
 
         if is_dual:
-            # Dual indicator: single-column heatmap + interactive 3D surface
-            chart_single_col = bt.generate_rolling_single_column(
-                fixed_results, p.rolling_metric, strategy_label, p.theme)
-
-            # Sweep both periods for 3D surface
+            # Dual indicator: animated heatmap over time
             import json as json_mod
             dual_sweep = bt.rolling_window_sweep_dual(
                 df_full, windows, p.ind1_name, p.ind2_name,
@@ -4483,9 +4477,8 @@ def _run_post_handler(cancel_event):
                 "same_type": dual_sweep["same_type"],
             })
 
-            return _render_main(p, chart=chart_single_col,
-                                rolling_charts={"single_col": chart_single_col,
-                                                "timeline": chart_timeline,
+            return _render_main(p, chart=chart_timeline,
+                                rolling_charts={"timeline": chart_timeline,
                                                 "equity": chart_equity},
                                 rolling_is_dual=True, rolling_plotly_data=plotly_data,
                                 rolling_score=score, rolling_score_label=score_label,
