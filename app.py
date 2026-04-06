@@ -1813,7 +1813,7 @@ HTML = """\
                             <input type="range" id="anim-slider" min="0" max="0" value="0" style="width:100%;accent-color:var(--accent)" oninput="goToHeatmapFrame(parseInt(this.value), true)">
                         </div>
                         <script>
-                        var _animData, _animPlaying = false, _animTimer = null, _animFrame = 0, _animFront = 'a', _animTransitioning = false;
+                        var _animData, _animPlaying = false, _animTimer = null, _animFrame = 0, _animFront = 'a';
                         (function() {
                             _animData = {{ rolling_plotly_data|safe }};
                             function makeTrace(d, frameIdx) {
@@ -1883,7 +1883,6 @@ HTML = """\
                             Plotly.relayout(elId, {'title.text': d.strategy_label + ' \u2014 ' + d.metric_label + ' (' + f.label + ')'});
                         }
                         function goToHeatmapFrame(idx, instant) {
-                            if (_animTransitioning && !instant) return;
                             _animFrame = idx;
                             var d = _animData, f = d.frames[idx];
                             document.getElementById('anim-slider').value = idx;
@@ -1893,7 +1892,6 @@ HTML = """\
                                 return;
                             }
                             // Cross-fade: render new frame on back layer, then swap opacity
-                            _animTransitioning = true;
                             var backId = _animFront === 'a' ? 'b' : 'a';
                             var frontEl = document.getElementById('plotly-anim-' + _animFront);
                             var backEl = document.getElementById('plotly-anim-' + backId);
@@ -1904,7 +1902,6 @@ HTML = """\
                             frontEl.style.opacity = '0';
                             frontEl.style.pointerEvents = 'none';
                             _animFront = backId;
-                            setTimeout(function() { _animTransitioning = false; }, 900);
                         }
                         function toggleHeatmapPlay() {
                             if (_animPlaying) {
