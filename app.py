@@ -3353,7 +3353,7 @@ class Params:
             if self.theme not in ("dark", "light"):
                 self.theme = "dark"
             # Rolling window params
-            self.window_size = int(form.get("window_size", 2))
+            self.window_size = int(form.get("window_size", 4))
             self.step_size = int(form.get("step_size", 1))
             self.rolling_metric = form.get("rolling_metric", "total_return")
         else:
@@ -3400,7 +3400,7 @@ class Params:
             self.dca_reverse = False
             self.dca_sweep_param = "multiplier"
             # Rolling window defaults
-            self.window_size = 2
+            self.window_size = 4
             self.step_size = 1
             self.rolling_metric = "total_return"
 
