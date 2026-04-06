@@ -1466,25 +1466,7 @@ HTML = """\
                             <input type="number" name="step" value="{{ p.step }}" min="1">
                         </div>
                     </div>
-                    <div class="form-row hidden" id="rolling-params-row">
-                        <div class="form-group">
-                            <label>Window Size (years)</label>
-                            <select name="window_size">
-                                {% for y in [1,2,3,4,5] %}
-                                <option value="{{ y }}" {{ 'selected' if p.window_size == y }}>{{ y }} year{{ 's' if y > 1 }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <input type="hidden" name="step_size" value="0.5">
-                        <div class="form-group">
-                            <label>Metric</label>
-                            <select name="rolling_metric">
-                                <option value="total_return" {{ 'selected' if p.rolling_metric == 'total_return' }}>Total Return</option>
-                                <option value="alpha" {{ 'selected' if p.rolling_metric == 'alpha' }}>Alpha vs B&H</option>
-                                <option value="sharpe" {{ 'selected' if p.rolling_metric == 'sharpe' }}>Sharpe Ratio</option>
-                            </select>
-                        </div>
-                    </div>
+                    <input type="hidden" name="step_size" value="0.5">
                     <input type="hidden" name="rolling_metric" id="rolling-metric-hidden" value="{{ p.rolling_metric }}">
                 </div>
                 <div class="form-section">
@@ -1758,7 +1740,7 @@ HTML = """\
                             <label>End Date</label>
                             <input type="date" name="end_date" value="{{ p.end_date }}">
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" id="initial-cash-group">
                             <label>Initial Cash</label>
                             <div style="position:relative">
                                 <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:0.9em">$</span>
@@ -1772,6 +1754,22 @@ HTML = """\
                         <div class="form-group" id="financing-group">
                             <label>Financing (% p.a.) <span class="m-info" data-tip="Annual financing rate for leveraged/margin positions.&#10;Long pays, short earns. Applied daily.&#10;Crypto: full notional. Stocks: borrowed portion.">ⓘ</span></label>
                             <input type="number" name="financing_rate" value="{{ p.financing_rate }}" step="0.1" min="0">
+                        </div>
+                        <div class="form-group hidden" id="window-size-group">
+                            <label>Window Size</label>
+                            <select name="window_size" id="window-size-select">
+                                {% for y in [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4] %}
+                                <option value="{{ y }}" {{ 'selected' if p.window_size == y }}>{{ y }} yr{{ 's' if y > 1 }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group hidden" id="rolling-metric-group">
+                            <label>Metric</label>
+                            <select name="rolling_metric">
+                                <option value="total_return" {{ 'selected' if p.rolling_metric == 'total_return' }}>Total Return</option>
+                                <option value="alpha" {{ 'selected' if p.rolling_metric == 'alpha' }}>Alpha vs B&H</option>
+                                <option value="sharpe" {{ 'selected' if p.rolling_metric == 'sharpe' }}>Sharpe Ratio</option>
+                            </select>
                         </div>
                         <div class="form-group" style="min-width:auto">
                             <label>&nbsp;</label>
@@ -2394,10 +2392,14 @@ function toggleFields() {
     }
 
     var isRolling = mode === 'rolling';
-    var rollingRow = document.getElementById('rolling-params-row');
-    if (isRolling) { rollingRow.classList.remove('hidden'); } else { rollingRow.classList.add('hidden'); }
-    var rInputs = rollingRow.querySelectorAll('input,select');
-    for (var ri = 0; ri < rInputs.length; ri++) rInputs[ri].disabled = !isRolling;
+    var windowGroup = document.getElementById('window-size-group');
+    var metricGroup = document.getElementById('rolling-metric-group');
+    var cashGroup = document.getElementById('initial-cash-group');
+    if (isRolling) { windowGroup.classList.remove('hidden'); metricGroup.classList.remove('hidden'); cashGroup.classList.add('hidden'); }
+    else { windowGroup.classList.add('hidden'); metricGroup.classList.add('hidden'); cashGroup.classList.remove('hidden'); }
+    windowGroup.querySelector('select').disabled = !isRolling;
+    metricGroup.querySelector('select').disabled = !isRolling;
+    if (isRolling) autoAdjustWindowSize();
 
     var sizingVal = document.querySelector('select[name="sizing"]').value;
     var rules = [
@@ -2493,6 +2495,25 @@ document.getElementById('buy_threshold').addEventListener('input', function() { 
 document.getElementById('sell_threshold').addEventListener('input', function() { updateExplainer(); enableBtn(); });
 document.getElementById('osc_period').addEventListener('input', function() { updateExplainer(); enableBtn(); });
 document.querySelector('select[name="sizing"]').addEventListener('change', function() { toggleFields(); enableBtn(); });
+function autoAdjustWindowSize() {
+    var startDate = document.getElementById('start_date').value;
+    var endEl = document.querySelector('input[name="end_date"]');
+    var endDate = endEl ? endEl.value : '';
+    if (!startDate) return;
+    var end = endDate ? new Date(endDate) : new Date();
+    var start = new Date(startDate);
+    var dataYears = (end - start) / (365.25 * 86400000);
+    // Window = half of data span, clamped to 0.5-4, rounded to nearest 0.5
+    var ideal = Math.round(Math.min(4, Math.max(0.5, dataYears / 2)) * 2) / 2;
+    var sel = document.getElementById('window-size-select');
+    // Pick closest available option
+    var best = null, bestDiff = 999;
+    for (var i = 0; i < sel.options.length; i++) {
+        var diff = Math.abs(parseFloat(sel.options[i].value) - ideal);
+        if (diff < bestDiff) { bestDiff = diff; best = i; }
+    }
+    if (best !== null) sel.selectedIndex = best;
+}
 function setAllData() {
     var asset = document.getElementById('asset').value;
     document.getElementById('start_date').value = assetStarts[asset] || '';
@@ -2508,6 +2529,8 @@ function onAssetChange() {
     } else if (start1) {
         startInput.value = start1;
     }
+    var mode = document.getElementById('mode').value;
+    if (mode === 'rolling') autoAdjustWindowSize();
 }
 var assetLogos = {{ asset_logos|tojson }};
 function selectAsset(name, el) {
@@ -3337,7 +3360,7 @@ class Params:
             if self.theme not in ("dark", "light"):
                 self.theme = "dark"
             # Rolling window params
-            self.window_size = int(form.get("window_size", 4))
+            self.window_size = float(form.get("window_size", 4))
             self.step_size = float(form.get("step_size", 0.5))
             self.rolling_metric = form.get("rolling_metric", "total_return")
         else:
