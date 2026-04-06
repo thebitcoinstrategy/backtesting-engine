@@ -1871,15 +1871,15 @@ HTML = """\
                         })();
                         function _updatePlotlyFrame(elId, d, f) {
                             var fm = f.zmax || 100;
-                            Plotly.restyle(elId, {z:[f.z], zmin:[-fm], zmax:[fm]}, [0]);
-                            // Update best star marker position (last trace = best marker if it exists)
+                            var promises = [Plotly.restyle(elId, {z:[f.z], zmin:[-fm], zmax:[fm]}, [0])];
                             var el = document.getElementById(elId);
                             if (el && el.data && f.best_p1 && f.best_p2) {
                                 var bestIdx = el.data.length - 1;
-                                Plotly.restyle(elId, {x:[[f.best_p2]], y:[[f.best_p1]],
-                                    'hovertemplate': 'Best in window: '+d.ind1_name+'('+f.best_p1+')/'+d.ind2_name+'('+f.best_p2+')<extra></extra>'}, [bestIdx]);
+                                promises.push(Plotly.restyle(elId, {x:[[f.best_p2]], y:[[f.best_p1]],
+                                    'hovertemplate': 'Best in window: '+d.ind1_name+'('+f.best_p1+')/'+d.ind2_name+'('+f.best_p2+')<extra></extra>'}, [bestIdx]));
                             }
-                            Plotly.relayout(elId, {'title.text': d.strategy_label + ' \u2014 ' + d.metric_label + ' (' + f.label + ')'});
+                            promises.push(Plotly.relayout(elId, {'title.text': d.strategy_label + ' \u2014 ' + d.metric_label + ' (' + f.label + ')'}));
+                            return Promise.all(promises);
                         }
                         function goToHeatmapFrame(idx, instant) {
                             _animFrame = idx;
@@ -1890,25 +1890,33 @@ HTML = """\
                                 _updatePlotlyFrame('plotly-anim-' + _animFront, d, f);
                                 return;
                             }
-                            // Cross-fade: render new frame on back layer, then swap opacity
+                            // Update back layer data, then cross-fade after render completes
                             var backId = _animFront === 'a' ? 'b' : 'a';
                             var frontEl = document.getElementById('plotly-anim-' + _animFront);
                             var backEl = document.getElementById('plotly-anim-' + backId);
-                            _updatePlotlyFrame('plotly-anim-' + backId, d, f);
-                            // Cross-fade: back fades in, front fades out
-                            backEl.style.opacity = '1';
-                            backEl.style.pointerEvents = 'auto';
-                            frontEl.style.opacity = '0';
-                            frontEl.style.pointerEvents = 'none';
-                            _animFront = backId;
+                            _updatePlotlyFrame('plotly-anim-' + backId, d, f).then(function() {
+                                backEl.style.opacity = '1';
+                                backEl.style.pointerEvents = 'auto';
+                                frontEl.style.opacity = '0';
+                                frontEl.style.pointerEvents = 'none';
+                                _animFront = backId;
+                            });
                         }
                         function stopHeatmapPlay() {
-                            if (_animTimer) { clearInterval(_animTimer); _animTimer = null; }
+                            if (_animTimer) { clearTimeout(_animTimer); _animTimer = null; }
                             _animPlaying = false;
                             var icon = document.getElementById('anim-play-icon');
                             var label = document.getElementById('anim-play-label');
                             if (icon) icon.innerHTML = '&#9654;';
                             if (label) label.textContent = 'Play';
+                        }
+                        function _scheduleNextFrame() {
+                            _animTimer = setTimeout(function() {
+                                if (!_animPlaying) return;
+                                _animFrame = (_animFrame + 1) % _animData.frames.length;
+                                goToHeatmapFrame(_animFrame, false);
+                                _scheduleNextFrame();
+                            }, 1000);
                         }
                         function toggleHeatmapPlay() {
                             if (_animPlaying) {
@@ -1917,11 +1925,8 @@ HTML = """\
                                 _animPlaying = true;
                                 document.getElementById('anim-play-icon').innerHTML = '&#9646;&#9646;';
                                 document.getElementById('anim-play-label').textContent = 'Pause';
-                                if (_animTimer) clearInterval(_animTimer);
-                                _animTimer = setInterval(function() {
-                                    _animFrame = (_animFrame + 1) % _animData.frames.length;
-                                    goToHeatmapFrame(_animFrame, false);
-                                }, 1000);
+                                if (_animTimer) clearTimeout(_animTimer);
+                                _scheduleNextFrame();
                             }
                         }
                         </script>
