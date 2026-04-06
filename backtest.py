@@ -1139,8 +1139,13 @@ def generate_rolling_windows(df, window_years, step_years, periods_per_year=365,
         # Discard partial windows (<80% of expected data)
         actual_days = len(df[(df.index >= start) & (df.index < end)])
         if actual_days >= expected_days * 0.8:
+            # Include month abbreviation for sub-year steps to avoid duplicate labels
+            s_month = start.strftime("%b") if step_years < 1 else ""
+            e_month = end.strftime("%b") if step_years < 1 else ""
             if window_years == 1:
-                label = str(start.year)
+                label = f"{s_month} {start.year}".strip() if s_month else str(start.year)
+            elif s_month:
+                label = f"{s_month} {start.year}\u2013{e_month} {end.year}"
             else:
                 label = f"{start.year}-{end.year}"
             windows.append({"start": start, "end": end, "label": label})
