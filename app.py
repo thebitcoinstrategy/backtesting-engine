@@ -1817,13 +1817,15 @@ HTML = """\
                                 if (typeof Plotly === 'undefined') { setTimeout(renderAnimated, 200); return; }
                                 var periods = data.periods;
                                 var frames = data.frames;
+                                // Explicit RdYlGn to match matplotlib heatmaps
+                                var rdYlGn = [[0,'#a50026'],[0.1,'#d73027'],[0.2,'#f46d43'],[0.3,'#fdae61'],[0.4,'#fee08b'],[0.5,'#ffffbf'],[0.6,'#d9ef8b'],[0.7,'#a6d96a'],[0.8,'#66bd63'],[0.9,'#1a9850'],[1,'#006837']];
                                 // Initial frame — scale symmetric around 0
                                 var initZ = frames[0].z;
                                 var initMax = frames[0].zmax || 100;
                                 var trace = {
                                     x: periods, y: periods, z: initZ,
-                                    type: 'heatmap', colorscale: 'RdYlGn', showscale: true,
-                                    zmin: -initMax, zmax: initMax, zmid: 0,
+                                    type: 'heatmap', colorscale: rdYlGn, showscale: true,
+                                    zmin: -initMax, zmax: initMax,
                                     colorbar: { title: {text: data.metric_label, font:{color:'#8890a4'}}, tickfont: {color:'#8890a4'} },
                                     hovertemplate: data.ind1_name + '(%{y}) / ' + data.ind2_name + '(%{x})<br>' + data.metric_label + ': %{z:.1f}<extra></extra>'
                                 };
@@ -1851,7 +1853,7 @@ HTML = """\
                                 for (var i = 0; i < frames.length; i++) {
                                     sliderSteps.push({
                                         method: 'animate', label: frames[i].label,
-                                        args: [[frames[i].label], {mode:'immediate', transition:{duration:300}, frame:{duration:300, redraw:true}}]
+                                        args: [[frames[i].label], {mode:'immediate', transition:{duration:600, easing:'cubic-in-out'}, frame:{duration:600, redraw:true}}]
                                     });
                                 }
                                 var layout = {
@@ -1864,7 +1866,7 @@ HTML = """\
                                         type: 'buttons', showactive: false, x: 0.05, y: -0.12, xanchor: 'left',
                                         buttons: [
                                             {label: '&#9654; Play', method: 'animate',
-                                             args: [null, {fromcurrent:true, frame:{duration:800, redraw:true}, transition:{duration:400}, mode:'immediate'}]},
+                                             args: [null, {fromcurrent:true, frame:{duration:1200, redraw:true}, transition:{duration:600, easing:'cubic-in-out'}, mode:'immediate'}]},
                                             {label: '&#9646;&#9646; Pause', method: 'animate',
                                              args: [[null], {mode:'immediate', frame:{duration:0, redraw:false}}]}
                                         ],
