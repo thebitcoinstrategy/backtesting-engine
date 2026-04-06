@@ -2527,14 +2527,18 @@ def generate_rolling_equity_overlay(window_results, strategy_label, theme="dark"
 
 
 def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark",
-                             selected_period=None, sweep_ind_label=None):
+                             selected_period=None, sweep_ind_label=None,
+                             normalize_rows=False):
     """2D heatmap: rows=windows, columns=periods, color=metric.
     selected_period: highlight the user's chosen period column.
     sweep_ind_label: axis label like 'SMA Period' instead of generic 'Period'.
+    normalize_rows: if True, each row is independently scaled so the full
+        green-red range appears per time window (best=green, worst=red).
     Returns base64 PNG."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib.colors import Normalize as MplNormalize
     from io import BytesIO
     import base64
 
@@ -2549,10 +2553,33 @@ def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark",
     metric_label = metric_names.get(metric, metric)
     x_label = sweep_ind_label or "Period"
 
+    # Row-normalized: scale each row independently to [-1, 1]
+    if normalize_rows:
+        display_matrix = np.full_like(matrix, np.nan)
+        for i in range(n_win):
+            row = matrix[i]
+            valid = row[~np.isnan(row)]
+            if len(valid) == 0:
+                continue
+            row_max = np.max(np.abs(valid))
+            if row_max > 0:
+                display_matrix[i] = row / row_max
+            else:
+                display_matrix[i] = 0
+    else:
+        display_matrix = matrix
+
     fig, ax = plt.subplots(figsize=(max(10, n_per * 0.4), max(4, n_win * 0.7)), dpi=150)
-    im = ax.imshow(matrix, aspect="auto", cmap="RdYlGn", interpolation="nearest")
+    if normalize_rows:
+        im = ax.imshow(display_matrix, aspect="auto", cmap="RdYlGn", interpolation="nearest",
+                        vmin=-1, vmax=1)
+    else:
+        im = ax.imshow(display_matrix, aspect="auto", cmap="RdYlGn", interpolation="nearest")
     cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
-    cbar.set_label(metric_label, fontsize=10, color=t["muted"])
+    if normalize_rows:
+        cbar.set_label("Relative (per window)", fontsize=10, color=t["muted"])
+    else:
+        cbar.set_label(metric_label, fontsize=10, color=t["muted"])
     cbar.ax.tick_params(colors=t["muted"])
 
     ax.set_xticks(range(n_per))
@@ -2561,7 +2588,8 @@ def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark",
     ax.set_yticklabels(win_labels, fontsize=9)
     ax.set_xlabel(x_label, fontsize=11, color=t["muted"])
     ax.set_ylabel("Window", fontsize=11, color=t["muted"])
-    ax.set_title(f"{strategy_label} — {x_label} Performance Over Time\n{metric_label}",
+    title_suffix = f"{metric_label} (row-normalized)" if normalize_rows else metric_label
+    ax.set_title(f"{strategy_label} — {x_label} Performance Over Time\n{title_suffix}",
                  fontsize=13, color=t["text"], pad=12)
 
     # Highlight the selected strategy's period column
@@ -2583,13 +2611,14 @@ def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark",
             j = periods.index(best_p)
             ax.plot(j, i, marker="*", color="white", markersize=12, markeredgecolor="black", markeredgewidth=0.5)
 
-    # Annotate values if grid is small enough
+    # Annotate values if grid is small enough (always show original values)
     if n_win * n_per <= 200:
         for i in range(n_win):
             for j in range(n_per):
                 val = matrix[i, j]
+                disp_val = display_matrix[i, j]
                 if not np.isnan(val):
-                    color = "black" if val > np.nanmedian(matrix) else "white"
+                    color = "black" if disp_val > np.nanmedian(display_matrix) else "white"
                     ax.text(j, i, f"{val:.0f}" if abs(val) >= 10 else f"{val:.1f}",
                             ha="center", va="center", fontsize=max(5, min(7, 150 // max(n_win, n_per))), color=color)
 

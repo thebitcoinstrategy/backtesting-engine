@@ -1934,9 +1934,11 @@ HTML = """\
                     {% else %}
                     <div class="rolling-tabs">
                         <button class="rolling-tab-btn active" onclick="switchRollingTab('heatmap', this)">Heatmap</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('heatmap-norm', this)">Per-Window Scale</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('timeline', this)">Timeline</button>
                     </div>
                     <div class="rolling-tab-content" id="rtab-heatmap"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap }}"/></div>
+                    <div class="rolling-tab-content hidden" id="rtab-heatmap-norm"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap_norm }}"/></div>
                     {% endif %}
                     <div class="rolling-tab-content hidden" id="rtab-timeline"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.timeline }}"/></div>
                 </div>
@@ -4527,9 +4529,13 @@ def _run_post_handler(cancel_event):
             sweep_ind_label = f"{p.ind2_name.upper()} Period"
             chart_heatmap = bt.generate_rolling_heatmap(sweep_data, p.rolling_metric, strategy_label, p.theme,
                                                          selected_period=p.ind2_period, sweep_ind_label=sweep_ind_label)
+            chart_heatmap_norm = bt.generate_rolling_heatmap(sweep_data, p.rolling_metric, strategy_label, p.theme,
+                                                              selected_period=p.ind2_period, sweep_ind_label=sweep_ind_label,
+                                                              normalize_rows=True)
 
             return _render_main(p, chart=chart_heatmap,
                                 rolling_charts={"heatmap": chart_heatmap,
+                                                "heatmap_norm": chart_heatmap_norm,
                                                 "timeline": chart_timeline,
                                                 },
                                 rolling_score=score, rolling_score_label=score_label,
