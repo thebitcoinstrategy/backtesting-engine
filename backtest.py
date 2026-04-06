@@ -2264,7 +2264,7 @@ def generate_dual_sweep_heatmap(df, ind1_name, ind2_name,
 # --- Rolling Window Chart Generation ---
 
 def generate_rolling_timeline_chart(window_results, metric, strategy_label, score, score_label, theme="dark"):
-    """Horizontal bar chart: one bar per window, green/red by metric sign. Returns base64 PNG."""
+    """Vertical bar chart: windows on x-axis, metric on y-axis. Returns base64 PNG."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -2274,32 +2274,33 @@ def generate_rolling_timeline_chart(window_results, metric, strategy_label, scor
     t = _get_theme(theme)
     labels = [r["window"]["label"] for r in window_results]
     values = [r[metric] for r in window_results]
-    colors = [t["green"] if v > (0.5 if metric == "sharpe" else 0) else t["red"] for v in values]
+    threshold = 0.5 if metric == "sharpe" else 0
+    colors = [t["green"] if v > threshold else t["red"] for v in values]
 
     metric_names = {"total_return": "Total Return %", "alpha": "Alpha vs Buy & Hold %", "sharpe": "Sharpe Ratio"}
     metric_label = metric_names.get(metric, metric)
 
-    fig, ax = plt.subplots(figsize=(12, max(4, len(labels) * 0.6)), dpi=150)
-    y_pos = range(len(labels))
-    bars = ax.barh(y_pos, values, color=colors, height=0.6, edgecolor='none', alpha=0.85)
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels(labels, fontsize=10)
-    ax.set_xlabel(metric_label, fontsize=11, color=t["muted"])
-    ax.axvline(x=(0.5 if metric == "sharpe" else 0), color=t["muted"], linewidth=0.8, linestyle="--", alpha=0.5)
+    fig, ax = plt.subplots(figsize=(max(8, len(labels) * 1.2), 6), dpi=150)
+    x_pos = range(len(labels))
+    bars = ax.bar(x_pos, values, color=colors, width=0.6, edgecolor='none', alpha=0.85)
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(labels, fontsize=10, rotation=30 if len(labels) > 6 else 0, ha="right" if len(labels) > 6 else "center")
+    ax.set_ylabel(metric_label, fontsize=11, color=t["muted"])
+    ax.set_xlabel("Window", fontsize=11, color=t["muted"])
+    ax.axhline(y=threshold, color=t["muted"], linewidth=0.8, linestyle="--", alpha=0.5)
     ax.set_title(f"{strategy_label} — Rolling Window Consistency\n"
                  f"Score: {score:.0f}/100 ({score_label})  |  {metric_label}",
                  fontsize=13, color=t["text"], pad=12)
 
     # Value labels on bars
     for bar, val in zip(bars, values):
-        x_pos = bar.get_width()
-        ha = "left" if x_pos >= 0 else "right"
+        y_pos_val = bar.get_height()
+        va = "bottom" if y_pos_val >= 0 else "top"
         offset = abs(max(values) - min(values)) * 0.02 if values else 1
-        ax.text(x_pos + (offset if x_pos >= 0 else -offset), bar.get_y() + bar.get_height()/2,
-                f"{val:.1f}", va="center", ha=ha, fontsize=9, color=t["text"])
+        ax.text(bar.get_x() + bar.get_width()/2, y_pos_val + (offset if y_pos_val >= 0 else -offset),
+                f"{val:.1f}", ha="center", va=va, fontsize=9, color=t["text"])
 
-    ax.invert_yaxis()
-    ax.grid(axis="x", color=t["grid"], alpha=0.3)
+    ax.grid(axis="y", color=t["grid"], alpha=0.3)
     _apply_dark_theme(fig, ax, theme)
     plt.tight_layout()
 

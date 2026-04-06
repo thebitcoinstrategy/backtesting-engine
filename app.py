@@ -1801,14 +1801,12 @@ HTML = """\
                         </div>
                     </div>
                     <div class="rolling-tabs">
-                        <button class="rolling-tab-btn active" onclick="switchRollingTab('timeline', this)">Timeline</button>
-                        <button class="rolling-tab-btn" onclick="switchRollingTab('surface', this)">3D Surface</button>
-                        <button class="rolling-tab-btn" onclick="switchRollingTab('heatmap', this)">Heatmap</button>
+                        <button class="rolling-tab-btn active" onclick="switchRollingTab('heatmap', this)">Heatmap</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('timeline', this)">Timeline</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('equity', this)">Equity Overlay</button>
                     </div>
-                    <div class="rolling-tab-content" id="rtab-timeline"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.timeline }}"/></div>
-                    <div class="rolling-tab-content hidden" id="rtab-surface"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.surface }}"/></div>
-                    <div class="rolling-tab-content hidden" id="rtab-heatmap"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap }}"/></div>
+                    <div class="rolling-tab-content" id="rtab-heatmap"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap }}"/></div>
+                    <div class="rolling-tab-content hidden" id="rtab-timeline"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.timeline }}"/></div>
                     <div class="rolling-tab-content hidden" id="rtab-equity"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.equity }}"/></div>
                 </div>
             {% elif chart %}
@@ -4340,15 +4338,14 @@ def _run_post_handler(cancel_event):
             p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate,
             metric=p.rolling_metric)
 
-        # Generate all 4 charts
+        # Generate charts
         chart_timeline = bt.generate_rolling_timeline_chart(
             fixed_results, p.rolling_metric, strategy_label, score, score_label, p.theme)
-        chart_3d = bt.generate_rolling_3d_surface(sweep_data, p.rolling_metric, strategy_label, p.theme)
         chart_heatmap = bt.generate_rolling_heatmap(sweep_data, p.rolling_metric, strategy_label, p.theme)
         chart_equity = bt.generate_rolling_equity_overlay(fixed_results, strategy_label, p.theme)
 
-        return _render_main(p, chart=chart_timeline,
-                            rolling_charts={"timeline": chart_timeline, "surface": chart_3d,
+        return _render_main(p, chart=chart_heatmap,
+                            rolling_charts={"timeline": chart_timeline,
                                             "heatmap": chart_heatmap, "equity": chart_equity},
                             rolling_score=score, rolling_score_label=score_label,
                             rolling_metric=p.rolling_metric, rolling_windows=len(windows),
