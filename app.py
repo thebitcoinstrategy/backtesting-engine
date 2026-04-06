@@ -2052,16 +2052,14 @@ HTML = """\
                      data-best-short-lev="{{ lev_sweep.best_short_lev if lev_sweep|default(none) else '' }}"
                      style="display:none"></div>
                 {% endif %}
-                {% if best and p.mode in ('sweep', 'heatmap', 'sweep-lev') %}
-                <div style="margin-bottom:10px">
-                    <button class="action-btn primary" onclick="viewBestInBacktest()" style="width:100%">
-                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 8 4 12 12"/><line x1="2" y1="14" x2="14" y2="14" opacity="0.4"/></svg>
-                        View Best Result in Backtest
-                    </button>
-                </div>
-                {% endif %}
                 {% if is_authenticated %}
                 <div class="action-buttons" id="backtest-actions">
+                    {% if best and p.mode in ('sweep', 'heatmap', 'sweep-lev') %}
+                    <button class="action-btn primary" onclick="viewBestInBacktest()">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 8 4 12 12"/><line x1="2" y1="14" x2="14" y2="14" opacity="0.4"/></svg>
+                        View Best
+                    </button>
+                    {% endif %}
                     <button class="action-btn" onclick="saveBacktest()" id="save-btn">
                         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v10h10V6l-3-3H3z"/><path d="M5 3v3h4V3"/><path d="M5 9h6v4H5z"/></svg>
                         Save
@@ -2842,11 +2840,11 @@ function viewBestInBacktest() {
     if (fd.get('vs_asset')) params.set('vs_asset', fd.get('vs_asset'));
     params.set('ind1_name', fd.get('ind1_name'));
     params.set('ind2_name', fd.get('ind2_name'));
-    // Use best periods from optimization result
-    if (bp && bp.dataset.ind1Period) params.set('period1', bp.dataset.ind1Period);
-    else if (fd.get('period1')) params.set('period1', fd.get('period1'));
-    if (bp && bp.dataset.ind2Period) params.set('period2', bp.dataset.ind2Period);
-    else if (fd.get('period2')) params.set('period2', fd.get('period2'));
+    // Use best periods from optimization result (skip empty/None values)
+    var p1 = (bp && bp.dataset.ind1Period && bp.dataset.ind1Period !== 'None') ? bp.dataset.ind1Period : fd.get('period1');
+    if (p1 && p1 !== 'None' && p1 !== '') params.set('period1', p1);
+    var p2 = (bp && bp.dataset.ind2Period && bp.dataset.ind2Period !== 'None') ? bp.dataset.ind2Period : fd.get('period2');
+    if (p2 && p2 !== 'None' && p2 !== '') params.set('period2', p2);
     params.set('exposure', fd.get('exposure'));
     params.set('fee', fd.get('fee'));
     params.set('start_date', fd.get('start_date'));
@@ -3266,7 +3264,7 @@ class Params:
             self.signal_type = form.get("signal_type", "crossover")
             self.ind1_name = form.get("ind1_name", "price")
             p1_val = form.get("period1", "").strip()
-            self.ind1_period = int(p1_val) if p1_val else None
+            self.ind1_period = int(p1_val) if p1_val and p1_val not in ("None", "null") else None
             self.ind2_name = form.get("ind2_name", "sma")
             p2_val = form.get("period2", "").strip()
             self.ind2_period = int(p2_val) if p2_val else None
