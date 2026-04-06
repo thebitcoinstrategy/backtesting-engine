@@ -2599,11 +2599,11 @@ def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark",
         else:
             # Find nearest period in the list
             sel_j = min(range(len(periods)), key=lambda i: abs(periods[i] - selected_period))
-        # Draw a vertical highlight band behind the data
-        ax.axvline(x=sel_j, color=t["accent"], linewidth=2, alpha=0.7)
+        # Draw a thick blue vertical line
+        ax.axvline(x=sel_j, color="#3b82f6", linewidth=3.5, alpha=0.9, zorder=5)
         # Mark the column header
         ax.text(sel_j, -0.7, f"\u25BC {selected_period}", ha="center", va="bottom",
-                fontsize=8, fontweight="bold", color=t["accent"])
+                fontsize=9, fontweight="bold", color="#3b82f6")
 
     # Mark best period per window with a star
     for i, (best_p, best_v) in enumerate(best_per_window):
