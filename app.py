@@ -1817,14 +1817,12 @@ HTML = """\
                                 if (typeof Plotly === 'undefined') { setTimeout(renderAnimated, 200); return; }
                                 var periods = data.periods;
                                 var frames = data.frames;
-                                // Red-green diverging scale centered at 0
-                                var rgScale = [[0,'#d32f2f'],[0.35,'#ef5350'],[0.5,'#424242'],[0.65,'#66bb6a'],[1,'#2e7d32']];
                                 // Initial frame — scale symmetric around 0
                                 var initZ = frames[0].z;
                                 var initMax = frames[0].zmax || 100;
                                 var trace = {
                                     x: periods, y: periods, z: initZ,
-                                    type: 'heatmap', colorscale: rgScale, showscale: true,
+                                    type: 'heatmap', colorscale: 'RdYlGn', showscale: true,
                                     zmin: -initMax, zmax: initMax, zmid: 0,
                                     colorbar: { title: {text: data.metric_label, font:{color:'#8890a4'}}, tickfont: {color:'#8890a4'} },
                                     hovertemplate: data.ind1_name + '(%{y}) / ' + data.ind2_name + '(%{x})<br>' + data.metric_label + ': %{z:.1f}<extra></extra>'
