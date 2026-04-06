@@ -1902,15 +1902,22 @@ HTML = """\
                             frontEl.style.pointerEvents = 'none';
                             _animFront = backId;
                         }
+                        function stopHeatmapPlay() {
+                            if (_animTimer) { clearInterval(_animTimer); _animTimer = null; }
+                            _animPlaying = false;
+                            var icon = document.getElementById('anim-play-icon');
+                            var label = document.getElementById('anim-play-label');
+                            if (icon) icon.innerHTML = '&#9654;';
+                            if (label) label.textContent = 'Play';
+                        }
                         function toggleHeatmapPlay() {
                             if (_animPlaying) {
-                                clearInterval(_animTimer); _animTimer = null; _animPlaying = false;
-                                document.getElementById('anim-play-icon').innerHTML = '&#9654;';
-                                document.getElementById('anim-play-label').textContent = 'Play';
+                                stopHeatmapPlay();
                             } else {
                                 _animPlaying = true;
                                 document.getElementById('anim-play-icon').innerHTML = '&#9646;&#9646;';
                                 document.getElementById('anim-play-label').textContent = 'Pause';
+                                if (_animTimer) clearInterval(_animTimer);
                                 _animTimer = setInterval(function() {
                                     _animFrame = (_animFrame + 1) % _animData.frames.length;
                                     goToHeatmapFrame(_animFrame, false);
