@@ -1377,9 +1377,10 @@ def rolling_window_sweep_dual(df, windows, ind1_name, ind2_name,
             pos[nan_mask] = 0
             position_cache[(p1, p2)] = pos
 
-    # For each (p1, p2), compute metric averaged across windows
-    avg_matrix = np.full((n_per, n_per), np.nan)
+    # For each (p1, p2), compute metric per window AND averaged
     n_windows = len(windows)
+    avg_matrix = np.full((n_per, n_per), np.nan)
+    per_window_matrices = [np.full((n_per, n_per), np.nan) for _ in range(n_windows)]
 
     for pi, p1 in enumerate(periods):
         for pj, p2 in enumerate(periods):
@@ -1389,7 +1390,7 @@ def rolling_window_sweep_dual(df, windows, ind1_name, ind2_name,
                 continue
             cached_pos = position_cache[(p1, p2)]
             vals = []
-            for w in windows:
+            for wi, w in enumerate(windows):
                 mask = (df.index >= w["start"]) & (df.index < w["end"])
                 w_pos = cached_pos[mask]
                 w_ret = daily_return[mask]
@@ -1418,11 +1419,12 @@ def rolling_window_sweep_dual(df, windows, ind1_name, ind2_name,
                 else:
                     val = total_return
                 vals.append(val)
+                per_window_matrices[wi][pi, pj] = val
 
             if vals:
                 avg_matrix[pi, pj] = np.mean(vals)
 
-    # Find best combo
+    # Find best combo (across average)
     best_val = -np.inf
     best_p1 = best_p2 = periods[0]
     for pi in range(n_per):
@@ -1436,6 +1438,8 @@ def rolling_window_sweep_dual(df, windows, ind1_name, ind2_name,
     return {
         "periods": periods,
         "matrix": avg_matrix,
+        "per_window_matrices": per_window_matrices,
+        "window_labels": [w["label"] for w in windows],
         "best_p1": best_p1,
         "best_p2": best_p2,
         "best_val": best_val,

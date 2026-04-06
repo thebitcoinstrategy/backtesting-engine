@@ -1064,6 +1064,20 @@ class TestRollingWindowAnalysis:
         filtered2 = bt.generate_rolling_windows(df, 2, 1, end_date="2023-01-01")
         assert len(filtered2) < len(all_windows), "end_date should reduce window count"
 
+    def test_rolling_window_sweep_dual_per_window(self):
+        """Dual sweep must return per_window_matrices with one matrix per window."""
+        df = self._make_df(years=6)
+        windows = bt.generate_rolling_windows(df, 2, 1)
+        result = bt.rolling_window_sweep_dual(df, windows, 'sma', 'ema',
+                                               10, 50, 10, 10000)
+        assert "per_window_matrices" in result, "Must return per_window_matrices"
+        assert "window_labels" in result, "Must return window_labels"
+        assert len(result["per_window_matrices"]) == len(windows)
+        assert len(result["window_labels"]) == len(windows)
+        n_per = len(result["periods"])
+        for mat in result["per_window_matrices"]:
+            assert mat.shape == (n_per, n_per)
+
     def test_rolling_mode_in_app(self):
         """app.py must have rolling mode card and handler."""
         src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
@@ -1073,6 +1087,8 @@ class TestRollingWindowAnalysis:
         assert "p.mode == \"rolling\"" in src, "Rolling mode handler must exist"
         assert "rolling-params-row" in src, "Rolling params form row must exist"
         assert "switchRollingTab" in src, "Tab switching JS must exist"
+        assert "plotly-animated-container" in src, "Animated heatmap container must exist"
+        assert "per_window_matrices" in src, "Must use per-window matrices for animation"
 
     def test_rolling_params_parsed(self):
         """Params class must parse window_size and step_size."""
