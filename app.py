@@ -4836,11 +4836,11 @@ COMMUNITY_HTML = """\
         .collection-card:hover { border-color: var(--border-hover); border-left-color: #8b5cf6; transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
         .collection-card-count { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2); font-size: 0.7em; color: #8b5cf6; font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
         .collection-card-count svg { width: 12px; height: 12px; }
-        .collection-yt-indicator { position: absolute; top: 12px; right: 12px; width: 24px; height: 24px; background: rgba(255,0,0,0.85); border-radius: 4px; display: flex; align-items: center; justify-content: center; z-index: 2; }
-        .collection-yt-indicator svg { width: 12px; height: 12px; color: #fff; }
+        .collection-yt-indicator { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; background: rgba(255,0,0,0.85); border-radius: 6px; display: flex; align-items: center; justify-content: center; z-index: 2; }
+        .collection-yt-indicator svg { width: 18px; height: 18px; color: #fff; }
         .collection-ct-indicator { position: absolute; top: 12px; right: 12px; height: 24px; padding: 0 8px; background: rgba(16,185,129,0.9); border-radius: 4px; display: flex; align-items: center; gap: 4px; z-index: 2; font-size: 0.65em; font-weight: 600; color: #fff; white-space: nowrap; }
         .collection-ct-indicator svg { width: 12px; height: 12px; color: #fff; }
-        .collection-yt-indicator + .collection-ct-indicator, .collection-ct-indicator.has-yt { right: 42px; }
+        .collection-yt-indicator + .collection-ct-indicator, .collection-ct-indicator.has-yt { right: 48px; }
         .coll-thumb-grid { display: grid; gap: 4px; border-radius: 8px; overflow: hidden; margin-bottom: 10px; border: 1px solid var(--border); }
         .coll-thumb-grid.thumbs-1 { grid-template-columns: 1fr; }
         .coll-thumb-grid.thumbs-2 { grid-template-columns: 1fr 1fr; }
