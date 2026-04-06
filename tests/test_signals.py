@@ -1049,6 +1049,21 @@ class TestRollingWindowAnalysis:
         score, label = bt.compute_consistency_score(fake_results, "total_return")
         assert 20 <= score <= 60, f"Mixed results should score 20-60, got {score}"
 
+    def test_generate_rolling_windows_respects_start_end_date(self):
+        """Windows should be constrained by start_date and end_date."""
+        df = self._make_df(years=10)
+        # Without date constraints
+        all_windows = bt.generate_rolling_windows(df, 2, 1)
+        # With start_date cutting off first few years
+        filtered = bt.generate_rolling_windows(df, 2, 1, start_date="2021-01-01")
+        assert len(filtered) < len(all_windows), "start_date should reduce window count"
+        for w in filtered:
+            assert w["start"] >= pd.Timestamp("2021-01-01", tz="UTC"), \
+                f"Window {w['label']} starts before start_date"
+        # With end_date
+        filtered2 = bt.generate_rolling_windows(df, 2, 1, end_date="2023-01-01")
+        assert len(filtered2) < len(all_windows), "end_date should reduce window count"
+
     def test_rolling_mode_in_app(self):
         """app.py must have rolling mode card and handler."""
         src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")

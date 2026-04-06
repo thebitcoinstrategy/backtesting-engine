@@ -4258,7 +4258,8 @@ def _run_post_handler(cancel_event):
 
         # Generate windows
         try:
-            windows = bt.generate_rolling_windows(df_full, p.window_size, p.step_size, periods_per_year)
+            windows = bt.generate_rolling_windows(df_full, p.window_size, p.step_size, periods_per_year,
+                                                     start_date=p.start_date, end_date=p.end_date)
         except ValueError as e:
             return _render_main(p, chart=None, best=None, table_rows=None, col_header=col_header,
                                 error=str(e),

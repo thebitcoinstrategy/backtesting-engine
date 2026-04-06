@@ -1102,11 +1102,25 @@ def sweep_sma_periods(df, sma_min, sma_max, initial_cash, mode, fast_sma, fee=0.
 
 # --- Rolling Window Analysis ---
 
-def generate_rolling_windows(df, window_years, step_years, periods_per_year=365):
+def generate_rolling_windows(df, window_years, step_years, periods_per_year=365,
+                             start_date=None, end_date=None):
     """Generate (start, end) date pairs for rolling windows across the dataset.
+    start_date/end_date constrain which windows are generated.
     Raises ValueError if dataset is shorter than one window."""
     data_start = df.index.min()
     data_end = df.index.max()
+    if start_date is not None:
+        ts = pd.Timestamp(start_date)
+        if df.index.tz is not None:
+            ts = ts.tz_localize(df.index.tz)
+        if ts > data_start:
+            data_start = ts
+    if end_date is not None:
+        ts = pd.Timestamp(end_date)
+        if df.index.tz is not None:
+            ts = ts.tz_localize(df.index.tz)
+        if ts < data_end:
+            data_end = ts
     window_offset = pd.DateOffset(years=window_years)
     step_offset = pd.DateOffset(years=step_years)
 
