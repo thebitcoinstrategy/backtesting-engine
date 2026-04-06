@@ -1796,7 +1796,6 @@ HTML = """\
                     <div class="rolling-tabs">
                         <button class="rolling-tab-btn active" onclick="switchRollingTab('animated', this)">Heatmap Over Time</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('timeline', this)">Timeline</button>
-                        <button class="rolling-tab-btn" onclick="switchRollingTab('equity', this)">Equity Overlay</button>
                     </div>
                     <div class="rolling-tab-content" id="rtab-animated">
                         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
@@ -1924,12 +1923,10 @@ HTML = """\
                     <div class="rolling-tabs">
                         <button class="rolling-tab-btn active" onclick="switchRollingTab('heatmap', this)">Heatmap</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('timeline', this)">Timeline</button>
-                        <button class="rolling-tab-btn" onclick="switchRollingTab('equity', this)">Equity Overlay</button>
                     </div>
                     <div class="rolling-tab-content" id="rtab-heatmap"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap }}"/></div>
                     {% endif %}
                     <div class="rolling-tab-content hidden" id="rtab-timeline"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.timeline }}"/></div>
-                    <div class="rolling-tab-content hidden" id="rtab-equity"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.equity }}"/></div>
                 </div>
             {% elif chart %}
                 {% if regression|default(none) %}
@@ -4446,7 +4443,7 @@ def _run_post_handler(cancel_event):
         # Common charts
         chart_timeline = bt.generate_rolling_timeline_chart(
             fixed_results, p.rolling_metric, strategy_label, score, score_label, p.theme)
-        chart_equity = bt.generate_rolling_equity_overlay(fixed_results, strategy_label, p.theme, mode="usd")
+
 
         is_dual = p.ind1_name != "price"
         metric_names = {"total_return": "Return %", "alpha": "Alpha %", "sharpe": "Sharpe"}
@@ -4498,7 +4495,7 @@ def _run_post_handler(cancel_event):
 
             return _render_main(p, chart=chart_timeline,
                                 rolling_charts={"timeline": chart_timeline,
-                                                "equity": chart_equity},
+                                                },
                                 rolling_is_dual=True, rolling_plotly_data=plotly_data,
                                 rolling_score=score, rolling_score_label=score_label,
                                 rolling_metric=p.rolling_metric, rolling_windows=len(windows),
@@ -4522,7 +4519,7 @@ def _run_post_handler(cancel_event):
             return _render_main(p, chart=chart_heatmap,
                                 rolling_charts={"heatmap": chart_heatmap,
                                                 "timeline": chart_timeline,
-                                                "equity": chart_equity},
+                                                },
                                 rolling_score=score, rolling_score_label=score_label,
                                 rolling_metric=p.rolling_metric, rolling_windows=len(windows),
                                 rolling_strategy=strategy_label,
