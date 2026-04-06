@@ -1341,6 +1341,7 @@ HTML = """\
             from { opacity: 0; transform: translateY(16px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeDown {
             from { opacity: 0; transform: translateY(-12px); }
             to { opacity: 1; transform: translateY(0); }
@@ -2734,7 +2735,10 @@ document.getElementById('form').addEventListener('submit', function(e) {
         .catch(function(err) {
             panel.style.opacity = '1';
             if (err.name === 'AbortError') {
-                panel.innerHTML = '<div class="placeholder">Stopped</div>';
+                // Don't show "Stopped" if there's already a loading spinner (auto-load in progress)
+                if (!panel.querySelector('.spinner')) {
+                    panel.innerHTML = '<div class="placeholder">Stopped</div>';
+                }
             } else if (err.message !== 'redirect') {
                 panel.innerHTML = '<div class="placeholder">Error: ' + err.message + '</div>';
             }
@@ -2742,52 +2746,17 @@ document.getElementById('form').addEventListener('submit', function(e) {
         });
 });
 
-// Initial load on first visit or when opened via shareable URL
+// Auto-submit on page load if URL has query params (e.g. from "View Best in Backtest" button)
+// This replaces the old initial-load block — the form submit handler above handles everything.
 {% if not chart %}
 (function() {
-    var btn = document.getElementById('btn');
-    var panel = document.getElementById('results-panel');
-    currentAbort = new AbortController();
-    btn.textContent = 'Stop';
-    btn.classList.add('btn-stop');
-    var formData = new FormData(document.getElementById('form'));
-    fetch('/backtester', { method: 'POST', body: formData, signal: currentAbort.signal })
-        .then(function(resp) {
-            if (resp.redirected) { window.location.href = resp.url; throw new Error('redirect'); }
-            return resp.text();
-        })
-        .then(function(html) {
-            var doc = new DOMParser().parseFromString(html, 'text/html');
-            var newPanel = doc.getElementById('results-panel');
-            if (newPanel) {
-                panel.innerHTML = newPanel.innerHTML;
-                var scripts = panel.querySelectorAll('script');
-                for (var si = 0; si < scripts.length; si++) {
-                    var ns = document.createElement('script');
-                    ns.textContent = scripts[si].textContent;
-                    scripts[si].replaceWith(ns);
-                }
-                lwChartLoaded = false;
-                var img = panel.querySelector('.chart-img');
-                if (img) { img.style.animation = 'fadeUp 0.5s ease-out both'; }
-            } else {
-                panel.innerHTML = '<div class="placeholder">Error loading results. Try refreshing the page.</div>';
-            }
-            var qs = new URLSearchParams(formData);
-            var viewParam = new URLSearchParams(window.location.search).get('view');
-            if (viewParam) qs.set('view', viewParam);
-            history.replaceState(null, '', '?' + qs.toString());
-            activateViewFromURL();
-            resetBtn();
-        })
-        .catch(function(err) {
-            if (err.name === 'AbortError') {
-                panel.innerHTML = '<div class="placeholder">Stopped</div>';
-            } else if (err.message !== 'redirect') {
-                panel.innerHTML = '<div class="placeholder">Error loading results. Try refreshing the page.</div>';
-            }
-            resetBtn();
-        });
+    var params = new URLSearchParams(window.location.search);
+    if (params.has('mode') && params.has('asset')) {
+        var panel = document.getElementById('results-panel');
+        panel.innerHTML = '<div class="placeholder" style="display:flex;align-items:center;gap:10px"><span class="spinner" style="width:20px;height:20px;border:2px solid var(--text-dim);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;display:inline-block"></span> Running backtest...</div>';
+        _isPopstate = true;
+        document.getElementById('form').dispatchEvent(new Event('submit', { cancelable: true }));
+    }
 })();
 {% endif %}
 
@@ -2844,15 +2813,6 @@ window.addEventListener('popstate', function(e) {
     _isPopstate = true;
     form.dispatchEvent(new Event('submit', { cancelable: true }));
 });
-
-// Auto-submit on page load if URL has query params (e.g. from "View Best in Backtest" button)
-(function() {
-    var params = new URLSearchParams(window.location.search);
-    if (params.has('mode') && params.has('asset')) {
-        _isPopstate = true;
-        document.getElementById('form').dispatchEvent(new Event('submit', { cancelable: true }));
-    }
-})();
 
 // --- Save / Publish / Like / Comment functionality ---
 var _currentShortCode = null;
