@@ -2553,7 +2553,7 @@ def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark",
     metric_label = metric_names.get(metric, metric)
     x_label = sweep_ind_label or "Period"
 
-    # Row-normalized: scale each row independently to [-1, 1]
+    # Row-normalized: min-max scale each row to [0, 1] so worst=red, best=green
     if normalize_rows:
         display_matrix = np.full_like(matrix, np.nan)
         for i in range(n_win):
@@ -2561,18 +2561,18 @@ def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark",
             valid = row[~np.isnan(row)]
             if len(valid) == 0:
                 continue
-            row_max = np.max(np.abs(valid))
-            if row_max > 0:
-                display_matrix[i] = row / row_max
+            row_min, row_max = np.min(valid), np.max(valid)
+            if row_max > row_min:
+                display_matrix[i] = (row - row_min) / (row_max - row_min)
             else:
-                display_matrix[i] = 0
+                display_matrix[i] = 0.5
     else:
         display_matrix = matrix
 
     fig, ax = plt.subplots(figsize=(max(10, n_per * 0.4), max(4, n_win * 0.7)), dpi=150)
     if normalize_rows:
         im = ax.imshow(display_matrix, aspect="auto", cmap="RdYlGn", interpolation="nearest",
-                        vmin=-1, vmax=1)
+                        vmin=0, vmax=1)
     else:
         im = ax.imshow(display_matrix, aspect="auto", cmap="RdYlGn", interpolation="nearest")
     cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
