@@ -1803,11 +1803,13 @@ HTML = """\
                     <div class="rolling-tabs">
                         <button class="rolling-tab-btn active" onclick="switchRollingTab('heatmap', this)">Heatmap</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('timeline', this)">Timeline</button>
-                        <button class="rolling-tab-btn" onclick="switchRollingTab('equity', this)">Equity Overlay</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('equity-usd', this)">Returns %</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('equity-alpha', this)">Alpha %</button>
                     </div>
                     <div class="rolling-tab-content" id="rtab-heatmap"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap }}"/></div>
                     <div class="rolling-tab-content hidden" id="rtab-timeline"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.timeline }}"/></div>
-                    <div class="rolling-tab-content hidden" id="rtab-equity"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.equity }}"/></div>
+                    <div class="rolling-tab-content hidden" id="rtab-equity-usd"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.equity_usd }}"/></div>
+                    <div class="rolling-tab-content hidden" id="rtab-equity-alpha"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.equity_alpha }}"/></div>
                 </div>
             {% elif chart %}
                 {% if regression|default(none) %}
@@ -4342,11 +4344,14 @@ def _run_post_handler(cancel_event):
         chart_timeline = bt.generate_rolling_timeline_chart(
             fixed_results, p.rolling_metric, strategy_label, score, score_label, p.theme)
         chart_heatmap = bt.generate_rolling_heatmap(sweep_data, p.rolling_metric, strategy_label, p.theme)
-        chart_equity = bt.generate_rolling_equity_overlay(fixed_results, strategy_label, p.theme)
+        chart_equity_usd = bt.generate_rolling_equity_overlay(fixed_results, strategy_label, p.theme, mode="usd")
+        chart_equity_alpha = bt.generate_rolling_equity_overlay(fixed_results, strategy_label, p.theme, mode="alpha")
 
         return _render_main(p, chart=chart_heatmap,
                             rolling_charts={"timeline": chart_timeline,
-                                            "heatmap": chart_heatmap, "equity": chart_equity},
+                                            "heatmap": chart_heatmap,
+                                            "equity_usd": chart_equity_usd,
+                                            "equity_alpha": chart_equity_alpha},
                             rolling_score=score, rolling_score_label=score_label,
                             rolling_metric=p.rolling_metric, rolling_windows=len(windows),
                             rolling_strategy=strategy_label,

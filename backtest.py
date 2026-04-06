@@ -1210,6 +1210,7 @@ def rolling_window_evaluate(df, windows, ind1_name, ind1_period, ind2_name, ind2
             "sharpe": sharpe,
             "max_drawdown": max_dd,
             "equity": equity,
+            "buyhold_equity": bh,
         })
     return results
 
@@ -2311,8 +2312,9 @@ def generate_rolling_timeline_chart(window_results, metric, strategy_label, scor
     return base64.b64encode(buf.read()).decode()
 
 
-def generate_rolling_equity_overlay(window_results, strategy_label, theme="dark"):
-    """Overlay per-window equity curves normalized to 100. Returns base64 PNG."""
+def generate_rolling_equity_overlay(window_results, strategy_label, theme="dark", mode="usd"):
+    """Overlay per-window curves. mode='usd' for % return, 'alpha' for outperformance vs B&H.
+    Returns base64 PNG."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -2326,16 +2328,32 @@ def generate_rolling_equity_overlay(window_results, strategy_label, theme="dark"
     fig, ax = plt.subplots(figsize=(14, 7), dpi=150)
     for i, r in enumerate(window_results):
         eq = r["equity"]
-        normalized = eq / eq.iloc[0] * 100
-        alpha = 0.3 + 0.7 * (i / max(n - 1, 1))
+        fade = 0.3 + 0.7 * (i / max(n - 1, 1))
         lw = 1.0 + 1.5 * (i / max(n - 1, 1))
         color = cmap(i / max(n - 1, 1))
-        ax.plot(normalized.index, normalized.values, color=color, alpha=alpha,
+
+        if mode == "alpha":
+            # Alpha = strategy % return minus buy-and-hold % return over time
+            strat_pct = (eq / eq.iloc[0] - 1) * 100
+            bh = r["buyhold_equity"]
+            bh_pct = (bh / bh.iloc[0] - 1) * 100
+            curve = strat_pct - bh_pct
+        else:
+            # USD % return
+            curve = (eq / eq.iloc[0] - 1) * 100
+
+        ax.plot(curve.index, curve.values, color=color, alpha=fade,
                 linewidth=lw, label=r["window"]["label"])
 
-    ax.axhline(y=100, color=t["muted"], linewidth=0.8, linestyle="--", alpha=0.4)
-    ax.set_ylabel("Normalized Equity (start = 100)", fontsize=11, color=t["muted"])
-    ax.set_title(f"{strategy_label} — Equity Curves Per Window", fontsize=13, color=t["text"], pad=12)
+    ax.axhline(y=0, color=t["muted"], linewidth=0.8, linestyle="--", alpha=0.4)
+
+    if mode == "alpha":
+        ax.set_ylabel("Alpha vs Buy & Hold (%)", fontsize=11, color=t["muted"])
+        ax.set_title(f"{strategy_label} — Outperformance Per Window", fontsize=13, color=t["text"], pad=12)
+    else:
+        ax.set_ylabel("Return (%)", fontsize=11, color=t["muted"])
+        ax.set_title(f"{strategy_label} — Equity Curves Per Window", fontsize=13, color=t["text"], pad=12)
+
     ax.legend(loc="upper left", fontsize=8, framealpha=0.7)
     ax.grid(color=t["grid"], alpha=0.3)
     _apply_dark_theme(fig, ax, theme)
