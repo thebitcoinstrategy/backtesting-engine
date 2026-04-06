@@ -1808,8 +1808,8 @@ HTML = """\
                             <span id="anim-window-label" style="font-size:0.85em;color:var(--text-dim)"></span>
                         </div>
                         <div id="anim-stack" style="position:relative;width:100%;height:600px;border-radius:12px;border:1px solid var(--border);background:var(--bg-deep);overflow:hidden">
-                            <div id="plotly-anim-a" style="position:absolute;inset:0;transition:opacity 1.2s ease;opacity:1"></div>
-                            <div id="plotly-anim-b" style="position:absolute;inset:0;transition:opacity 1.2s ease;opacity:0;pointer-events:none"></div>
+                            <div id="plotly-anim-a" style="position:absolute;inset:0;transition:opacity 1.8s ease;opacity:1"></div>
+                            <div id="plotly-anim-b" style="position:absolute;inset:0;transition:opacity 1.8s ease;opacity:0;pointer-events:none"></div>
                         </div>
                         <div style="margin-top:8px">
                             <input type="range" id="anim-slider" min="0" max="0" value="0" style="width:100%;accent-color:var(--accent)" oninput="goToHeatmapFrame(parseInt(this.value), true)">
@@ -1904,7 +1904,7 @@ HTML = """\
                             frontEl.style.opacity = '0';
                             frontEl.style.pointerEvents = 'none';
                             _animFront = backId;
-                            setTimeout(function() { _animTransitioning = false; }, 1300);
+                            setTimeout(function() { _animTransitioning = false; }, 1900);
                         }
                         function toggleHeatmapPlay() {
                             if (_animPlaying) {
@@ -1918,7 +1918,7 @@ HTML = """\
                                 _animTimer = setInterval(function() {
                                     _animFrame = (_animFrame + 1) % _animData.frames.length;
                                     goToHeatmapFrame(_animFrame, false);
-                                }, 2500);
+                                }, 2200);
                             }
                         }
                         </script>
