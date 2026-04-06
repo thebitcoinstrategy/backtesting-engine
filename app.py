@@ -1800,12 +1800,75 @@ HTML = """\
                             {{ rolling_windows }} windows  &middot;  {{ rolling_strategy }}
                         </div>
                     </div>
+                    {% if rolling_is_dual|default(false) %}
+                    <div class="rolling-tabs">
+                        <button class="rolling-tab-btn active" onclick="switchRollingTab('single-col', this)">Strategy Over Time</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('3d', this)">3D Period Surface</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('timeline', this)">Timeline</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('equity', this)">Equity Overlay</button>
+                    </div>
+                    <div class="rolling-tab-content" id="rtab-single-col"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.single_col }}"/></div>
+                    <div class="rolling-tab-content hidden" id="rtab-3d">
+                        <div id="plotly-3d-container" style="width:100%;height:600px;border-radius:12px;border:1px solid var(--border);background:var(--bg-deep)"></div>
+                        <script>
+                        (function() {
+                            var data = {{ rolling_plotly_data|safe }};
+                            function render3D() {
+                                if (typeof Plotly === 'undefined') { setTimeout(render3D, 200); return; }
+                                var trace = {
+                                    x: data.y, y: data.x, z: data.z,
+                                    type: 'surface', colorscale: 'RdYlGn', showscale: true,
+                                    colorbar: { title: data.metric_label, titlefont: {color:'#8890a4'}, tickfont: {color:'#8890a4'} },
+                                    hovertemplate: data.ind1_name + '(%{y}) / ' + data.ind2_name + '(%{x})<br>' + data.metric_label + ': %{z:.1f}<extra></extra>'
+                                };
+                                var markers = [];
+                                if (data.selected_p1 && data.selected_p2) {
+                                    var si = data.x.indexOf(data.selected_p1), sj = data.y.indexOf(data.selected_p2);
+                                    var sz = (si >= 0 && sj >= 0 && data.z[si] && data.z[si][sj] !== null) ? data.z[si][sj] : 0;
+                                    markers.push({x:[data.selected_p2], y:[data.selected_p1], z:[sz], mode:'markers+text',
+                                        type:'scatter3d', marker:{size:6, color:'#f7931a', symbol:'diamond'},
+                                        text:['Selected'], textposition:'top center', textfont:{color:'#f7931a', size:11},
+                                        hovertemplate:'Selected: '+data.strategy_label+'<br>'+data.metric_label+': %{z:.1f}<extra></extra>'});
+                                }
+                                if (data.best_p1 && data.best_p2) {
+                                    var bi = data.x.indexOf(data.best_p1), bj = data.y.indexOf(data.best_p2);
+                                    var bz = (bi >= 0 && bj >= 0 && data.z[bi] && data.z[bi][bj] !== null) ? data.z[bi][bj] : 0;
+                                    markers.push({x:[data.best_p2], y:[data.best_p1], z:[bz], mode:'markers+text',
+                                        type:'scatter3d', marker:{size:6, color:'#34d399', symbol:'diamond'},
+                                        text:['Best'], textposition:'top center', textfont:{color:'#34d399', size:11},
+                                        hovertemplate:'Best: '+data.ind1_name+'('+data.best_p1+')/'+data.ind2_name+'('+data.best_p2+')<br>'+data.metric_label+': %{z:.1f}<extra></extra>'});
+                                }
+                                var layout = {
+                                    scene: {
+                                        xaxis: {title: data.ind2_name + ' Period', color:'#8890a4', gridcolor:'#252a3a'},
+                                        yaxis: {title: data.ind1_name + ' Period', color:'#8890a4', gridcolor:'#252a3a'},
+                                        zaxis: {title: data.metric_label, color:'#8890a4', gridcolor:'#252a3a'},
+                                        bgcolor: '#080a10'
+                                    },
+                                    paper_bgcolor: '#161922', font: {color:'#e8eaf0'},
+                                    title: {text: data.strategy_label + ' \u2014 Avg ' + data.metric_label + ' (all windows)', font:{size:14, color:'#e8eaf0'}},
+                                    margin: {l:0, r:0, t:50, b:0}
+                                };
+                                Plotly.newPlot('plotly-3d-container', [trace].concat(markers), layout, {responsive:true});
+                            }
+                            // Load Plotly.js if not already loaded
+                            if (typeof Plotly === 'undefined') {
+                                var s = document.createElement('script');
+                                s.src = 'https://cdn.plot.ly/plotly-gl3d-2.35.2.min.js';
+                                s.onload = render3D;
+                                document.head.appendChild(s);
+                            } else { render3D(); }
+                        })();
+                        </script>
+                    </div>
+                    {% else %}
                     <div class="rolling-tabs">
                         <button class="rolling-tab-btn active" onclick="switchRollingTab('heatmap', this)">Heatmap</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('timeline', this)">Timeline</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('equity', this)">Equity Overlay</button>
                     </div>
                     <div class="rolling-tab-content" id="rtab-heatmap"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap }}"/></div>
+                    {% endif %}
                     <div class="rolling-tab-content hidden" id="rtab-timeline"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.timeline }}"/></div>
                     <div class="rolling-tab-content hidden" id="rtab-equity"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.equity }}"/></div>
                 </div>
@@ -2114,6 +2177,11 @@ function switchRollingTab(name, btn) {
     document.getElementById('rtab-' + name).classList.remove('hidden');
     document.querySelectorAll('.rolling-tab-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
+    // Resize Plotly chart when 3D tab becomes visible
+    if (name === '3d' && typeof Plotly !== 'undefined') {
+        var el = document.getElementById('plotly-3d-container');
+        if (el && el.data) Plotly.Plots.resize(el);
+    }
 }
 var oscDefaults = {
     rsi:        { period: 14, buy: 30, sell: 70, desc: 'Relative Strength Index \u2014 buy when dropping below 30 (oversold/cheap), sell when rising above 70 (overbought/expensive). Hold between thresholds.' },
@@ -4330,32 +4398,78 @@ def _run_post_handler(cancel_event):
         else:
             strategy_label = f"Price/{p.ind2_name.upper()}({p.ind2_period})"
 
-        # Sweep evaluation (for 3D surface + heatmap)
-        sweep_data = bt.rolling_window_sweep(
-            df_full, windows, p.ind1_name, p.ind1_period, p.ind2_name,
-            "ind2", p.range_min, p.range_max, p.step,
-            p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage,
-            p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate,
-            metric=p.rolling_metric)
-
-        # Generate charts
-        sweep_ind_label = f"{p.ind2_name.upper()} Period"
+        # Common charts
         chart_timeline = bt.generate_rolling_timeline_chart(
             fixed_results, p.rolling_metric, strategy_label, score, score_label, p.theme)
-        chart_heatmap = bt.generate_rolling_heatmap(sweep_data, p.rolling_metric, strategy_label, p.theme,
-                                                     selected_period=p.ind2_period, sweep_ind_label=sweep_ind_label)
         chart_equity = bt.generate_rolling_equity_overlay(fixed_results, strategy_label, p.theme, mode="usd")
 
-        return _render_main(p, chart=chart_heatmap,
-                            rolling_charts={"timeline": chart_timeline,
-                                            "heatmap": chart_heatmap,
-                                            "equity": chart_equity},
-                            rolling_score=score, rolling_score_label=score_label,
-                            rolling_metric=p.rolling_metric, rolling_windows=len(windows),
-                            rolling_strategy=strategy_label,
-                            best=None, table_rows=None, col_header=col_header,
-                            price_json=None, ind1_json="[]", ind2_json="[]",
-                            ind1_label="", ind2_label="")
+        is_dual = p.ind1_name != "price"
+        metric_names = {"total_return": "Return %", "alpha": "Alpha %", "sharpe": "Sharpe"}
+        metric_display = metric_names.get(p.rolling_metric, p.rolling_metric)
+
+        if is_dual:
+            # Dual indicator: single-column heatmap + interactive 3D surface
+            chart_single_col = bt.generate_rolling_single_column(
+                fixed_results, p.rolling_metric, strategy_label, p.theme)
+
+            # Sweep both periods for 3D surface
+            import json as json_mod
+            dual_sweep = bt.rolling_window_sweep_dual(
+                df_full, windows, p.ind1_name, p.ind2_name,
+                p.range_min, p.range_max, p.step,
+                p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage,
+                p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate,
+                metric=p.rolling_metric)
+
+            # Plotly JSON for interactive 3D
+            periods_3d = dual_sweep["periods"]
+            matrix_3d = dual_sweep["matrix"]
+            # Replace NaN with None for JSON
+            z_data = [[None if np.isnan(v) else round(float(v), 2) for v in row] for row in matrix_3d]
+            plotly_data = json_mod.dumps({
+                "x": periods_3d, "y": periods_3d, "z": z_data,
+                "selected_p1": p.ind1_period, "selected_p2": p.ind2_period,
+                "best_p1": int(dual_sweep["best_p1"]), "best_p2": int(dual_sweep["best_p2"]),
+                "best_val": round(float(dual_sweep["best_val"]), 2),
+                "ind1_name": p.ind1_name.upper(), "ind2_name": p.ind2_name.upper(),
+                "metric_label": metric_display, "strategy_label": strategy_label,
+                "same_type": dual_sweep["same_type"],
+            })
+
+            return _render_main(p, chart=chart_single_col,
+                                rolling_charts={"single_col": chart_single_col,
+                                                "timeline": chart_timeline,
+                                                "equity": chart_equity},
+                                rolling_is_dual=True, rolling_plotly_data=plotly_data,
+                                rolling_score=score, rolling_score_label=score_label,
+                                rolling_metric=p.rolling_metric, rolling_windows=len(windows),
+                                rolling_strategy=strategy_label,
+                                best=None, table_rows=None, col_header=col_header,
+                                price_json=None, ind1_json="[]", ind2_json="[]",
+                                ind1_label="", ind2_label="")
+        else:
+            # Single indicator (price vs MA): heatmap sweep of ind2 period
+            sweep_data = bt.rolling_window_sweep(
+                df_full, windows, p.ind1_name, p.ind1_period, p.ind2_name,
+                "ind2", p.range_min, p.range_max, p.step,
+                p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage,
+                p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate,
+                metric=p.rolling_metric)
+
+            sweep_ind_label = f"{p.ind2_name.upper()} Period"
+            chart_heatmap = bt.generate_rolling_heatmap(sweep_data, p.rolling_metric, strategy_label, p.theme,
+                                                         selected_period=p.ind2_period, sweep_ind_label=sweep_ind_label)
+
+            return _render_main(p, chart=chart_heatmap,
+                                rolling_charts={"heatmap": chart_heatmap,
+                                                "timeline": chart_timeline,
+                                                "equity": chart_equity},
+                                rolling_score=score, rolling_score_label=score_label,
+                                rolling_metric=p.rolling_metric, rolling_windows=len(windows),
+                                rolling_strategy=strategy_label,
+                                best=None, table_rows=None, col_header=col_header,
+                                price_json=None, ind1_json="[]", ind2_json="[]",
+                                ind1_label="", ind2_label="")
 
     # --- Heatmap Mode ---
     if p.mode == "heatmap":

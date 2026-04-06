@@ -1334,6 +1334,159 @@ def rolling_window_sweep(df, windows, ind1_name, ind1_period, ind2_name,
     }
 
 
+def rolling_window_sweep_dual(df, windows, ind1_name, ind2_name,
+                              sweep_min, sweep_max, sweep_step,
+                              initial_cash, fee=0.001, exposure="long-cash",
+                              long_leverage=1, short_leverage=1, lev_mode="rebalance",
+                              reverse=False, sizing="compound", periods_per_year=365,
+                              financing_rate=0, metric="total_return"):
+    """Sweep both ind1 and ind2 periods across all windows. Returns averaged 2D matrix.
+    For same-type indicators, only computes upper triangle (fast < slow).
+    Returns dict with periods, matrix (n_periods x n_periods), best_p1, best_p2."""
+    periods = list(range(sweep_min, sweep_max + 1, sweep_step))
+    n_per = len(periods)
+    df = df.copy()
+    daily_return = df["close"].pct_change().fillna(0)
+    same_type = (ind1_name == ind2_name)
+
+    # Pre-compute all indicator series
+    ind_cache = {}
+    for period in periods:
+        s, _ = compute_indicator_from_spec(df, ind1_name, period)
+        ind_cache[(ind1_name, period)] = s
+        if not same_type:
+            s2, _ = compute_indicator_from_spec(df, ind2_name, period)
+            ind_cache[(ind2_name, period)] = s2
+
+    # Pre-compute positions for all (p1, p2) combos
+    position_cache = {}
+    for p1 in periods:
+        for p2 in periods:
+            if same_type and p1 >= p2:
+                continue
+            s1 = ind_cache.get((ind1_name, p1))
+            s2_key = (ind2_name if not same_type else ind1_name, p2)
+            s2 = ind_cache.get(s2_key)
+            if s1 is None or s2 is None:
+                continue
+            above = s1 > s2
+            if reverse:
+                above = ~above
+            pos = _apply_exposure(above, exposure).shift(1).fillna(0)
+            nan_mask = s1.isna() | s2.isna()
+            pos[nan_mask] = 0
+            position_cache[(p1, p2)] = pos
+
+    # For each (p1, p2), compute metric averaged across windows
+    avg_matrix = np.full((n_per, n_per), np.nan)
+    n_windows = len(windows)
+
+    for pi, p1 in enumerate(periods):
+        for pj, p2 in enumerate(periods):
+            if same_type and p1 >= p2:
+                continue
+            if (p1, p2) not in position_cache:
+                continue
+            cached_pos = position_cache[(p1, p2)]
+            vals = []
+            for w in windows:
+                mask = (df.index >= w["start"]) & (df.index < w["end"])
+                w_pos = cached_pos[mask]
+                w_ret = daily_return[mask]
+                if len(w_pos) < 2:
+                    continue
+                leverage = np.where(w_pos > 0, long_leverage,
+                           np.where(w_pos < 0, short_leverage, 1))
+                strat_ret = w_pos * w_ret * leverage
+                trade_mask_arr = np.abs(np.diff(w_pos.values, prepend=0)) > 0
+                strat_ret_arr = strat_ret.values.copy()
+                strat_ret_arr[trade_mask_arr] -= fee
+                equity_arr, _ = _compute_equity_with_liquidation(strat_ret_arr, initial_cash)
+                total_return = (equity_arr[-1] / initial_cash - 1) * 100
+                n_days = len(w_pos)
+
+                if metric == "total_return":
+                    val = total_return
+                elif metric == "alpha":
+                    bh_return = ((1 + w_ret).cumprod().iloc[-1] - 1) * 100
+                    val = total_return - bh_return
+                elif metric == "sharpe":
+                    eq_rets = np.diff(equity_arr, prepend=initial_cash) / np.maximum(
+                        np.abs(np.concatenate([[initial_cash], equity_arr[:-1]])), 1e-10)
+                    std_d = np.std(eq_rets)
+                    val = (np.mean(eq_rets) / std_d * np.sqrt(periods_per_year)) if std_d > 0 else 0.0
+                else:
+                    val = total_return
+                vals.append(val)
+
+            if vals:
+                avg_matrix[pi, pj] = np.mean(vals)
+
+    # Find best combo
+    best_val = -np.inf
+    best_p1 = best_p2 = periods[0]
+    for pi in range(n_per):
+        for pj in range(n_per):
+            v = avg_matrix[pi, pj]
+            if not np.isnan(v) and v > best_val:
+                best_val = v
+                best_p1 = periods[pi]
+                best_p2 = periods[pj]
+
+    return {
+        "periods": periods,
+        "matrix": avg_matrix,
+        "best_p1": best_p1,
+        "best_p2": best_p2,
+        "best_val": best_val,
+        "same_type": same_type,
+    }
+
+
+def generate_rolling_single_column(window_results, metric, strategy_label, theme="dark"):
+    """Single-column heatmap: one colored cell per window for the fixed strategy. Returns base64 PNG."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from io import BytesIO
+    import base64
+
+    t = _get_theme(theme)
+    labels = [r["window"]["label"] for r in window_results]
+    values = [r[metric] for r in window_results]
+    n = len(labels)
+
+    metric_names = {"total_return": "Return %", "alpha": "Alpha %", "sharpe": "Sharpe"}
+    metric_label = metric_names.get(metric, metric)
+
+    fig, ax = plt.subplots(figsize=(4, max(4, n * 0.7)), dpi=150)
+    matrix = np.array(values).reshape(n, 1)
+    im = ax.imshow(matrix, aspect="auto", cmap="RdYlGn", interpolation="nearest")
+    cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.15)
+    cbar.set_label(metric_label, fontsize=10, color=t["muted"])
+    cbar.ax.tick_params(colors=t["muted"])
+
+    ax.set_yticks(range(n))
+    ax.set_yticklabels(labels, fontsize=10)
+    ax.set_xticks([0])
+    ax.set_xticklabels([strategy_label], fontsize=9)
+    ax.set_title(f"Strategy Over Time\n{metric_label}", fontsize=13, color=t["text"], pad=12)
+
+    # Annotate values
+    for i, val in enumerate(values):
+        color = "black" if val > np.median(values) else "white"
+        ax.text(0, i, f"{val:.1f}", ha="center", va="center", fontsize=10, fontweight="bold", color=color)
+
+    _apply_dark_theme(fig, ax, theme)
+    plt.tight_layout()
+
+    buf = BytesIO()
+    plt.savefig(buf, format="png", facecolor=fig.get_facecolor())
+    plt.close()
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
+
+
 # --- DCA Functions ---
 
 DCA_SIGNAL_TYPES = {
