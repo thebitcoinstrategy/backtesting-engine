@@ -1814,23 +1814,24 @@ HTML = """\
                             </button>
                             <span id="anim-window-label" style="font-size:0.85em;color:var(--text-dim)"></span>
                         </div>
-                        <div id="plotly-animated-container" style="width:100%;height:600px;border-radius:12px;border:1px solid var(--border);background:var(--bg-deep);transition:opacity 0.4s ease"></div>
+                        <div id="anim-stack" style="position:relative;width:100%;height:600px;border-radius:12px;border:1px solid var(--border);background:var(--bg-deep);overflow:hidden">
+                            <div id="plotly-anim-a" style="position:absolute;inset:0;transition:opacity 0.6s ease;opacity:1"></div>
+                            <div id="plotly-anim-b" style="position:absolute;inset:0;transition:opacity 0.6s ease;opacity:0;pointer-events:none"></div>
+                        </div>
                         <div style="margin-top:8px">
-                            <input type="range" id="anim-slider" min="0" max="0" value="0" style="width:100%;accent-color:var(--accent)" oninput="goToHeatmapFrame(parseInt(this.value))">
+                            <input type="range" id="anim-slider" min="0" max="0" value="0" style="width:100%;accent-color:var(--accent)" oninput="goToHeatmapFrame(parseInt(this.value), true)">
                         </div>
                         <script>
-                        var _animData, _animPlaying = false, _animTimer = null, _animFrame = 0;
+                        var _animData, _animPlaying = false, _animTimer = null, _animFrame = 0, _animFront = 'a', _animTransitioning = false;
                         (function() {
                             _animData = {{ rolling_plotly_data|safe }};
-                            function renderAnimated() {
-                                if (typeof Plotly === 'undefined') { setTimeout(renderAnimated, 200); return; }
-                                var d = _animData, periods = d.periods, frames = d.frames;
+                            function makeTrace(d, frameIdx) {
+                                var f = d.frames[frameIdx], fm = f.zmax || 100;
                                 var rdYlGn = [[0,'#a50026'],[0.1,'#d73027'],[0.2,'#f46d43'],[0.3,'#fdae61'],[0.4,'#fee08b'],[0.5,'#ffffbf'],[0.6,'#d9ef8b'],[0.7,'#a6d96a'],[0.8,'#66bd63'],[0.9,'#1a9850'],[1,'#006837']];
-                                var initMax = frames[0].zmax || 100;
                                 var trace = {
-                                    x: periods, y: periods, z: frames[0].z,
+                                    x: d.periods, y: d.periods, z: f.z,
                                     type: 'heatmap', colorscale: rdYlGn, showscale: true,
-                                    zmin: -initMax, zmax: initMax,
+                                    zmin: -fm, zmax: fm,
                                     colorbar: { title: {text: d.metric_label, font:{color:'#8890a4'}}, tickfont: {color:'#8890a4'} },
                                     hovertemplate: d.ind1_name + '(%{y}) / ' + d.ind2_name + '(%{x})<br>' + d.metric_label + ': %{z:.1f}<extra></extra>'
                                 };
@@ -1845,17 +1846,28 @@ HTML = """\
                                         type:'scatter', marker:{size:14, color:'#34d399', symbol:'star', line:{color:'white',width:2}},
                                         hovertemplate:'Best avg: '+d.ind1_name+'('+d.best_p1+')/'+d.ind2_name+'('+d.best_p2+')<extra></extra>', showlegend:false});
                                 }
-                                var layout = {
+                                return {traces: [trace].concat(markers), label: f.label};
+                            }
+                            function makeLayout(d, label) {
+                                return {
                                     xaxis: {title: d.ind2_name + ' Period', color:'#8890a4', gridcolor:'#252a3a', dtick: d.dtick},
                                     yaxis: {title: d.ind1_name + ' Period', color:'#8890a4', gridcolor:'#252a3a', dtick: d.dtick},
-                                    paper_bgcolor: '#161922', plot_bgcolor: '#080a10', font: {color:'#e8eaf0'},
-                                    title: {text: d.strategy_label + ' \u2014 ' + d.metric_label + ' (' + frames[0].label + ')', font:{size:14, color:'#e8eaf0'}},
+                                    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: {color:'#e8eaf0'},
+                                    title: {text: d.strategy_label + ' \u2014 ' + d.metric_label + ' (' + label + ')', font:{size:14, color:'#e8eaf0'}},
                                     margin: {l:60, r:20, t:50, b:20}
                                 };
-                                Plotly.newPlot('plotly-animated-container', [trace].concat(markers), layout, {responsive:true});
-                                var slider = document.getElementById('anim-slider');
-                                slider.max = frames.length - 1;
-                                document.getElementById('anim-window-label').textContent = 'Window: ' + frames[0].label;
+                            }
+                            window._animMakeTrace = makeTrace;
+                            window._animMakeLayout = makeLayout;
+                            function renderAnimated() {
+                                if (typeof Plotly === 'undefined') { setTimeout(renderAnimated, 200); return; }
+                                var d = _animData;
+                                var t = makeTrace(d, 0);
+                                Plotly.newPlot('plotly-anim-a', t.traces, makeLayout(d, t.label), {responsive:true});
+                                // Pre-render layer b with same frame (ready for cross-fade)
+                                Plotly.newPlot('plotly-anim-b', makeTrace(d, 0).traces, makeLayout(d, t.label), {responsive:true});
+                                document.getElementById('anim-slider').max = d.frames.length - 1;
+                                document.getElementById('anim-window-label').textContent = 'Window: ' + t.label;
                             }
                             if (typeof Plotly === 'undefined') {
                                 var s = document.createElement('script');
@@ -1864,19 +1876,34 @@ HTML = """\
                                 document.head.appendChild(s);
                             } else { renderAnimated(); }
                         })();
-                        function goToHeatmapFrame(idx) {
+                        function goToHeatmapFrame(idx, instant) {
+                            if (_animTransitioning && !instant) return;
                             _animFrame = idx;
-                            var el = document.getElementById('plotly-animated-container');
-                            var f = _animData.frames[idx], fm = f.zmax || 100;
-                            // Fade out, swap data, fade in
-                            el.style.opacity = '0.15';
-                            setTimeout(function() {
-                                Plotly.restyle(el, {z:[f.z], zmin:[-fm], zmax:[fm]}, [0]);
-                                Plotly.relayout(el, {'title.text': _animData.strategy_label + ' \u2014 ' + _animData.metric_label + ' (' + f.label + ')'});
-                                el.style.opacity = '1';
-                            }, 350);
+                            var d = _animData, f = d.frames[idx], fm = f.zmax || 100;
                             document.getElementById('anim-slider').value = idx;
                             document.getElementById('anim-window-label').textContent = 'Window: ' + f.label;
+                            if (instant) {
+                                // Slider drag: instant update on front layer
+                                var front = document.getElementById('plotly-anim-' + _animFront);
+                                Plotly.restyle(front, {z:[f.z], zmin:[-fm], zmax:[fm]}, [0]);
+                                Plotly.relayout(front, {'title.text': d.strategy_label + ' \u2014 ' + d.metric_label + ' (' + f.label + ')'});
+                                return;
+                            }
+                            // Cross-fade: render new frame on back layer, then swap opacity
+                            _animTransitioning = true;
+                            var backId = _animFront === 'a' ? 'b' : 'a';
+                            var frontEl = document.getElementById('plotly-anim-' + _animFront);
+                            var backEl = document.getElementById('plotly-anim-' + backId);
+                            // Update back layer data
+                            Plotly.restyle(backEl, {z:[f.z], zmin:[-fm], zmax:[fm]}, [0]);
+                            Plotly.relayout(backEl, {'title.text': d.strategy_label + ' \u2014 ' + d.metric_label + ' (' + f.label + ')'});
+                            // Cross-fade: back fades in, front fades out
+                            backEl.style.opacity = '1';
+                            backEl.style.pointerEvents = 'auto';
+                            frontEl.style.opacity = '0';
+                            frontEl.style.pointerEvents = 'none';
+                            _animFront = backId;
+                            setTimeout(function() { _animTransitioning = false; }, 650);
                         }
                         function toggleHeatmapPlay() {
                             if (_animPlaying) {
@@ -1889,7 +1916,7 @@ HTML = """\
                                 document.getElementById('anim-play-label').textContent = 'Pause';
                                 _animTimer = setInterval(function() {
                                     _animFrame = (_animFrame + 1) % _animData.frames.length;
-                                    goToHeatmapFrame(_animFrame);
+                                    goToHeatmapFrame(_animFrame, false);
                                 }, 1800);
                             }
                         }
@@ -2210,8 +2237,12 @@ function switchRollingTab(name, btn) {
     document.querySelectorAll('.rolling-tab-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
     if (name === 'animated' && typeof Plotly !== 'undefined') {
-        var el = document.getElementById('plotly-animated-container');
-        if (el && el.data) setTimeout(function(){ Plotly.Plots.resize(el); }, 50);
+        setTimeout(function(){
+            var a = document.getElementById('plotly-anim-a');
+            var b = document.getElementById('plotly-anim-b');
+            if (a && a.data) Plotly.Plots.resize(a);
+            if (b && b.data) Plotly.Plots.resize(b);
+        }, 50);
     }
 }
 var oscDefaults = {

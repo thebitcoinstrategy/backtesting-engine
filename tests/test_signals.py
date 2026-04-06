@@ -1087,7 +1087,7 @@ class TestRollingWindowAnalysis:
         assert "p.mode == \"rolling\"" in src, "Rolling mode handler must exist"
         assert "rolling-params-row" in src, "Rolling params form row must exist"
         assert "switchRollingTab" in src, "Tab switching JS must exist"
-        assert "plotly-animated-container" in src, "Animated heatmap container must exist"
+        assert "plotly-anim-a" in src, "Animated heatmap container must exist"
         assert "per_window_matrices" in src, "Must use per-window matrices for animation"
 
     def test_rolling_params_parsed(self):
