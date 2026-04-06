@@ -1808,88 +1808,54 @@ HTML = """\
                         <button class="rolling-tab-btn" onclick="switchRollingTab('equity', this)">Equity Overlay</button>
                     </div>
                     <div class="rolling-tab-content" id="rtab-animated">
-                        <div id="plotly-animated-container" style="width:100%;height:650px;border-radius:12px;border:1px solid var(--border);background:var(--bg-deep)"></div>
+                        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+                            <button id="anim-play-btn" onclick="toggleHeatmapPlay()" style="background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 14px;cursor:pointer;font-size:0.85em;display:flex;align-items:center;gap:6px">
+                                <span id="anim-play-icon">&#9654;</span> <span id="anim-play-label">Play</span>
+                            </button>
+                            <span id="anim-window-label" style="font-size:0.85em;color:var(--text-dim)"></span>
+                        </div>
+                        <div id="plotly-animated-container" style="width:100%;height:600px;border-radius:12px;border:1px solid var(--border);background:var(--bg-deep);transition:opacity 0.4s ease"></div>
+                        <div style="margin-top:8px">
+                            <input type="range" id="anim-slider" min="0" max="0" value="0" style="width:100%;accent-color:var(--accent)" oninput="goToHeatmapFrame(parseInt(this.value))">
+                        </div>
                         <script>
+                        var _animData, _animPlaying = false, _animTimer = null, _animFrame = 0;
                         (function() {
-                            var data = {{ rolling_plotly_data|safe }};
+                            _animData = {{ rolling_plotly_data|safe }};
                             function renderAnimated() {
                                 if (typeof Plotly === 'undefined') { setTimeout(renderAnimated, 200); return; }
-                                var periods = data.periods;
-                                var frames = data.frames;
-                                // Explicit RdYlGn to match matplotlib heatmaps
+                                var d = _animData, periods = d.periods, frames = d.frames;
                                 var rdYlGn = [[0,'#a50026'],[0.1,'#d73027'],[0.2,'#f46d43'],[0.3,'#fdae61'],[0.4,'#fee08b'],[0.5,'#ffffbf'],[0.6,'#d9ef8b'],[0.7,'#a6d96a'],[0.8,'#66bd63'],[0.9,'#1a9850'],[1,'#006837']];
-                                // Initial frame — scale symmetric around 0
-                                var initZ = frames[0].z;
                                 var initMax = frames[0].zmax || 100;
                                 var trace = {
-                                    x: periods, y: periods, z: initZ,
+                                    x: periods, y: periods, z: frames[0].z,
                                     type: 'heatmap', colorscale: rdYlGn, showscale: true,
                                     zmin: -initMax, zmax: initMax,
-                                    colorbar: { title: {text: data.metric_label, font:{color:'#8890a4'}}, tickfont: {color:'#8890a4'} },
-                                    hovertemplate: data.ind1_name + '(%{y}) / ' + data.ind2_name + '(%{x})<br>' + data.metric_label + ': %{z:.1f}<extra></extra>'
+                                    colorbar: { title: {text: d.metric_label, font:{color:'#8890a4'}}, tickfont: {color:'#8890a4'} },
+                                    hovertemplate: d.ind1_name + '(%{y}) / ' + d.ind2_name + '(%{x})<br>' + d.metric_label + ': %{z:.1f}<extra></extra>'
                                 };
                                 var markers = [];
-                                if (data.selected_p1 && data.selected_p2) {
-                                    markers.push({x:[data.selected_p2], y:[data.selected_p1], mode:'markers',
+                                if (d.selected_p1 && d.selected_p2) {
+                                    markers.push({x:[d.selected_p2], y:[d.selected_p1], mode:'markers',
                                         type:'scatter', marker:{size:14, color:'#f7931a', symbol:'diamond', line:{color:'white',width:2}},
-                                        hovertemplate:'Selected: '+data.strategy_label+'<extra></extra>', showlegend:false});
+                                        hovertemplate:'Selected: '+d.strategy_label+'<extra></extra>', showlegend:false});
                                 }
-                                if (data.best_p1 && data.best_p2) {
-                                    markers.push({x:[data.best_p2], y:[data.best_p1], mode:'markers',
+                                if (d.best_p1 && d.best_p2) {
+                                    markers.push({x:[d.best_p2], y:[d.best_p1], mode:'markers',
                                         type:'scatter', marker:{size:14, color:'#34d399', symbol:'star', line:{color:'white',width:2}},
-                                        hovertemplate:'Best avg: '+data.ind1_name+'('+data.best_p1+')/'+data.ind2_name+'('+data.best_p2+')<extra></extra>', showlegend:false});
-                                }
-                                // Build animation frames with per-window scale
-                                var plotlyFrames = [];
-                                for (var i = 0; i < frames.length; i++) {
-                                    var fm = frames[i].zmax || 100;
-                                    plotlyFrames.push({
-                                        name: frames[i].label,
-                                        data: [{z: frames[i].z, zmin: -fm, zmax: fm}]
-                                    });
-                                }
-                                var sliderSteps = [];
-                                for (var i = 0; i < frames.length; i++) {
-                                    sliderSteps.push({
-                                        method: 'animate', label: frames[i].label,
-                                        args: [[frames[i].label], {mode:'immediate', transition:{duration:600, easing:'cubic-in-out'}, frame:{duration:600, redraw:true}}]
-                                    });
+                                        hovertemplate:'Best avg: '+d.ind1_name+'('+d.best_p1+')/'+d.ind2_name+'('+d.best_p2+')<extra></extra>', showlegend:false});
                                 }
                                 var layout = {
-                                    xaxis: {title: data.ind2_name + ' Period', color:'#8890a4', gridcolor:'#252a3a', dtick: data.dtick},
-                                    yaxis: {title: data.ind1_name + ' Period', color:'#8890a4', gridcolor:'#252a3a', dtick: data.dtick},
+                                    xaxis: {title: d.ind2_name + ' Period', color:'#8890a4', gridcolor:'#252a3a', dtick: d.dtick},
+                                    yaxis: {title: d.ind1_name + ' Period', color:'#8890a4', gridcolor:'#252a3a', dtick: d.dtick},
                                     paper_bgcolor: '#161922', plot_bgcolor: '#080a10', font: {color:'#e8eaf0'},
-                                    title: {text: data.strategy_label + ' — ' + data.metric_label + ' (' + frames[0].label + ')', font:{size:14, color:'#e8eaf0'}},
-                                    margin: {l:60, r:20, t:50, b:100},
-                                    updatemenus: [{
-                                        type: 'buttons', showactive: false, x: 0.05, y: -0.12, xanchor: 'left',
-                                        buttons: [
-                                            {label: '&#9654; Play', method: 'animate',
-                                             args: [null, {fromcurrent:true, frame:{duration:1200, redraw:true}, transition:{duration:600, easing:'cubic-in-out'}, mode:'immediate'}]},
-                                            {label: '&#9646;&#9646; Pause', method: 'animate',
-                                             args: [[null], {mode:'immediate', frame:{duration:0, redraw:false}}]}
-                                        ],
-                                        font: {color: '#e8eaf0'}, bgcolor: '#252a3a', bordercolor: '#3a3f50'
-                                    }],
-                                    sliders: [{
-                                        active: 0, pad: {t: 30},
-                                        currentvalue: {prefix: 'Window: ', font: {color:'#e8eaf0', size:12}},
-                                        steps: sliderSteps,
-                                        bgcolor: '#252a3a', bordercolor: '#3a3f50',
-                                        font: {color: '#8890a4'},
-                                        activebgcolor: '#4a90d9'
-                                    }]
+                                    title: {text: d.strategy_label + ' \u2014 ' + d.metric_label + ' (' + frames[0].label + ')', font:{size:14, color:'#e8eaf0'}},
+                                    margin: {l:60, r:20, t:50, b:20}
                                 };
-                                var allTraces = [trace].concat(markers);
-                                Plotly.newPlot('plotly-animated-container', allTraces, layout, {responsive:true}).then(function() {
-                                    Plotly.addFrames('plotly-animated-container', plotlyFrames);
-                                });
-                                // Update title on frame change
-                                document.getElementById('plotly-animated-container').on('plotly_animated', function() {});
-                                document.getElementById('plotly-animated-container').on('plotly_sliderchange', function(e) {
-                                    var lbl = e.slider.active !== undefined ? frames[e.slider.active].label : '';
-                                    Plotly.relayout('plotly-animated-container', {'title.text': data.strategy_label + ' — ' + data.metric_label + ' (' + lbl + ')'});
-                                });
+                                Plotly.newPlot('plotly-animated-container', [trace].concat(markers), layout, {responsive:true});
+                                var slider = document.getElementById('anim-slider');
+                                slider.max = frames.length - 1;
+                                document.getElementById('anim-window-label').textContent = 'Window: ' + frames[0].label;
                             }
                             if (typeof Plotly === 'undefined') {
                                 var s = document.createElement('script');
@@ -1898,6 +1864,35 @@ HTML = """\
                                 document.head.appendChild(s);
                             } else { renderAnimated(); }
                         })();
+                        function goToHeatmapFrame(idx) {
+                            _animFrame = idx;
+                            var el = document.getElementById('plotly-animated-container');
+                            var f = _animData.frames[idx], fm = f.zmax || 100;
+                            // Fade out, swap data, fade in
+                            el.style.opacity = '0.15';
+                            setTimeout(function() {
+                                Plotly.restyle(el, {z:[f.z], zmin:[-fm], zmax:[fm]}, [0]);
+                                Plotly.relayout(el, {'title.text': _animData.strategy_label + ' \u2014 ' + _animData.metric_label + ' (' + f.label + ')'});
+                                el.style.opacity = '1';
+                            }, 350);
+                            document.getElementById('anim-slider').value = idx;
+                            document.getElementById('anim-window-label').textContent = 'Window: ' + f.label;
+                        }
+                        function toggleHeatmapPlay() {
+                            if (_animPlaying) {
+                                clearInterval(_animTimer); _animTimer = null; _animPlaying = false;
+                                document.getElementById('anim-play-icon').innerHTML = '&#9654;';
+                                document.getElementById('anim-play-label').textContent = 'Play';
+                            } else {
+                                _animPlaying = true;
+                                document.getElementById('anim-play-icon').innerHTML = '&#9646;&#9646;';
+                                document.getElementById('anim-play-label').textContent = 'Pause';
+                                _animTimer = setInterval(function() {
+                                    _animFrame = (_animFrame + 1) % _animData.frames.length;
+                                    goToHeatmapFrame(_animFrame);
+                                }, 1800);
+                            }
+                        }
                         </script>
                     </div>
                     {% else %}
@@ -2214,10 +2209,9 @@ function switchRollingTab(name, btn) {
     document.getElementById('rtab-' + name).classList.remove('hidden');
     document.querySelectorAll('.rolling-tab-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
-    // Resize Plotly chart when animated heatmap tab becomes visible
     if (name === 'animated' && typeof Plotly !== 'undefined') {
         var el = document.getElementById('plotly-animated-container');
-        if (el && el.data) Plotly.Plots.resize(el);
+        if (el && el.data) setTimeout(function(){ Plotly.Plots.resize(el); }, 50);
     }
 }
 var oscDefaults = {
