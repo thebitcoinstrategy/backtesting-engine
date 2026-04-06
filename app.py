@@ -1475,14 +1475,7 @@ HTML = """\
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label>Step Size (years)</label>
-                            <select name="step_size">
-                                {% for y in [1,2,3] %}
-                                <option value="{{ y }}" {{ 'selected' if p.step_size == y }}>{{ y }} year{{ 's' if y > 1 }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
+                        <input type="hidden" name="step_size" value="0.5">
                         <div class="form-group">
                             <label>Metric</label>
                             <select name="rolling_metric">
@@ -3345,7 +3338,7 @@ class Params:
                 self.theme = "dark"
             # Rolling window params
             self.window_size = int(form.get("window_size", 4))
-            self.step_size = int(form.get("step_size", 1))
+            self.step_size = float(form.get("step_size", 0.5))
             self.rolling_metric = form.get("rolling_metric", "total_return")
         else:
             self.asset = DEFAULT_ASSET
@@ -3392,7 +3385,7 @@ class Params:
             self.dca_sweep_param = "multiplier"
             # Rolling window defaults
             self.window_size = 4
-            self.step_size = 1
+            self.step_size = 0.5
             self.rolling_metric = "total_return"
 
 

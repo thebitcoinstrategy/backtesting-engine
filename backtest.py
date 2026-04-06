@@ -1121,8 +1121,8 @@ def generate_rolling_windows(df, window_years, step_years, periods_per_year=365,
             ts = ts.tz_localize(df.index.tz)
         if ts < data_end:
             data_end = ts
-    window_offset = pd.DateOffset(years=window_years)
-    step_offset = pd.DateOffset(years=step_years)
+    window_offset = pd.DateOffset(years=int(window_years)) if window_years == int(window_years) else pd.DateOffset(months=int(round(window_years * 12)))
+    step_offset = pd.DateOffset(years=int(step_years)) if step_years == int(step_years) else pd.DateOffset(months=int(round(step_years * 12)))
 
     # Check dataset can fit at least one window
     if data_start + window_offset > data_end:
