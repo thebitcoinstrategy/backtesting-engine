@@ -2401,7 +2401,8 @@ function toggleFields() {
     else { windowGroup.classList.add('hidden'); metricGroup.classList.add('hidden'); cashGroup.classList.remove('hidden'); }
     windowGroup.querySelector('select').disabled = !isRolling;
     metricGroup.querySelector('select').disabled = !isRolling;
-    if (isRolling) autoAdjustWindowSize();
+    // Don't auto-adjust window size here — it would override URL params on submit.
+    // Auto-adjust only runs on asset change (onAssetChange) and initial page load.
 
     var sizingVal = document.querySelector('select[name="sizing"]').value;
     var rules = [
