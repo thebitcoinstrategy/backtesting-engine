@@ -1815,8 +1815,8 @@ HTML = """\
                             <span id="anim-window-label" style="font-size:0.85em;color:var(--text-dim)"></span>
                         </div>
                         <div id="anim-stack" style="position:relative;width:100%;height:600px;border-radius:12px;border:1px solid var(--border);background:var(--bg-deep);overflow:hidden">
-                            <div id="plotly-anim-a" style="position:absolute;inset:0;transition:opacity 0.6s ease;opacity:1"></div>
-                            <div id="plotly-anim-b" style="position:absolute;inset:0;transition:opacity 0.6s ease;opacity:0;pointer-events:none"></div>
+                            <div id="plotly-anim-a" style="position:absolute;inset:0;transition:opacity 1.2s ease;opacity:1"></div>
+                            <div id="plotly-anim-b" style="position:absolute;inset:0;transition:opacity 1.2s ease;opacity:0;pointer-events:none"></div>
                         </div>
                         <div style="margin-top:8px">
                             <input type="range" id="anim-slider" min="0" max="0" value="0" style="width:100%;accent-color:var(--accent)" oninput="goToHeatmapFrame(parseInt(this.value), true)">
@@ -1841,12 +1841,13 @@ HTML = """\
                                         type:'scatter', marker:{size:14, color:'#f7931a', symbol:'diamond', line:{color:'white',width:2}},
                                         hovertemplate:'Selected: '+d.strategy_label+'<extra></extra>', showlegend:false});
                                 }
-                                if (d.best_p1 && d.best_p2) {
-                                    markers.push({x:[d.best_p2], y:[d.best_p1], mode:'markers',
+                                // Per-frame best combo (moves with each window)
+                                if (f.best_p1 && f.best_p2) {
+                                    markers.push({x:[f.best_p2], y:[f.best_p1], mode:'markers',
                                         type:'scatter', marker:{size:14, color:'#34d399', symbol:'star', line:{color:'white',width:2}},
-                                        hovertemplate:'Best avg: '+d.ind1_name+'('+d.best_p1+')/'+d.ind2_name+'('+d.best_p2+')<extra></extra>', showlegend:false});
+                                        hovertemplate:'Best in window: '+d.ind1_name+'('+f.best_p1+')/'+d.ind2_name+'('+f.best_p2+')<extra></extra>', showlegend:false});
                                 }
-                                return {traces: [trace].concat(markers), label: f.label};
+                                return {traces: [trace].concat(markers), label: f.label, nMarkers: markers.length};
                             }
                             function makeLayout(d, label) {
                                 return {
@@ -1876,17 +1877,26 @@ HTML = """\
                                 document.head.appendChild(s);
                             } else { renderAnimated(); }
                         })();
+                        function _updatePlotlyFrame(elId, d, f) {
+                            var fm = f.zmax || 100;
+                            Plotly.restyle(elId, {z:[f.z], zmin:[-fm], zmax:[fm]}, [0]);
+                            // Update best star marker position (last trace = best marker if it exists)
+                            var el = document.getElementById(elId);
+                            if (el && el.data && f.best_p1 && f.best_p2) {
+                                var bestIdx = el.data.length - 1;
+                                Plotly.restyle(elId, {x:[[f.best_p2]], y:[[f.best_p1]],
+                                    'hovertemplate': 'Best in window: '+d.ind1_name+'('+f.best_p1+')/'+d.ind2_name+'('+f.best_p2+')<extra></extra>'}, [bestIdx]);
+                            }
+                            Plotly.relayout(elId, {'title.text': d.strategy_label + ' \u2014 ' + d.metric_label + ' (' + f.label + ')'});
+                        }
                         function goToHeatmapFrame(idx, instant) {
                             if (_animTransitioning && !instant) return;
                             _animFrame = idx;
-                            var d = _animData, f = d.frames[idx], fm = f.zmax || 100;
+                            var d = _animData, f = d.frames[idx];
                             document.getElementById('anim-slider').value = idx;
                             document.getElementById('anim-window-label').textContent = 'Window: ' + f.label;
                             if (instant) {
-                                // Slider drag: instant update on front layer
-                                var front = document.getElementById('plotly-anim-' + _animFront);
-                                Plotly.restyle(front, {z:[f.z], zmin:[-fm], zmax:[fm]}, [0]);
-                                Plotly.relayout(front, {'title.text': d.strategy_label + ' \u2014 ' + d.metric_label + ' (' + f.label + ')'});
+                                _updatePlotlyFrame('plotly-anim-' + _animFront, d, f);
                                 return;
                             }
                             // Cross-fade: render new frame on back layer, then swap opacity
@@ -1894,16 +1904,14 @@ HTML = """\
                             var backId = _animFront === 'a' ? 'b' : 'a';
                             var frontEl = document.getElementById('plotly-anim-' + _animFront);
                             var backEl = document.getElementById('plotly-anim-' + backId);
-                            // Update back layer data
-                            Plotly.restyle(backEl, {z:[f.z], zmin:[-fm], zmax:[fm]}, [0]);
-                            Plotly.relayout(backEl, {'title.text': d.strategy_label + ' \u2014 ' + d.metric_label + ' (' + f.label + ')'});
+                            _updatePlotlyFrame('plotly-anim-' + backId, d, f);
                             // Cross-fade: back fades in, front fades out
                             backEl.style.opacity = '1';
                             backEl.style.pointerEvents = 'auto';
                             frontEl.style.opacity = '0';
                             frontEl.style.pointerEvents = 'none';
                             _animFront = backId;
-                            setTimeout(function() { _animTransitioning = false; }, 650);
+                            setTimeout(function() { _animTransitioning = false; }, 1300);
                         }
                         function toggleHeatmapPlay() {
                             if (_animPlaying) {
@@ -1917,7 +1925,7 @@ HTML = """\
                                 _animTimer = setInterval(function() {
                                     _animFrame = (_animFrame + 1) % _animData.frames.length;
                                     goToHeatmapFrame(_animFrame, false);
-                                }, 1800);
+                                }, 2500);
                             }
                         }
                         </script>
@@ -4442,13 +4450,23 @@ def _run_post_handler(cancel_event):
             periods_anim = dual_sweep["periods"]
             per_window = dual_sweep["per_window_matrices"]
             window_labels = dual_sweep["window_labels"]
-            # Build frames: one heatmap per window with per-frame scale
+            # Build frames: one heatmap per window with per-frame scale and best combo
             frames_json = []
             for wi, (mat, label) in enumerate(zip(per_window, window_labels)):
                 z_frame = [[None if np.isnan(v) else round(float(v), 2) for v in row] for row in mat]
                 frame_vals = [v for row in mat for v in row if not np.isnan(v)]
                 fmax = round(float(max(abs(v) for v in frame_vals)), 2) if frame_vals else 100
-                frames_json.append({"label": label, "z": z_frame, "zmax": fmax})
+                # Find best combo for this specific window
+                best_v, best_fp1, best_fp2 = -np.inf, periods_anim[0], periods_anim[0]
+                for pi in range(len(periods_anim)):
+                    for pj in range(len(periods_anim)):
+                        v = mat[pi, pj]
+                        if not np.isnan(v) and v > best_v:
+                            best_v = v
+                            best_fp1 = periods_anim[pi]
+                            best_fp2 = periods_anim[pj]
+                frames_json.append({"label": label, "z": z_frame, "zmax": fmax,
+                                    "best_p1": int(best_fp1), "best_p2": int(best_fp2)})
             # dtick for axes: auto based on period count
             dtick = max(1, len(periods_anim) // 15) * (periods_anim[1] - periods_anim[0]) if len(periods_anim) > 1 else 1
             plotly_data = json_mod.dumps({
