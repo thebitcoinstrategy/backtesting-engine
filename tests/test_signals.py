@@ -1098,3 +1098,80 @@ class TestRollingWindowAnalysis:
         assert "self.window_size" in src, "Params must parse window_size"
         assert "self.step_size" in src, "Params must parse step_size"
         assert "self.rolling_metric" in src, "Params must parse rolling_metric"
+
+
+class TestProgressTracking:
+    """Progress bar feature: server tracks calculation progress, client polls it."""
+
+    def test_progress_endpoint_exists(self):
+        """The /progress route must exist in app.py."""
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            src = f.read()
+        assert "@app.route('/progress')" in src, "/progress endpoint must exist"
+        assert "def progress():" in src, "progress() handler must exist"
+
+    def test_progress_infrastructure(self):
+        """update_progress and _progress dict must exist in app.py."""
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            src = f.read()
+        assert "_progress = {}" in src or "_progress = " in src, "_progress dict must exist"
+        assert "def update_progress(" in src, "update_progress helper must exist"
+        assert "_progress_lock" in src, "Progress must use thread lock"
+
+    def test_progress_cleanup_on_completion(self):
+        """Progress entry must be cleaned up when request finishes."""
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            src = f.read()
+        assert "_progress.pop(rid" in src, "Progress must be cleaned up in finally block"
+
+    def test_heatmap_reports_progress(self):
+        """Heatmap loop must call update_progress."""
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            src = f.read()
+        assert 'update_progress(rid, i, n, ' in src, "Heatmap must report progress"
+
+    def test_sweep_reports_progress(self):
+        """Sweep loop must call update_progress."""
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            src = f.read()
+        assert 'update_progress(rid, si, n_sweep' in src, "Sweep must report progress"
+
+    def test_client_polls_progress(self):
+        """Client JS must poll /progress and show a progress bar."""
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            src = f.read()
+        assert "progress-bar" in src, "Progress bar element must exist"
+        assert "/progress?id=" in src, "Client must poll /progress endpoint"
+        assert "clearInterval(progressInterval)" in src, "Must stop polling when done"
+
+    def test_rolling_functions_accept_progress_callback(self):
+        """backtest.py rolling functions must accept progress_callback parameter."""
+        import inspect
+        sig_eval = inspect.signature(bt.rolling_window_evaluate)
+        assert "progress_callback" in sig_eval.parameters, "rolling_window_evaluate must accept progress_callback"
+        sig_sweep = inspect.signature(bt.rolling_window_sweep)
+        assert "progress_callback" in sig_sweep.parameters, "rolling_window_sweep must accept progress_callback"
+        sig_dual = inspect.signature(bt.rolling_window_sweep_dual)
+        assert "progress_callback" in sig_dual.parameters, "rolling_window_sweep_dual must accept progress_callback"
+
+    def test_rolling_callback_invoked(self):
+        """rolling_window_evaluate must call the progress_callback."""
+        prices = list(range(100, 200))
+        dates = pd.date_range("2020-01-01", periods=len(prices), freq="D", tz="UTC")
+        df = pd.DataFrame({"close": prices}, index=dates)
+        windows = bt.generate_rolling_windows(df, window_years=0.15, step_years=0.05,
+                                                periods_per_year=365)
+        calls = []
+        def cb(cur, tot):
+            calls.append((cur, tot))
+        bt.rolling_window_evaluate(df, windows, "price", None, "sma", 10,
+                                    initial_cash=10000, progress_callback=cb)
+        assert len(calls) > 0, "progress_callback must be called at least once"
+        assert calls[-1][0] == calls[-1][1] - 1 or calls[-1][0] < calls[-1][1], \
+            "Last call should be near total"

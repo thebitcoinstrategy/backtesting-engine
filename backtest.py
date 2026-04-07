@@ -1157,7 +1157,7 @@ def rolling_window_evaluate(df, windows, ind1_name, ind1_period, ind2_name, ind2
                             initial_cash, fee=0.001, exposure="long-cash",
                             long_leverage=1, short_leverage=1, lev_mode="rebalance",
                             reverse=False, sizing="compound", periods_per_year=365,
-                            financing_rate=0):
+                            financing_rate=0, progress_callback=None):
     """Run a fixed strategy across all windows. Indicators computed once on full df."""
     df = df.copy()
     ind1_series, ind1_label = compute_indicator_from_spec(df, ind1_name, ind1_period)
@@ -1172,7 +1172,10 @@ def rolling_window_evaluate(df, windows, ind1_name, ind1_period, ind2_name, ind2
     daily_return = df["close"].pct_change().fillna(0)
 
     results = []
-    for w in windows:
+    n_windows = len(windows)
+    for wi, w in enumerate(windows):
+        if progress_callback:
+            progress_callback(wi, n_windows)
         mask = (df.index >= w["start"]) & (df.index < w["end"])
         w_pos = position[mask]
         w_ret = daily_return[mask]
@@ -1257,7 +1260,7 @@ def rolling_window_sweep(df, windows, ind1_name, ind1_period, ind2_name,
                          initial_cash, fee=0.001, exposure="long-cash",
                          long_leverage=1, short_leverage=1, lev_mode="rebalance",
                          reverse=False, sizing="compound", periods_per_year=365,
-                         financing_rate=0, metric="total_return"):
+                         financing_rate=0, metric="total_return", progress_callback=None):
     """Sweep one indicator's period across all windows.
     Returns dict with windows, periods, matrix (n_windows x n_periods), best_per_window."""
     periods = list(range(sweep_min, sweep_max + 1, sweep_step))
@@ -1287,6 +1290,8 @@ def rolling_window_sweep(df, windows, ind1_name, ind1_period, ind2_name,
     best_per_window = []
 
     for i, w in enumerate(windows):
+        if progress_callback:
+            progress_callback(i, n_windows)
         mask = (df.index >= w["start"]) & (df.index < w["end"])
         w_ret = daily_return[mask]
         if len(w_ret) < 2:
@@ -1342,7 +1347,7 @@ def rolling_window_sweep_dual(df, windows, ind1_name, ind2_name,
                               initial_cash, fee=0.001, exposure="long-cash",
                               long_leverage=1, short_leverage=1, lev_mode="rebalance",
                               reverse=False, sizing="compound", periods_per_year=365,
-                              financing_rate=0, metric="total_return"):
+                              financing_rate=0, metric="total_return", progress_callback=None):
     """Sweep both ind1 and ind2 periods across all windows. Returns averaged 2D matrix.
     For same-type indicators, only computes upper triangle (fast < slow).
     Returns dict with periods, matrix (n_periods x n_periods), best_p1, best_p2."""
@@ -1386,6 +1391,8 @@ def rolling_window_sweep_dual(df, windows, ind1_name, ind2_name,
     per_window_matrices = [np.full((n_per, n_per), np.nan) for _ in range(n_windows)]
 
     for pi, p1 in enumerate(periods):
+        if progress_callback:
+            progress_callback(pi, n_per)
         for pj, p2 in enumerate(periods):
             if same_type and p1 >= p2:
                 continue

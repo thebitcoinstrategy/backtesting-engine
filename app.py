@@ -235,6 +235,14 @@ def _cache_evict():
 _cancel_flags = {}   # request_id -> threading.Event
 _cancel_lock = threading.Lock()
 
+# --- Progress tracking infrastructure ---
+_progress = {}       # request_id -> {current, total, label}
+_progress_lock = threading.Lock()
+
+def update_progress(rid, current, total, label=""):
+    with _progress_lock:
+        _progress[rid] = {"current": current, "total": total, "label": label}
+
 class ClientDisconnected(Exception):
     pass
 
@@ -2742,11 +2750,41 @@ document.getElementById('form').addEventListener('submit', function(e) {
     panel.style.opacity = '0.5';
     panel.style.transition = 'opacity 0.2s ease';
 
+    // Show progress bar placeholder
+    panel.innerHTML = '<div class="placeholder" style="display:flex;flex-direction:column;align-items:center;gap:12px">'
+        + '<div style="display:flex;align-items:center;gap:10px"><span class="spinner" style="width:20px;height:20px;border:2px solid var(--text-dim);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;display:inline-block"></span> <span id="progress-label">Calculating...</span></div>'
+        + '<div id="progress-bar-wrap" style="width:100%;max-width:400px;height:6px;background:var(--bg-deep);border-radius:3px;overflow:hidden;display:none">'
+        + '<div id="progress-bar" style="width:0%;height:100%;background:var(--accent);border-radius:3px;transition:width 0.3s ease"></div></div>'
+        + '<div id="progress-pct" style="font-size:0.8em;color:var(--text-dim);display:none">0%</div></div>';
+    panel.style.opacity = '1';
+
+    // Start polling progress
+    var progressRid = currentRequestId;
+    var progressInterval = setInterval(function() {
+        fetch('/progress?id=' + progressRid)
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.total > 0) {
+                    var pct = Math.round(d.current / d.total * 100);
+                    var barWrap = document.getElementById('progress-bar-wrap');
+                    var bar = document.getElementById('progress-bar');
+                    var pctLabel = document.getElementById('progress-pct');
+                    var label = document.getElementById('progress-label');
+                    if (barWrap) barWrap.style.display = 'block';
+                    if (bar) bar.style.width = pct + '%';
+                    if (pctLabel) { pctLabel.style.display = 'block'; pctLabel.textContent = pct + '%'; }
+                    if (label) label.textContent = d.label || 'Calculating...';
+                }
+            })
+            .catch(function() {});
+    }, 300);
+
     var formData = new FormData(this);
     formData.append('_request_id', currentRequestId);
 
     fetch('/backtester', { method: 'POST', body: formData, signal: currentAbort.signal })
         .then(function(resp) {
+            clearInterval(progressInterval);
             if (resp.redirected) { window.location.href = resp.url; throw new Error('redirect'); }
             return resp.text();
         })
@@ -2796,6 +2834,7 @@ document.getElementById('form').addEventListener('submit', function(e) {
             resetBtn();
         })
         .catch(function(err) {
+            clearInterval(progressInterval);
             panel.style.opacity = '1';
             if (err.name === 'AbortError') {
                 // Don't show "Stopped" if there's already a loading spinner (auto-load in progress)
@@ -3890,6 +3929,16 @@ def cancel():
     return '', 204
 
 
+@app.route('/progress')
+def progress():
+    rid = request.args.get('id', '')
+    with _progress_lock:
+        p = _progress.get(rid)
+    if p is None:
+        return jsonify({"current": 0, "total": 0, "label": ""})
+    return jsonify(p)
+
+
 def _render_main(p, **kwargs):
     """Render the main backtester HTML template with shared asset metadata."""
     defaults = dict(
@@ -3935,7 +3984,7 @@ def index():
         _cancel_flags[rid] = cancel_event
 
     try:
-        result = _run_post_handler(cancel_event)
+        result = _run_post_handler(cancel_event, rid)
         # Cache the rendered HTML response
         if isinstance(result, str):
             _cache_put(cache_key, result)
@@ -3945,9 +3994,11 @@ def index():
     finally:
         with _cancel_lock:
             _cancel_flags.pop(rid, None)
+        with _progress_lock:
+            _progress.pop(rid, None)
 
 
-def _run_post_handler(cancel_event):
+def _run_post_handler(cancel_event, rid=None):
     chart_b64 = None
     thumb_b64 = ''
     best = None
@@ -4299,13 +4350,18 @@ def _run_post_handler(cancel_event):
             total_ret = (equity_final / p.initial_cash - 1) * 100
             return bt._annualized_return(total_ret, n_days, periods_per_year)
 
+        n_lev = len(lev_values)
         long_sweep_full = []
-        for lv in lev_values:
+        for li, lv in enumerate(lev_values):
             check_cancelled(cancel_event)
+            if rid:
+                update_progress(rid, li, n_lev * 2, f"Leverage sweep {li+1}/{n_lev*2}")
             long_sweep_full.append(_sweep_ann(lv, 0))
         short_sweep_full = []
-        for lv in lev_values:
+        for li, lv in enumerate(lev_values):
             check_cancelled(cancel_event)
+            if rid:
+                update_progress(rid, n_lev + li, n_lev * 2, f"Leverage sweep {n_lev+li+1}/{n_lev*2}")
             short_sweep_full.append(_sweep_ann(0, lv))
 
         def _trim_flatline(values, levs):
@@ -4443,10 +4499,12 @@ def _run_post_handler(cancel_event):
                                 ind1_label="", ind2_label="")
 
         # Fixed strategy evaluation (for timeline + equity overlay)
+        _rolling_cb = (lambda cur, tot: update_progress(rid, cur, tot, f"Rolling window {cur+1}/{tot}")) if rid else None
         fixed_results = bt.rolling_window_evaluate(
             df_full, windows, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
             p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage,
-            p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate)
+            p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate,
+            progress_callback=_rolling_cb)
 
         # Consistency score
         score, score_label = bt.compute_consistency_score(fixed_results, p.rolling_metric)
@@ -4469,12 +4527,13 @@ def _run_post_handler(cancel_event):
         if is_dual:
             # Dual indicator: animated heatmap over time
             import json as json_mod
+            _dual_cb = (lambda cur, tot: update_progress(rid, cur, tot, f"Rolling heatmap row {cur+1}/{tot}")) if rid else None
             dual_sweep = bt.rolling_window_sweep_dual(
                 df_full, windows, p.ind1_name, p.ind2_name,
                 p.range_min, p.range_max, p.step,
                 p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage,
                 p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate,
-                metric=p.rolling_metric)
+                metric=p.rolling_metric, progress_callback=_dual_cb)
 
             # Plotly JSON for animated heatmap
             periods_anim = dual_sweep["periods"]
@@ -4522,12 +4581,13 @@ def _run_post_handler(cancel_event):
                                 ind1_label="", ind2_label="")
         else:
             # Single indicator (price vs MA): heatmap sweep of ind2 period
+            _sweep_cb = (lambda cur, tot: update_progress(rid, cur, tot, f"Rolling sweep window {cur+1}/{tot}")) if rid else None
             sweep_data = bt.rolling_window_sweep(
                 df_full, windows, p.ind1_name, p.ind1_period, p.ind2_name,
                 "ind2", p.range_min, p.range_max, p.step,
                 p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage,
                 p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate,
-                metric=p.rolling_metric)
+                metric=p.rolling_metric, progress_callback=_sweep_cb)
 
             sweep_ind_label = f"{p.ind2_name.upper()} Period"
             chart_heatmap = bt.generate_rolling_heatmap(sweep_data, p.rolling_metric, strategy_label, p.theme,
@@ -4602,6 +4662,8 @@ def _run_post_handler(cancel_event):
         n_days = int(_hm_mask.sum())
         for i, p1 in enumerate(periods):
             check_cancelled(cancel_event)
+            if rid:
+                update_progress(rid, i, n, f"Heatmap row {i+1}/{n}")
             for j, p2 in enumerate(periods):
                 if same_type and p1 >= p2:
                     continue
@@ -4728,8 +4790,11 @@ def _run_post_handler(cancel_event):
         periods = list(range(p.range_min, p.range_max + 1))
         annualized_returns = []
 
-        for period in periods:
+        n_sweep = len(periods)
+        for si, period in enumerate(periods):
             check_cancelled(cancel_event)
+            if rid:
+                update_progress(rid, si, n_sweep, f"Sweep {si+1}/{n_sweep}")
             result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, period,
                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year, financing_rate=fin_rate)
             ann = bt._annualized_return(result["total_return"], n_days, periods_per_year)
