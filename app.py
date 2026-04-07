@@ -9498,20 +9498,26 @@ function toggleAddBtList() {
 function addBacktest(btId) {
     fetch('/api/collection/' + collId + '/add-backtest', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({backtest_id: btId}),
-        redirect: 'manual'
+        body: JSON.stringify({backtest_id: btId})
     }).then(function(r) {
-        if (r.type === 'opaqueredirect' || r.redirected) {
+        return r.text().then(function(body) { return {status: r.status, ok: r.ok, redirected: r.redirected, body: body}; });
+    }).then(function(res) {
+        if (res.redirected || res.status === 0) {
             _swal.fire({icon:'warning', title:'Session expired', text:'Please log in again.'});
             return;
         }
-        if (!r.ok) {
-            return r.text().then(function(t) { throw new Error('Server error ' + r.status + ': ' + t); });
+        if (!res.body) {
+            throw new Error('Empty response (status ' + res.status + '). Try refreshing the page.');
         }
-        return r.json().then(function(data) {
-            if (data.error) { _swal.fire({icon:'warning', title:data.error}); return; }
-            location.reload();
-        });
+        var data;
+        try { data = JSON.parse(res.body); } catch(e) {
+            throw new Error('Invalid response (status ' + res.status + '): ' + res.body.substring(0, 200));
+        }
+        if (!res.ok || data.error) {
+            _swal.fire({icon:'warning', title: data.error || ('Server error ' + res.status)});
+            return;
+        }
+        location.reload();
     })
     .catch(function(e) { _swal.fire({icon:'error', title:'Failed to add', text:e.message}); });
 }
