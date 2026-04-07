@@ -9044,7 +9044,7 @@ def api_delete_collection(collection_id):
 @app.route('/api/collection/<collection_id>/add-backtest', methods=['POST'])
 @require_auth
 def api_add_backtest_to_collection(collection_id):
-    """Add a backtest to a collection."""
+    """Add a backtest to a collection. Supports JSON, form-encoded, or full-page POST."""
     try:
         # Support both JSON and form-encoded body
         data = request.get_json(silent=True)
@@ -9060,6 +9060,9 @@ def api_add_backtest_to_collection(collection_id):
         added = db.add_backtest_to_collection(collection_id, backtest_id)
         if not added:
             return jsonify(error='Already in collection'), 409
+        # If _redirect param present, redirect back instead of JSON response
+        if request.form.get('_redirect'):
+            return redirect(request.form['_redirect'], code=302)
         return jsonify(ok=True)
     except Exception as e:
         app.logger.error(f"add-backtest error: {e}")
@@ -9433,7 +9436,8 @@ COLLECTION_DETAIL_HTML = """\
             </button>
             <div class="add-bt-list hidden" id="add-bt-list">
                 {% for ubt in user_backtests|sort(attribute='created_at', reverse=true) %}
-                <div class="add-bt-item{{ ' in-collection' if ubt.id in collection_bt_ids else '' }}" onclick="addBacktest('{{ ubt.id }}')">
+                {% if ubt.id in collection_bt_ids %}
+                <div class="add-bt-item in-collection">
                     <div class="abt-info">
                         <div class="abt-title">{{ ubt.title or 'Untitled' }}</div>
                         <div class="abt-meta">
@@ -9441,8 +9445,23 @@ COLLECTION_DETAIL_HTML = """\
                             <span>{{ ubt.created_at[:10] if ubt.created_at else '' }}</span>
                         </div>
                     </div>
-                    {% if ubt.id in collection_bt_ids %}<span class="abt-check">Added</span>{% endif %}
+                    <span class="abt-check">Added</span>
                 </div>
+                {% else %}
+                <form method="POST" action="/api/collection/{{ collection.id }}/add-backtest" style="margin:0">
+                    <input type="hidden" name="backtest_id" value="{{ ubt.id }}">
+                    <input type="hidden" name="_redirect" value="/collection/{{ collection.id }}">
+                    <button type="submit" class="add-bt-item" style="width:100%;background:none;border:none;text-align:left;font-family:inherit">
+                        <div class="abt-info">
+                            <div class="abt-title">{{ ubt.title or 'Untitled' }}</div>
+                            <div class="abt-meta">
+                                {% if ubt._asset %}<span>{{ ubt._asset }}</span>{% endif %}
+                                <span>{{ ubt.created_at[:10] if ubt.created_at else '' }}</span>
+                            </div>
+                        </div>
+                    </button>
+                </form>
+                {% endif %}
                 {% endfor %}
                 {% if not user_backtests %}
                 <div style="padding:12px 14px;color:var(--text-dim);font-size:0.82em">No backtests to add</div>
@@ -9498,32 +9517,7 @@ function removeBacktest(btId) {
 function toggleAddBtList() {
     document.getElementById('add-bt-list').classList.toggle('hidden');
 }
-function addBacktest(btId) {
-    var url = '/api/collection/' + collId + '/add-backtest';
-    var body = new URLSearchParams({backtest_id: btId});
-    fetch(url, {method: 'POST', body: body, credentials: 'same-origin'})
-    .then(function(r) {
-        return r.text().then(function(body) { return {status: r.status, ok: r.ok, redirected: r.redirected, type: r.type, url: r.url, body: body}; });
-    }).then(function(res) {
-        if (res.redirected || res.status === 0 || (res.url && res.url.indexOf('/api/') === -1)) {
-            _swal.fire({icon:'warning', title:'Session expired', text:'Please log in again, then try again.'});
-            return;
-        }
-        if (!res.body) {
-            throw new Error('Empty response (status ' + res.status + ', type: ' + res.type + ', url: ' + res.url + ')');
-        }
-        var data;
-        try { data = JSON.parse(res.body); } catch(e) {
-            throw new Error('Status ' + res.status + ': ' + res.body.substring(0, 300));
-        }
-        if (!res.ok || data.error) {
-            _swal.fire({icon:'warning', title: data.error || ('Error ' + res.status)});
-            return;
-        }
-        location.reload();
-    })
-    .catch(function(e) { _swal.fire({icon:'error', title:'Failed to add', text:e.message}); });
-}
+// addBacktest is now handled via native form POST (no JS fetch needed)
 function openEditModal() {
     document.getElementById('edit-modal-overlay').classList.add('open');
     document.getElementById('edit-coll-title').focus();
