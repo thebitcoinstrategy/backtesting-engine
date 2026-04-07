@@ -9046,8 +9046,11 @@ def api_delete_collection(collection_id):
 def api_add_backtest_to_collection(collection_id):
     """Add a backtest to a collection."""
     try:
+        import sys
+        print(f"[ADD-BT] collection_id={collection_id} user={session.get('user_id')} method={request.method}", file=sys.stderr, flush=True)
         data = request.get_json(silent=True) or {}
         backtest_id = data.get('backtest_id')
+        print(f"[ADD-BT] backtest_id={backtest_id} data={data}", file=sys.stderr, flush=True)
         if not backtest_id:
             return jsonify(error='backtest_id required'), 400
         # Verify ownership of collection
@@ -9055,11 +9058,13 @@ def api_add_backtest_to_collection(collection_id):
         if not coll or str(coll['user_id']) != str(session.get('user_id')):
             return jsonify(error='Not authorized'), 403
         added = db.add_backtest_to_collection(collection_id, backtest_id)
+        print(f"[ADD-BT] added={added}", file=sys.stderr, flush=True)
         if not added:
             return jsonify(error='Already in collection'), 409
         return jsonify(ok=True)
     except Exception as e:
-        app.logger.error(f"add-backtest error: {e}")
+        import traceback, sys
+        traceback.print_exc(file=sys.stderr)
         return jsonify(error=str(e)), 500
 
 
