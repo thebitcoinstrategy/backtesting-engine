@@ -9073,7 +9073,9 @@ def api_add_backtest_to_collection(collection_id):
 @require_auth
 def api_remove_backtest_from_collection(collection_id):
     """Remove a backtest from a collection."""
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not data:
+        data = dict(request.form)
     backtest_id = data.get('backtest_id')
     if not backtest_id:
         return jsonify(error='backtest_id required'), 400
@@ -9081,6 +9083,8 @@ def api_remove_backtest_from_collection(collection_id):
     if not coll or str(coll['user_id']) != str(session.get('user_id')):
         return jsonify(error='Not authorized'), 403
     db.remove_backtest_from_collection(collection_id, backtest_id)
+    if request.form.get('_redirect'):
+        return redirect(request.form['_redirect'], code=302)
     return jsonify(ok=True)
 
 
@@ -9208,8 +9212,9 @@ COLLECTION_DETAIL_HTML = """\
         .card-author-sep { color: var(--text-dim); }
         .card-author-time { color: var(--text-dim); }
         .backtest-card-wrapper { position: relative; }
-        .remove-bt-btn { position: absolute; top: 8px; right: 8px; z-index: 10; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-dim); cursor: pointer; font-size: 0.9em; display: flex; align-items: center; justify-content: center; opacity: 0; transition: all 0.15s ease; }
-        .backtest-card-wrapper:hover .remove-bt-btn { opacity: 1; }
+        .remove-bt-form { position: absolute; top: 8px; right: 8px; z-index: 10; margin: 0; opacity: 0; transition: opacity 0.15s ease; }
+        .backtest-card-wrapper:hover .remove-bt-form { opacity: 1; }
+        .remove-bt-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-dim); cursor: pointer; font-size: 0.9em; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease; }
         .remove-bt-btn:hover { background: rgba(239,68,68,0.15); color: #ef4444; border-color: #ef4444; }
         /* Drag-and-drop reorder */
         .drag-handle { position: absolute; top: 8px; left: 8px; z-index: 10; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-dim); cursor: grab; font-size: 0.8em; display: flex; align-items: center; justify-content: center; opacity: 0; transition: all 0.15s ease; }
@@ -9367,7 +9372,11 @@ COLLECTION_DETAIL_HTML = """\
             {% endif %}
             {% if is_owner %}
             <div class="drag-handle" title="Drag to reorder">⠿</div>
-            <button class="remove-bt-btn" onclick="event.preventDefault();removeBacktest('{{ bt.id }}')" title="Remove from collection">&times;</button>
+            <form method="POST" action="/api/collection/{{ collection.id }}/remove-backtest" class="remove-bt-form">
+                <input type="hidden" name="backtest_id" value="{{ bt.id }}">
+                <input type="hidden" name="_redirect" value="/collection/{{ collection.id }}">
+                <button type="submit" class="remove-bt-btn" title="Remove from collection" onclick="event.stopPropagation()">&times;</button>
+            </form>
             {% endif %}
             <a class="backtest-card" href="{{ '/backtest/' ~ bt.id if is_authenticated or loop.first else '#' }}">
                 <div class="backtest-card-head">
@@ -9508,12 +9517,7 @@ function changeVisibility(vis) {
         _swal.fire({icon:'success', title:'Visibility updated to ' + vis, timer:1500, showConfirmButton:false});
     });
 }
-function removeBacktest(btId) {
-    fetch('/api/collection/' + collId + '/remove-backtest', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({backtest_id: btId})
-    }).then(function() { location.reload(); });
-}
+// removeBacktest is now handled via native form POST (no JS fetch needed)
 function toggleAddBtList() {
     document.getElementById('add-bt-list').classList.toggle('hidden');
 }
