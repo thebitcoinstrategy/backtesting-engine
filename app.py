@@ -9037,7 +9037,7 @@ def api_create_collection():
 @require_auth
 def api_update_collection(collection_id):
     """Update collection metadata."""
-    data = request.get_json()
+    data = request.get_json(silent=True) or dict(request.form)
     user_id = session.get('user_id')
     title = data.get('title')
     description = data.get('description')
@@ -9113,8 +9113,13 @@ def api_remove_backtest_from_collection(collection_id):
 @require_auth
 def api_reorder_collection(collection_id):
     """Reorder backtests within a collection."""
-    data = request.get_json()
-    ordered_ids = data.get('ordered_ids', [])
+    data = request.get_json(silent=True)
+    if data:
+        ordered_ids = data.get('ordered_ids', [])
+    else:
+        # Form-encoded: comma-separated IDs
+        ordered_ids = request.form.get('ordered_ids', '')
+        ordered_ids = [x for x in ordered_ids.split(',') if x]
     coll = db.get_collection(collection_id)
     if not coll or str(coll['user_id']) != str(session.get('user_id')):
         return jsonify(error='Not authorized'), 403
@@ -9127,7 +9132,7 @@ def api_collection_visibility(collection_id):
     """Admin: change collection visibility."""
     if not _is_admin():
         abort(403)
-    data = request.get_json()
+    data = request.get_json(silent=True) or dict(request.form)
     new_vis = data.get('visibility')
     if new_vis not in ('private', 'community', 'featured'):
         return jsonify(error='Invalid visibility'), 400
@@ -9524,14 +9529,15 @@ function deleteCollection() {
         icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
     }).then(function(result) {
         if (!result.isConfirmed) return;
-        fetch('/api/collection/' + collId + '/delete', { method: 'POST' })
+        fetch('/api/collection/' + collId + '/delete', { method: 'POST', credentials: 'same-origin' })
         .then(function() { window.location.href = '/my-backtests'; });
     });
 }
 function changeVisibility(vis) {
     fetch('/api/collection/' + collId + '/visibility', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({visibility: vis})
+        method: 'POST',
+        body: new URLSearchParams({visibility: vis}),
+        credentials: 'same-origin'
     }).then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.error) { _swal.fire({icon:'error', title:data.error}); return; }
@@ -9556,8 +9562,9 @@ function saveEditColl() {
     var yt = document.getElementById('edit-coll-youtube').value.trim();
     var ct = document.getElementById('edit-coll-copytrading').value.trim();
     fetch('/api/collection/' + collId + '/update', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({title: title, description: desc, youtube_url: yt, copy_trading_url: ct})
+        method: 'POST',
+        body: new URLSearchParams({title: title, description: desc, youtube_url: yt, copy_trading_url: ct}),
+        credentials: 'same-origin'
     }).then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.error) throw new Error(data.error);
@@ -9613,8 +9620,9 @@ document.addEventListener('click', function(e) {
             // Save new order
             var newOrder = Array.from(grid.querySelectorAll('.backtest-card-wrapper[data-bt-id]')).map(function(el) { return el.dataset.btId; });
             fetch('/api/collection/' + collId + '/reorder', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ordered_ids: newOrder})
+                method: 'POST',
+                body: new URLSearchParams({ordered_ids: newOrder.join(',')}),
+                credentials: 'same-origin'
             });
         });
     });

@@ -1272,3 +1272,40 @@ class TestCollectionAddRemove:
             "add-backtest must support _redirect param"
         assert remove_match and "_redirect" in remove_match.group(), \
             "remove-backtest must support _redirect param"
+
+    def test_reorder_no_json_content_type(self):
+        """Reorder fetch must NOT use Content-Type: application/json."""
+        src = self._read_app()
+        # Find the reorder fetch call in JS (uses string concatenation: collId + '/reorder')
+        reorder_js = re.search(r"fetch\('/api/collection/'\s*\+\s*collId\s*\+\s*'/reorder'.*?\}\)", src, re.DOTALL)
+        assert reorder_js, "Reorder fetch call must exist"
+        assert "'Content-Type': 'application/json'" not in reorder_js.group(), \
+            "Reorder must not use JSON Content-Type (causes silent 204 in some browsers)"
+
+    def test_reorder_endpoint_accepts_form_data(self):
+        """Reorder API must accept form-encoded body (comma-separated IDs)."""
+        src = self._read_app()
+        # Match api_reorder_collection(collection_id) not api_reorder_collections()
+        reorder_match = re.search(r'def api_reorder_collection\(collection_id\).*?(?=\n@app\.route|\nclass |\Z)',
+                                   src, re.DOTALL)
+        assert reorder_match, "reorder endpoint must exist"
+        assert 'request.form' in reorder_match.group(), \
+            "reorder endpoint must accept form-encoded body"
+
+    def test_collection_update_no_json_content_type(self):
+        """Collection update fetch must NOT use Content-Type: application/json."""
+        src = self._read_app()
+        # Find the update fetch in collection detail page (uses collId + '/update')
+        update_js = re.search(r"fetch\('/api/collection/'\s*\+\s*collId\s*\+\s*'/update'.*?\}\)", src, re.DOTALL)
+        assert update_js, "Update fetch call must exist"
+        assert "'Content-Type': 'application/json'" not in update_js.group(), \
+            "Update must not use JSON Content-Type"
+
+    def test_collection_update_endpoint_accepts_form_data(self):
+        """Collection update API must accept form-encoded body."""
+        src = self._read_app()
+        update_match = re.search(r'def api_update_collection.*?(?=\n@app\.route|\nclass |\Z)',
+                                  src, re.DOTALL)
+        assert update_match, "update endpoint must exist"
+        assert 'request.form' in update_match.group(), \
+            "update endpoint must accept form-encoded body"
