@@ -1175,3 +1175,73 @@ class TestProgressTracking:
         assert len(calls) > 0, "progress_callback must be called at least once"
         assert calls[-1][0] == calls[-1][1] - 1 or calls[-1][0] < calls[-1][1], \
             "Last call should be near total"
+
+
+class TestCollectionAddRemove:
+    """Collection add/remove must use native form POST, not JS fetch.
+    Bug: JS fetch with Content-Type:application/json silently returned 204 in some
+    browsers without the request ever reaching the server."""
+
+    def _read_app(self):
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            return f.read()
+
+    def test_add_backtest_uses_form_post(self):
+        """Add-backtest dropdown items must be native <form> POST, not JS fetch."""
+        src = self._read_app()
+        # The add-bt-item for addable backtests must be inside a <form> with method POST
+        assert 'action="/api/collection/{{ collection.id }}/add-backtest"' in src, \
+            "Add-backtest must use a native form POST action"
+        assert 'name="backtest_id"' in src, "Form must include backtest_id hidden input"
+        assert 'name="_redirect"' in src, "Form must include _redirect hidden input"
+
+    def test_add_backtest_no_js_fetch(self):
+        """addBacktest() must NOT use JS fetch — it silently fails in some browsers."""
+        src = self._read_app()
+        assert "fetch('/api/collection/' + collId + '/add-backtest'" not in src, \
+            "addBacktest must not use JS fetch (causes silent 204 failures)"
+
+    def test_remove_backtest_uses_form_post(self):
+        """Remove button must be a native <form> POST, not JS fetch."""
+        src = self._read_app()
+        assert 'action="/api/collection/{{ collection.id }}/remove-backtest"' in src, \
+            "Remove-backtest must use a native form POST action"
+
+    def test_remove_backtest_no_js_fetch(self):
+        """removeBacktest() must NOT use JS fetch."""
+        src = self._read_app()
+        assert "fetch('/api/collection/' + collId + '/remove-backtest'" not in src, \
+            "removeBacktest must not use JS fetch (causes silent 204 failures)"
+
+    def test_add_endpoint_accepts_form_data(self):
+        """The add-backtest API must accept form-encoded body (not just JSON)."""
+        src = self._read_app()
+        # Must check request.form as fallback when JSON is absent
+        assert re.search(r'request\.form.*backtest_id|dict\(request\.form\)', src), \
+            "add-backtest endpoint must accept form-encoded body"
+
+    def test_remove_endpoint_accepts_form_data(self):
+        """The remove-backtest API must accept form-encoded body (not just JSON)."""
+        src = self._read_app()
+        # The remove endpoint function should also support form data
+        # Find the remove endpoint and check it handles form data
+        remove_match = re.search(r'def api_remove_backtest_from_collection.*?(?=\n@app\.route|\nclass |\Z)',
+                                  src, re.DOTALL)
+        assert remove_match, "remove-backtest endpoint must exist"
+        remove_src = remove_match.group()
+        assert 'request.form' in remove_src, \
+            "remove-backtest endpoint must accept form-encoded body"
+
+    def test_endpoints_support_redirect(self):
+        """Both add and remove endpoints must support _redirect param for page reload."""
+        src = self._read_app()
+        # Both endpoints should check for _redirect and redirect back
+        add_match = re.search(r'def api_add_backtest_to_collection.*?(?=\n@app\.route|\nclass |\Z)',
+                               src, re.DOTALL)
+        remove_match = re.search(r'def api_remove_backtest_from_collection.*?(?=\n@app\.route|\nclass |\Z)',
+                                  src, re.DOTALL)
+        assert add_match and "_redirect" in add_match.group(), \
+            "add-backtest must support _redirect param"
+        assert remove_match and "_redirect" in remove_match.group(), \
+            "remove-backtest must support _redirect param"
