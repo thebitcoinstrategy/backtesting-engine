@@ -9045,18 +9045,22 @@ def api_delete_collection(collection_id):
 @require_auth
 def api_add_backtest_to_collection(collection_id):
     """Add a backtest to a collection."""
-    data = request.get_json()
-    backtest_id = data.get('backtest_id')
-    if not backtest_id:
-        return jsonify(error='backtest_id required'), 400
-    # Verify ownership of collection
-    coll = db.get_collection(collection_id)
-    if not coll or str(coll['user_id']) != str(session.get('user_id')):
-        return jsonify(error='Not authorized'), 403
-    added = db.add_backtest_to_collection(collection_id, backtest_id)
-    if not added:
-        return jsonify(error='Already in collection'), 409
-    return jsonify(ok=True)
+    try:
+        data = request.get_json(silent=True) or {}
+        backtest_id = data.get('backtest_id')
+        if not backtest_id:
+            return jsonify(error='backtest_id required'), 400
+        # Verify ownership of collection
+        coll = db.get_collection(collection_id)
+        if not coll or str(coll['user_id']) != str(session.get('user_id')):
+            return jsonify(error='Not authorized'), 403
+        added = db.add_backtest_to_collection(collection_id, backtest_id)
+        if not added:
+            return jsonify(error='Already in collection'), 409
+        return jsonify(ok=True)
+    except Exception as e:
+        app.logger.error(f"add-backtest error: {e}")
+        return jsonify(error=str(e)), 500
 
 
 @app.route('/api/collection/<collection_id>/remove-backtest', methods=['POST'])
@@ -9494,16 +9498,20 @@ function toggleAddBtList() {
 function addBacktest(btId) {
     fetch('/api/collection/' + collId + '/add-backtest', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({backtest_id: btId})
+        body: JSON.stringify({backtest_id: btId}),
+        redirect: 'manual'
     }).then(function(r) {
-        if (r.redirected || !r.ok) {
-            throw new Error(r.redirected ? 'Session expired — please log in again' : 'Server error: ' + r.status);
+        if (r.type === 'opaqueredirect' || r.redirected) {
+            _swal.fire({icon:'warning', title:'Session expired', text:'Please log in again.'});
+            return;
         }
-        return r.json();
-    })
-    .then(function(data) {
-        if (data.error) { _swal.fire({icon:'warning', title:data.error}); return; }
-        location.reload();
+        if (!r.ok) {
+            return r.text().then(function(t) { throw new Error('Server error ' + r.status + ': ' + t); });
+        }
+        return r.json().then(function(data) {
+            if (data.error) { _swal.fire({icon:'warning', title:data.error}); return; }
+            location.reload();
+        });
     })
     .catch(function(e) { _swal.fire({icon:'error', title:'Failed to add', text:e.message}); });
 }
