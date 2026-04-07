@@ -9046,11 +9046,11 @@ def api_delete_collection(collection_id):
 def api_add_backtest_to_collection(collection_id):
     """Add a backtest to a collection."""
     try:
-        import sys
-        print(f"[ADD-BT] collection_id={collection_id} user={session.get('user_id')} method={request.method}", file=sys.stderr, flush=True)
-        data = request.get_json(silent=True) or {}
+        # Support both JSON and form-encoded body
+        data = request.get_json(silent=True)
+        if not data:
+            data = dict(request.form)
         backtest_id = data.get('backtest_id')
-        print(f"[ADD-BT] backtest_id={backtest_id} data={data}", file=sys.stderr, flush=True)
         if not backtest_id:
             return jsonify(error='backtest_id required'), 400
         # Verify ownership of collection
@@ -9058,13 +9058,11 @@ def api_add_backtest_to_collection(collection_id):
         if not coll or str(coll['user_id']) != str(session.get('user_id')):
             return jsonify(error='Not authorized'), 403
         added = db.add_backtest_to_collection(collection_id, backtest_id)
-        print(f"[ADD-BT] added={added}", file=sys.stderr, flush=True)
         if not added:
             return jsonify(error='Already in collection'), 409
         return jsonify(ok=True)
     except Exception as e:
-        import traceback, sys
-        traceback.print_exc(file=sys.stderr)
+        app.logger.error(f"add-backtest error: {e}")
         return jsonify(error=str(e)), 500
 
 
@@ -9501,25 +9499,25 @@ function toggleAddBtList() {
     document.getElementById('add-bt-list').classList.toggle('hidden');
 }
 function addBacktest(btId) {
-    fetch('/api/collection/' + collId + '/add-backtest', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({backtest_id: btId})
-    }).then(function(r) {
-        return r.text().then(function(body) { return {status: r.status, ok: r.ok, redirected: r.redirected, body: body}; });
+    var url = '/api/collection/' + collId + '/add-backtest';
+    var body = new URLSearchParams({backtest_id: btId});
+    fetch(url, {method: 'POST', body: body, credentials: 'same-origin'})
+    .then(function(r) {
+        return r.text().then(function(body) { return {status: r.status, ok: r.ok, redirected: r.redirected, type: r.type, url: r.url, body: body}; });
     }).then(function(res) {
-        if (res.redirected || res.status === 0) {
-            _swal.fire({icon:'warning', title:'Session expired', text:'Please log in again.'});
+        if (res.redirected || res.status === 0 || (res.url && res.url.indexOf('/api/') === -1)) {
+            _swal.fire({icon:'warning', title:'Session expired', text:'Please log in again, then try again.'});
             return;
         }
         if (!res.body) {
-            throw new Error('Empty response (status ' + res.status + '). Try refreshing the page.');
+            throw new Error('Empty response (status ' + res.status + ', type: ' + res.type + ', url: ' + res.url + ')');
         }
         var data;
         try { data = JSON.parse(res.body); } catch(e) {
-            throw new Error('Invalid response (status ' + res.status + '): ' + res.body.substring(0, 200));
+            throw new Error('Status ' + res.status + ': ' + res.body.substring(0, 300));
         }
         if (!res.ok || data.error) {
-            _swal.fire({icon:'warning', title: data.error || ('Server error ' + res.status)});
+            _swal.fire({icon:'warning', title: data.error || ('Error ' + res.status)});
             return;
         }
         location.reload();
