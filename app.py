@@ -9046,6 +9046,9 @@ def api_update_collection(collection_id):
     updated = db.update_collection(collection_id, user_id, title=title, description=description, youtube_url=youtube_url, copy_trading_url=copy_trading_url)
     if not updated:
         return jsonify(error='Not found or not authorized'), 404
+    redir = request.form.get('_redirect')
+    if redir:
+        return redirect(redir, code=302)
     return jsonify(ok=True)
 
 
@@ -9059,6 +9062,9 @@ def api_delete_collection(collection_id):
     else:
         if not db.delete_collection(collection_id, user_id):
             return jsonify(error='Not found or not authorized'), 404
+    redir = request.form.get('_redirect')
+    if redir:
+        return redirect(redir, code=302)
     return jsonify(ok=True)
 
 
@@ -9124,6 +9130,9 @@ def api_reorder_collection(collection_id):
     if not coll or str(coll['user_id']) != str(session.get('user_id')):
         return jsonify(error='Not authorized'), 403
     db.reorder_collection_backtests(collection_id, ordered_ids)
+    redir = request.form.get('_redirect')
+    if redir:
+        return redirect(redir, code=302)
     return jsonify(ok=True)
 
 
@@ -9137,6 +9146,9 @@ def api_collection_visibility(collection_id):
     if new_vis not in ('private', 'community', 'featured'):
         return jsonify(error='Invalid visibility'), 400
     db.update_collection_visibility(collection_id, new_vis)
+    redir = request.form.get('_redirect')
+    if redir:
+        return redirect(redir, code=302)
     return jsonify(ok=True)
 
 
@@ -9507,6 +9519,29 @@ COLLECTION_DETAIL_HTML = """\
     {% endif %}
 </div>
 
+{% if is_owner %}
+<form id="reorder-form" method="POST" action="/api/collection/{{ collection.id }}/reorder" style="display:none">
+    <input type="hidden" name="ordered_ids" value="">
+    <input type="hidden" name="_redirect" value="/collection/{{ collection.id }}">
+</form>
+<form id="delete-form" method="POST" action="/api/collection/{{ collection.id }}/delete" style="display:none">
+    <input type="hidden" name="_redirect" value="/my-backtests">
+</form>
+<form id="update-form" method="POST" action="/api/collection/{{ collection.id }}/update" style="display:none">
+    <input type="hidden" name="title" value="">
+    <input type="hidden" name="description" value="">
+    <input type="hidden" name="youtube_url" value="">
+    <input type="hidden" name="copy_trading_url" value="">
+    <input type="hidden" name="_redirect" value="/collection/{{ collection.id }}">
+</form>
+{% endif %}
+{% if is_admin %}
+<form id="visibility-form" method="POST" action="/api/collection/{{ collection.id }}/visibility" style="display:none">
+    <input type="hidden" name="visibility" value="">
+    <input type="hidden" name="_redirect" value="/collection/{{ collection.id }}">
+</form>
+{% endif %}
+
 <script>
 function shakeLock(el) {
     el.classList.remove('shake');
@@ -9529,24 +9564,14 @@ function deleteCollection() {
         icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
     }).then(function(result) {
         if (!result.isConfirmed) return;
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/collection/' + collId + '/delete', true);
-        xhr.withCredentials = true;
-        xhr.onload = function() { window.location.href = '/my-backtests'; };
-        xhr.send();
+        var f = document.getElementById('delete-form');
+        f.submit();
     });
 }
 function changeVisibility(vis) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/collection/' + collId + '/visibility', true);
-    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.withCredentials = true;
-    xhr.onload = function() {
-        try { var data = JSON.parse(xhr.responseText); } catch(e) { return; }
-        if (data.error) { _swal.fire({icon:'error', title:data.error}); return; }
-        _swal.fire({icon:'success', title:'Visibility updated to ' + vis, timer:1500, showConfirmButton:false});
-    };
-    xhr.send('visibility=' + encodeURIComponent(vis));
+    var f = document.getElementById('visibility-form');
+    f.querySelector('[name=visibility]').value = vis;
+    f.submit();
 }
 // removeBacktest is now handled via native form POST (no JS fetch needed)
 function toggleAddBtList() {
@@ -9561,21 +9586,12 @@ function closeEditModal() {
     document.getElementById('edit-modal-overlay').classList.remove('open');
 }
 function saveEditColl() {
-    var title = document.getElementById('edit-coll-title').value.trim();
-    var desc = document.getElementById('edit-coll-desc').value.trim();
-    var yt = document.getElementById('edit-coll-youtube').value.trim();
-    var ct = document.getElementById('edit-coll-copytrading').value.trim();
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/collection/' + collId + '/update', true);
-    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.withCredentials = true;
-    xhr.onload = function() {
-        try { var data = JSON.parse(xhr.responseText); } catch(e) { _swal.fire({icon:'error', title:'Failed', text:'Invalid response'}); return; }
-        if (data.error) { _swal.fire({icon:'error', title:'Failed', text:data.error}); return; }
-        closeEditModal(); location.reload();
-    };
-    xhr.onerror = function() { _swal.fire({icon:'error', title:'Failed', text:'Network error'}); };
-    xhr.send('title=' + encodeURIComponent(title) + '&description=' + encodeURIComponent(desc) + '&youtube_url=' + encodeURIComponent(yt) + '&copy_trading_url=' + encodeURIComponent(ct));
+    var f = document.getElementById('update-form');
+    f.querySelector('[name=title]').value = document.getElementById('edit-coll-title').value.trim();
+    f.querySelector('[name=description]').value = document.getElementById('edit-coll-desc').value.trim();
+    f.querySelector('[name=youtube_url]').value = document.getElementById('edit-coll-youtube').value.trim();
+    f.querySelector('[name=copy_trading_url]').value = document.getElementById('edit-coll-copytrading').value.trim();
+    f.submit();
 }
 document.addEventListener('click', function(e) {
     var list = document.getElementById('add-bt-list');
@@ -9623,13 +9639,11 @@ document.addEventListener('click', function(e) {
             } else {
                 card.parentNode.insertBefore(dragSrc, card);
             }
-            // Save new order via XHR (fetch silently fails on this page)
+            // Save new order via hidden form POST (fetch AND XHR silently fail on this page)
             var newOrder = Array.from(grid.querySelectorAll('.backtest-card-wrapper[data-bt-id]')).map(function(el) { return el.dataset.btId; });
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/api/collection/' + collId + '/reorder', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            xhr.withCredentials = true;
-            xhr.send('ordered_ids=' + encodeURIComponent(newOrder.join(',')));
+            var f = document.getElementById('reorder-form');
+            f.querySelector('[name=ordered_ids]').value = newOrder.join(',');
+            f.submit();
         });
     });
 })();
