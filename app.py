@@ -9495,11 +9495,17 @@ function addBacktest(btId) {
     fetch('/api/collection/' + collId + '/add-backtest', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({backtest_id: btId})
-    }).then(function(r) { return r.json(); })
+    }).then(function(r) {
+        if (r.redirected || !r.ok) {
+            throw new Error(r.redirected ? 'Session expired — please log in again' : 'Server error: ' + r.status);
+        }
+        return r.json();
+    })
     .then(function(data) {
         if (data.error) { _swal.fire({icon:'warning', title:data.error}); return; }
         location.reload();
-    });
+    })
+    .catch(function(e) { _swal.fire({icon:'error', title:'Failed to add', text:e.message}); });
 }
 function openEditModal() {
     document.getElementById('edit-modal-overlay').classList.add('open');
