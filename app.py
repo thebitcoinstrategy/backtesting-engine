@@ -9529,20 +9529,24 @@ function deleteCollection() {
         icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#e74c3c'
     }).then(function(result) {
         if (!result.isConfirmed) return;
-        fetch('/api/collection/' + collId + '/delete', { method: 'POST', credentials: 'same-origin' })
-        .then(function() { window.location.href = '/my-backtests'; });
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/collection/' + collId + '/delete', true);
+        xhr.withCredentials = true;
+        xhr.onload = function() { window.location.href = '/my-backtests'; };
+        xhr.send();
     });
 }
 function changeVisibility(vis) {
-    fetch('/api/collection/' + collId + '/visibility', {
-        method: 'POST',
-        body: new URLSearchParams({visibility: vis}),
-        credentials: 'same-origin'
-    }).then(function(r) { return r.json(); })
-    .then(function(data) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/collection/' + collId + '/visibility', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.withCredentials = true;
+    xhr.onload = function() {
+        try { var data = JSON.parse(xhr.responseText); } catch(e) { return; }
         if (data.error) { _swal.fire({icon:'error', title:data.error}); return; }
         _swal.fire({icon:'success', title:'Visibility updated to ' + vis, timer:1500, showConfirmButton:false});
-    });
+    };
+    xhr.send('visibility=' + encodeURIComponent(vis));
 }
 // removeBacktest is now handled via native form POST (no JS fetch needed)
 function toggleAddBtList() {
@@ -9561,15 +9565,17 @@ function saveEditColl() {
     var desc = document.getElementById('edit-coll-desc').value.trim();
     var yt = document.getElementById('edit-coll-youtube').value.trim();
     var ct = document.getElementById('edit-coll-copytrading').value.trim();
-    fetch('/api/collection/' + collId + '/update', {
-        method: 'POST',
-        body: new URLSearchParams({title: title, description: desc, youtube_url: yt, copy_trading_url: ct}),
-        credentials: 'same-origin'
-    }).then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.error) throw new Error(data.error);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/collection/' + collId + '/update', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.withCredentials = true;
+    xhr.onload = function() {
+        try { var data = JSON.parse(xhr.responseText); } catch(e) { _swal.fire({icon:'error', title:'Failed', text:'Invalid response'}); return; }
+        if (data.error) { _swal.fire({icon:'error', title:'Failed', text:data.error}); return; }
         closeEditModal(); location.reload();
-    }).catch(function(e) { _swal.fire({icon:'error', title:'Failed', text:e.message}); });
+    };
+    xhr.onerror = function() { _swal.fire({icon:'error', title:'Failed', text:'Network error'}); };
+    xhr.send('title=' + encodeURIComponent(title) + '&description=' + encodeURIComponent(desc) + '&youtube_url=' + encodeURIComponent(yt) + '&copy_trading_url=' + encodeURIComponent(ct));
 }
 document.addEventListener('click', function(e) {
     var list = document.getElementById('add-bt-list');
@@ -9617,13 +9623,13 @@ document.addEventListener('click', function(e) {
             } else {
                 card.parentNode.insertBefore(dragSrc, card);
             }
-            // Save new order
+            // Save new order via XHR (fetch silently fails on this page)
             var newOrder = Array.from(grid.querySelectorAll('.backtest-card-wrapper[data-bt-id]')).map(function(el) { return el.dataset.btId; });
-            fetch('/api/collection/' + collId + '/reorder', {
-                method: 'POST',
-                body: new URLSearchParams({ordered_ids: newOrder.join(',')}),
-                credentials: 'same-origin'
-            });
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/collection/' + collId + '/reorder', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.withCredentials = true;
+            xhr.send('ordered_ids=' + encodeURIComponent(newOrder.join(',')));
         });
     });
 })();

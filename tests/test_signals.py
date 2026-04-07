@@ -1273,14 +1273,17 @@ class TestCollectionAddRemove:
         assert remove_match and "_redirect" in remove_match.group(), \
             "remove-backtest must support _redirect param"
 
-    def test_reorder_no_json_content_type(self):
-        """Reorder fetch must NOT use Content-Type: application/json."""
+    def test_reorder_uses_xhr_not_fetch(self):
+        """Reorder must use XMLHttpRequest, not fetch (fetch silently fails on collection page)."""
         src = self._read_app()
-        # Find the reorder fetch call in JS (uses string concatenation: collId + '/reorder')
-        reorder_js = re.search(r"fetch\('/api/collection/'\s*\+\s*collId\s*\+\s*'/reorder'.*?\}\)", src, re.DOTALL)
-        assert reorder_js, "Reorder fetch call must exist"
-        assert "'Content-Type': 'application/json'" not in reorder_js.group(), \
-            "Reorder must not use JSON Content-Type (causes silent 204 in some browsers)"
+        # Find the COLLECTION_DETAIL_HTML section with drag-and-drop reorder
+        detail_section = src[src.index('COLLECTION_DETAIL_HTML'):]
+        assert "XMLHttpRequest" in detail_section and "'/reorder'" in detail_section, \
+            "Reorder must use XMLHttpRequest (fetch silently fails on this page)"
+        # Must NOT use fetch for reorder
+        reorder_fetch = re.search(r"fetch\([^)]*reorder", detail_section)
+        assert reorder_fetch is None, \
+            "Reorder must NOT use fetch (silently fails); use XMLHttpRequest instead"
 
     def test_reorder_endpoint_accepts_form_data(self):
         """Reorder API must accept form-encoded body (comma-separated IDs)."""
@@ -1292,14 +1295,15 @@ class TestCollectionAddRemove:
         assert 'request.form' in reorder_match.group(), \
             "reorder endpoint must accept form-encoded body"
 
-    def test_collection_update_no_json_content_type(self):
-        """Collection update fetch must NOT use Content-Type: application/json."""
+    def test_collection_update_uses_xhr_not_fetch(self):
+        """Collection update must use XMLHttpRequest, not fetch."""
         src = self._read_app()
-        # Find the update fetch in collection detail page (uses collId + '/update')
-        update_js = re.search(r"fetch\('/api/collection/'\s*\+\s*collId\s*\+\s*'/update'.*?\}\)", src, re.DOTALL)
-        assert update_js, "Update fetch call must exist"
-        assert "'Content-Type': 'application/json'" not in update_js.group(), \
-            "Update must not use JSON Content-Type"
+        detail_section = src[src.index('COLLECTION_DETAIL_HTML'):]
+        assert "XMLHttpRequest" in detail_section and "'/update'" in detail_section, \
+            "Update must use XMLHttpRequest (fetch silently fails on this page)"
+        update_fetch = re.search(r"fetch\([^)]*update", detail_section)
+        assert update_fetch is None, \
+            "Update must NOT use fetch; use XMLHttpRequest instead"
 
     def test_collection_update_endpoint_accepts_form_data(self):
         """Collection update API must accept form-encoded body."""
