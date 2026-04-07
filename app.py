@@ -1952,6 +1952,23 @@ HTML = """\
                     <div class="rolling-tab-content hidden" id="rtab-heatmap-norm"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap_norm }}"/></div>
                     {% endif %}
                     <div class="rolling-tab-content hidden" id="rtab-timeline"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.timeline }}"/></div>
+                    <input type="hidden" id="equity-thumbnail" value="{{ rolling_thumb|default('') }}">
+                    {% if is_authenticated %}
+                    <div class="action-buttons" id="backtest-actions">
+                        <button class="action-btn" onclick="saveBacktest()" id="save-btn">
+                            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v10h10V6l-3-3H3z"/><path d="M5 3v3h4V3"/><path d="M5 9h6v4H5z"/></svg>
+                            Save
+                        </button>
+                        <button class="action-btn primary" onclick="openPublishModal()">
+                            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l4-4 4 4"/><path d="M8 8v6"/><path d="M13.5 10.5A3.5 3.5 0 0010 5a4 4 0 00-7.5 2"/></svg>
+                            Publish
+                        </button>
+                        <button class="action-btn hidden" onclick="copyShortLink()" id="copy-link-btn">
+                            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a3 3 0 004.24 0l2-2a3 3 0 00-4.24-4.24L6.5 3.26"/><path d="M10 8a3 3 0 00-4.24 0l-2 2a3 3 0 004.24 4.24L9.5 12.74"/></svg>
+                            Copy Link
+                        </button>
+                    </div>
+                    {% endif %}
                 </div>
             {% elif chart %}
                 {% if regression|default(none) %}
@@ -4569,6 +4586,7 @@ def _run_post_handler(cancel_event, rid=None):
                 "same_type": dual_sweep["same_type"],
             })
 
+            rolling_thumb = "data:image/png;base64," + chart_timeline
             return _render_main(p, chart=chart_timeline,
                                 rolling_charts={"timeline": chart_timeline,
                                                 },
@@ -4576,6 +4594,7 @@ def _run_post_handler(cancel_event, rid=None):
                                 rolling_score=score, rolling_score_label=score_label,
                                 rolling_metric=p.rolling_metric, rolling_windows=len(windows),
                                 rolling_strategy=strategy_label,
+                                rolling_thumb=rolling_thumb,
                                 best=None, table_rows=None, col_header=col_header,
                                 price_json=None, ind1_json="[]", ind2_json="[]",
                                 ind1_label="", ind2_label="")
@@ -4596,6 +4615,7 @@ def _run_post_handler(cancel_event, rid=None):
                                                               selected_period=p.ind2_period, sweep_ind_label=sweep_ind_label,
                                                               normalize_rows=True)
 
+            rolling_thumb = "data:image/png;base64," + chart_heatmap
             return _render_main(p, chart=chart_heatmap,
                                 rolling_charts={"heatmap": chart_heatmap,
                                                 "heatmap_norm": chart_heatmap_norm,
@@ -4604,6 +4624,7 @@ def _run_post_handler(cancel_event, rid=None):
                                 rolling_score=score, rolling_score_label=score_label,
                                 rolling_metric=p.rolling_metric, rolling_windows=len(windows),
                                 rolling_strategy=strategy_label,
+                                rolling_thumb=rolling_thumb,
                                 best=None, table_rows=None, col_header=col_header,
                                 price_json=None, ind1_json="[]", ind2_json="[]",
                                 ind1_label="", ind2_label="")

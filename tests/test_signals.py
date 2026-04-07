@@ -1099,6 +1099,33 @@ class TestRollingWindowAnalysis:
         assert "self.step_size" in src, "Params must parse step_size"
         assert "self.rolling_metric" in src, "Params must parse rolling_metric"
 
+    def test_rolling_mode_has_save_publish_buttons(self):
+        """Rolling mode results must include save/publish action buttons."""
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            src = f.read()
+        # Find the rolling_charts block and check it has action buttons
+        rolling_block = re.search(
+            r'elif rolling_charts.*?elif chart',
+            src, re.DOTALL)
+        assert rolling_block, "rolling_charts template block must exist"
+        block = rolling_block.group()
+        assert 'id="backtest-actions"' in block, \
+            "Rolling results must include backtest-actions div"
+        assert 'saveBacktest()' in block, \
+            "Rolling results must include Save button"
+        assert 'openPublishModal()' in block, \
+            "Rolling results must include Publish button"
+        assert 'id="equity-thumbnail"' in block, \
+            "Rolling results must include equity-thumbnail hidden input"
+
+    def test_rolling_mode_passes_thumbnail(self):
+        """Rolling mode must pass a thumbnail to the template."""
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            src = f.read()
+        assert "rolling_thumb=" in src, "Rolling mode must pass rolling_thumb to template"
+
 
 class TestProgressTracking:
     """Progress bar feature: server tracks calculation progress, client polls it."""
