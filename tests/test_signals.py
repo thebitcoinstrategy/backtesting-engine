@@ -1315,3 +1315,41 @@ class TestCollectionAddRemove:
         assert update_match, "update endpoint must exist"
         assert 'request.form' in update_match.group(), \
             "update endpoint must accept form-encoded body"
+
+
+class TestDetailPageRollingTabs:
+    """DETAIL_HTML must include rolling-tab CSS and switchRollingTab JS so that
+    cached rolling backtest HTML renders correctly on the detail page."""
+
+    def _read_app(self):
+        app_path = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), 'app.py')
+        with open(app_path, 'r', encoding='utf-8') as f:
+            return f.read()
+
+    def _detail_section(self):
+        src = self._read_app()
+        start = src.index('DETAIL_HTML')
+        return src[start:]
+
+    def test_rolling_tab_css_in_detail(self):
+        """DETAIL_HTML must have CSS for .rolling-tabs and .rolling-tab-btn."""
+        detail = self._detail_section()
+        assert '.rolling-tabs' in detail, \
+            "DETAIL_HTML missing .rolling-tabs CSS — rolling tab layout will break"
+        assert '.rolling-tab-btn' in detail, \
+            "DETAIL_HTML missing .rolling-tab-btn CSS — tab buttons unstyled"
+        assert '.rolling-tab-content' in detail, \
+            "DETAIL_HTML missing .rolling-tab-content CSS — tab panels won't hide/show"
+
+    def test_rolling_tab_js_in_detail(self):
+        """DETAIL_HTML must define switchRollingTab() so tab clicks work."""
+        detail = self._detail_section()
+        assert 'function switchRollingTab' in detail, \
+            "DETAIL_HTML missing switchRollingTab() — clicking tabs does nothing"
+
+    def test_consistency_badge_css_in_detail(self):
+        """DETAIL_HTML must style .consistency-badge for rolling score display."""
+        detail = self._detail_section()
+        assert '.consistency-badge' in detail, \
+            "DETAIL_HTML missing .consistency-badge CSS — score badge unstyled"

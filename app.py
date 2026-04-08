@@ -6032,6 +6032,20 @@ DETAIL_HTML = """\
         .cta-banner a { display: inline-block; padding: 10px 24px; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.85em; }
         .hidden { display: none !important; }
         .chart-img { width: 100%; border-radius: 12px; border: 1px solid var(--border); }
+        /* Rolling Window Mode (for cached rolling backtest HTML) */
+        .rolling-results { animation: fadeUp 0.5s ease-out both; }
+        .rolling-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+        .consistency-badge { display:inline-block; padding:8px 16px; border-radius:8px; font-weight:700; font-size:0.95em; font-family:'JetBrains Mono',monospace; }
+        .consistency-badge.excellent { background:rgba(52,211,153,0.15); color:#34d399; }
+        .consistency-badge.good { background:rgba(100,149,237,0.15); color:#6495ED; }
+        .consistency-badge.fair { background:rgba(247,147,26,0.15); color:#f7931a; }
+        .consistency-badge.poor { background:rgba(239,68,68,0.15); color:#ef4444; }
+        .rolling-tabs { display:flex; gap:4px; margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:8px; overflow-x:auto; }
+        .rolling-tab-btn { padding:8px 16px; background:transparent; border:1px solid var(--border); border-radius:8px 8px 0 0; color:var(--text-dim); cursor:pointer; font-size:0.85em; font-weight:500; transition:all 0.2s; white-space:nowrap; }
+        .rolling-tab-btn:hover { color:var(--text); background:var(--bg-surface); }
+        .rolling-tab-btn.active { background:var(--bg-surface); color:var(--accent); border-bottom-color:var(--bg-surface); }
+        .rolling-tab-content.hidden { display:none; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
         .chart-download-btn {
             position: absolute; top: 12px; right: 12px;
             background: var(--bg-surface); color: var(--text-muted);
@@ -6405,6 +6419,20 @@ DETAIL_HTML = """\
 document.addEventListener("DOMContentLoaded", function() {
     activateViewFromURL();
 });
+function switchRollingTab(name, btn) {
+    document.querySelectorAll('.rolling-tab-content').forEach(function(el) { el.classList.add('hidden'); });
+    document.getElementById('rtab-' + name).classList.remove('hidden');
+    document.querySelectorAll('.rolling-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    if (name === 'animated' && typeof Plotly !== 'undefined') {
+        setTimeout(function(){
+            var a = document.getElementById('plotly-anim-a');
+            var b = document.getElementById('plotly-anim-b');
+            if (a && a.data) Plotly.Plots.resize(a);
+            if (b && b.data) Plotly.Plots.resize(b);
+        }, 50);
+    }
+}
 function toggleLike(backtestId, btn) {
     fetch('/api/backtest/' + backtestId + '/like', { method: 'POST' })
     .then(function(r) { return r.json(); })
