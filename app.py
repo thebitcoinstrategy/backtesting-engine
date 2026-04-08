@@ -1807,6 +1807,7 @@ HTML = """\
                     <div class="rolling-tabs">
                         <button class="rolling-tab-btn active" onclick="switchRollingTab('animated', this)">Heatmap Over Time</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('timeline', this)">Timeline</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('timeline-alpha', this)">Alpha Timeline</button>
                     </div>
                     <div class="rolling-tab-content" id="rtab-animated">
                         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
@@ -1947,11 +1948,13 @@ HTML = """\
                         <button class="rolling-tab-btn active" onclick="switchRollingTab('heatmap', this)">Heatmap</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('heatmap-norm', this)">Per-Window Scale</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('timeline', this)">Timeline</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('timeline-alpha', this)">Alpha Timeline</button>
                     </div>
                     <div class="rolling-tab-content" id="rtab-heatmap"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap }}"/></div>
                     <div class="rolling-tab-content hidden" id="rtab-heatmap-norm"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap_norm }}"/></div>
                     {% endif %}
                     <div class="rolling-tab-content hidden" id="rtab-timeline"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.timeline }}"/></div>
+                    <div class="rolling-tab-content hidden" id="rtab-timeline-alpha"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.timeline_alpha }}"/></div>
                     <input type="hidden" id="equity-thumbnail" value="{{ rolling_thumb|default('') }}">
                     {% if is_authenticated %}
                     <div class="action-buttons" id="backtest-actions">
@@ -4535,6 +4538,12 @@ def _run_post_handler(cancel_event, rid=None):
         # Common charts
         chart_timeline = bt.generate_rolling_timeline_chart(
             fixed_results, p.rolling_metric, strategy_label, score, score_label, p.theme)
+        # Always generate alpha timeline (even if rolling_metric is already alpha)
+        if p.rolling_metric != "alpha":
+            chart_timeline_alpha = bt.generate_rolling_timeline_chart(
+                fixed_results, "alpha", strategy_label, score, score_label, p.theme)
+        else:
+            chart_timeline_alpha = chart_timeline
 
 
         is_dual = p.ind1_name != "price"
@@ -4589,6 +4598,7 @@ def _run_post_handler(cancel_event, rid=None):
             rolling_thumb = "data:image/png;base64," + chart_timeline
             return _render_main(p, chart=chart_timeline,
                                 rolling_charts={"timeline": chart_timeline,
+                                                "timeline_alpha": chart_timeline_alpha,
                                                 },
                                 rolling_is_dual=True, rolling_plotly_data=plotly_data,
                                 rolling_score=score, rolling_score_label=score_label,
@@ -4620,6 +4630,7 @@ def _run_post_handler(cancel_event, rid=None):
                                 rolling_charts={"heatmap": chart_heatmap,
                                                 "heatmap_norm": chart_heatmap_norm,
                                                 "timeline": chart_timeline,
+                                                "timeline_alpha": chart_timeline_alpha,
                                                 },
                                 rolling_score=score, rolling_score_label=score_label,
                                 rolling_metric=p.rolling_metric, rolling_windows=len(windows),

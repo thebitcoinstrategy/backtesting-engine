@@ -1126,6 +1126,28 @@ class TestRollingWindowAnalysis:
             src = f.read()
         assert "rolling_thumb=" in src, "Rolling mode must pass rolling_thumb to template"
 
+    def test_rolling_alpha_timeline_tab_exists(self):
+        """Rolling mode must have an Alpha Timeline tab for both single and dual indicator views."""
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            src = f.read()
+        # Alpha timeline tab button must exist
+        assert "Alpha Timeline" in src, "Alpha Timeline tab must exist in rolling results"
+        # Alpha timeline content div must exist
+        assert 'id="rtab-timeline-alpha"' in src, "Alpha timeline content div must exist"
+        # Alpha timeline chart must be generated
+        assert '"timeline_alpha"' in src, "timeline_alpha chart must be passed in rolling_charts"
+
+    def test_rolling_alpha_timeline_always_generated(self):
+        """Alpha timeline chart must be generated even when rolling_metric is not alpha."""
+        src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(src_path, encoding="utf-8") as f:
+            src = f.read()
+        assert 'chart_timeline_alpha' in src, "chart_timeline_alpha must be generated"
+        # Must generate alpha chart when metric != alpha
+        assert "\"alpha\", strategy_label" in src, \
+            "Must call generate_rolling_timeline_chart with 'alpha' metric"
+
 
 class TestProgressTracking:
     """Progress bar feature: server tracks calculation progress, client polls it."""
