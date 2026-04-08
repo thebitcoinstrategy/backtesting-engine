@@ -1199,7 +1199,10 @@ def rolling_window_evaluate(df, windows, ind1_name, ind1_period, ind2_name, ind2
         n_days = len(w_pos)
         total_return = (equity.iloc[-1] / initial_cash - 1) * 100
         buyhold_return = (bh.iloc[-1] / initial_cash - 1) * 100
-        alpha = total_return - buyhold_return
+        # Excess geometric return: (1+strategy)/(1+buyhold) - 1
+        bh_factor = bh.iloc[-1] / initial_cash  # e.g. 2.1 for +110%
+        strat_factor = equity.iloc[-1] / initial_cash  # e.g. 0.6 for -40%
+        alpha = (strat_factor / bh_factor - 1) * 100 if bh_factor > 0 else 0.0
         annualized = _annualized_return(total_return, n_days, periods_per_year)
 
         eq_returns = pd.Series(equity_arr).pct_change().fillna(0)
@@ -1316,8 +1319,9 @@ def rolling_window_sweep(df, windows, ind1_name, ind1_period, ind2_name,
             if metric == "total_return":
                 val = total_return
             elif metric == "alpha":
-                bh_return = ((1 + w_ret).cumprod().iloc[-1] - 1) * 100
-                val = total_return - bh_return
+                bh_factor = (1 + w_ret).cumprod().iloc[-1]
+                strat_factor = equity_arr[-1] / initial_cash
+                val = (strat_factor / bh_factor - 1) * 100 if bh_factor > 0 else 0.0
             elif metric == "sharpe":
                 eq_rets = np.diff(equity_arr, prepend=initial_cash) / np.maximum(np.abs(np.concatenate([[initial_cash], equity_arr[:-1]])), 1e-10)
                 std_d = np.std(eq_rets)
@@ -1419,8 +1423,9 @@ def rolling_window_sweep_dual(df, windows, ind1_name, ind2_name,
                 if metric == "total_return":
                     val = total_return
                 elif metric == "alpha":
-                    bh_return = ((1 + w_ret).cumprod().iloc[-1] - 1) * 100
-                    val = total_return - bh_return
+                    bh_factor = (1 + w_ret).cumprod().iloc[-1]
+                    strat_factor = equity_arr[-1] / initial_cash
+                    val = (strat_factor / bh_factor - 1) * 100 if bh_factor > 0 else 0.0
                 elif metric == "sharpe":
                     eq_rets = np.diff(equity_arr, prepend=initial_cash) / np.maximum(
                         np.abs(np.concatenate([[initial_cash], equity_arr[:-1]])), 1e-10)
@@ -1470,7 +1475,7 @@ def generate_rolling_single_column(window_results, metric, strategy_label, theme
     values = [r[metric] for r in window_results]
     n = len(labels)
 
-    metric_names = {"total_return": "Return %", "alpha": "Alpha %", "sharpe": "Sharpe"}
+    metric_names = {"total_return": "Return %", "alpha": "Relative Alpha %", "sharpe": "Sharpe"}
     metric_label = metric_names.get(metric, metric)
 
     fig, ax = plt.subplots(figsize=(4, max(4, n * 0.7)), dpi=150)
@@ -2445,7 +2450,7 @@ def generate_rolling_timeline_chart(window_results, metric, strategy_label, scor
     threshold = 0.5 if metric == "sharpe" else 0
     colors = [t["green"] if v > threshold else t["red"] for v in values]
 
-    metric_names = {"total_return": "Total Return %", "alpha": "Alpha vs Buy & Hold %", "sharpe": "Sharpe Ratio"}
+    metric_names = {"total_return": "Total Return %", "alpha": "Relative Alpha %", "sharpe": "Sharpe Ratio"}
     metric_label = metric_names.get(metric, metric)
 
     fig, ax = plt.subplots(figsize=(max(8, len(labels) * 1.2), 6), dpi=150)
@@ -2500,11 +2505,11 @@ def generate_rolling_equity_overlay(window_results, strategy_label, theme="dark"
         color = cmap(i / max(n - 1, 1))
 
         if mode == "alpha":
-            # Alpha = strategy % return minus buy-and-hold % return over time
-            strat_pct = (eq / eq.iloc[0] - 1) * 100
+            # Relative alpha: (strategy_factor / bh_factor - 1) * 100 over time
+            strat_factor = eq / eq.iloc[0]
             bh = r["buyhold_equity"]
-            bh_pct = (bh / bh.iloc[0] - 1) * 100
-            curve = strat_pct - bh_pct
+            bh_factor = bh / bh.iloc[0]
+            curve = (strat_factor / bh_factor.clip(lower=1e-10) - 1) * 100
         else:
             # USD % return
             curve = (eq / eq.iloc[0] - 1) * 100
@@ -2515,8 +2520,8 @@ def generate_rolling_equity_overlay(window_results, strategy_label, theme="dark"
     ax.axhline(y=0, color=t["muted"], linewidth=0.8, linestyle="--", alpha=0.4)
 
     if mode == "alpha":
-        ax.set_ylabel("Alpha vs Buy & Hold (%)", fontsize=11, color=t["muted"])
-        ax.set_title(f"{strategy_label} — Outperformance Per Window", fontsize=13, color=t["text"], pad=12)
+        ax.set_ylabel("Relative Alpha (%)", fontsize=11, color=t["muted"])
+        ax.set_title(f"{strategy_label} — Relative Alpha Per Window", fontsize=13, color=t["text"], pad=12)
     else:
         ax.set_ylabel("Return (%)", fontsize=11, color=t["muted"])
         ax.set_title(f"{strategy_label} — Equity Curves Per Window", fontsize=13, color=t["text"], pad=12)
@@ -2556,7 +2561,7 @@ def generate_rolling_heatmap(sweep_data, metric, strategy_label, theme="dark",
     best_per_window = sweep_data["best_per_window"]
     n_win, n_per = matrix.shape
 
-    metric_names = {"total_return": "Total Return %", "alpha": "Alpha %", "sharpe": "Sharpe Ratio"}
+    metric_names = {"total_return": "Total Return %", "alpha": "Relative Alpha %", "sharpe": "Sharpe Ratio"}
     metric_label = metric_names.get(metric, metric)
     x_label = sweep_ind_label or "Period"
 
@@ -2654,7 +2659,7 @@ def generate_rolling_3d_surface(sweep_data, metric, strategy_label, theme="dark"
     periods = sweep_data["periods"]
     n_win, n_per = matrix.shape
 
-    metric_names = {"total_return": "Return %", "alpha": "Alpha %", "sharpe": "Sharpe"}
+    metric_names = {"total_return": "Return %", "alpha": "Relative Alpha %", "sharpe": "Sharpe"}
     metric_label = metric_names.get(metric, metric)
 
     fig = plt.figure(figsize=(14, 9), dpi=150)

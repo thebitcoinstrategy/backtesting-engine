@@ -1778,7 +1778,7 @@ HTML = """\
                             <label>Metric</label>
                             <select name="rolling_metric">
                                 <option value="total_return" {{ 'selected' if p.rolling_metric == 'total_return' }}>Total Return</option>
-                                <option value="alpha" {{ 'selected' if p.rolling_metric == 'alpha' }}>Alpha vs B&H</option>
+                                <option value="alpha" {{ 'selected' if p.rolling_metric == 'alpha' }}>Relative Alpha</option>
                                 <option value="sharpe" {{ 'selected' if p.rolling_metric == 'sharpe' }}>Sharpe Ratio</option>
                             </select>
                         </div>
@@ -1807,7 +1807,7 @@ HTML = """\
                     <div class="rolling-tabs">
                         <button class="rolling-tab-btn active" onclick="switchRollingTab('animated', this)">Heatmap Over Time</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('timeline', this)">Timeline</button>
-                        <button class="rolling-tab-btn" onclick="switchRollingTab('timeline-alpha', this)">Alpha Timeline</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('timeline-alpha', this)">Relative Alpha Timeline</button>
                     </div>
                     <div class="rolling-tab-content" id="rtab-animated">
                         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
@@ -1948,7 +1948,7 @@ HTML = """\
                         <button class="rolling-tab-btn active" onclick="switchRollingTab('heatmap', this)">Heatmap</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('heatmap-norm', this)">Per-Window Scale</button>
                         <button class="rolling-tab-btn" onclick="switchRollingTab('timeline', this)">Timeline</button>
-                        <button class="rolling-tab-btn" onclick="switchRollingTab('timeline-alpha', this)">Alpha Timeline</button>
+                        <button class="rolling-tab-btn" onclick="switchRollingTab('timeline-alpha', this)">Relative Alpha Timeline</button>
                     </div>
                     <div class="rolling-tab-content" id="rtab-heatmap"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap }}"/></div>
                     <div class="rolling-tab-content hidden" id="rtab-heatmap-norm"><img class="chart-img" src="data:image/png;base64,{{ rolling_charts.heatmap_norm }}"/></div>
@@ -4547,7 +4547,7 @@ def _run_post_handler(cancel_event, rid=None):
 
 
         is_dual = p.ind1_name != "price"
-        metric_names = {"total_return": "Return %", "alpha": "Alpha %", "sharpe": "Sharpe"}
+        metric_names = {"total_return": "Return %", "alpha": "Relative Alpha %", "sharpe": "Sharpe"}
         metric_display = metric_names.get(p.rolling_metric, p.rolling_metric)
 
         if is_dual:
