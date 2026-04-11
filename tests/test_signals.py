@@ -1375,3 +1375,73 @@ class TestDetailPageRollingTabs:
         detail = self._detail_section()
         assert '.consistency-badge' in detail, \
             "DETAIL_HTML missing .consistency-badge CSS — score badge unstyled"
+
+
+# ---------------------------------------------------------------------------
+# Bug fix: Uploaded assets must have a proper price source so the daily
+# fetcher can keep their data up-to-date. Previously, all uploaded assets
+# got source='csv', source_id=None and were silently skipped by the fetcher.
+# ---------------------------------------------------------------------------
+
+class TestUploadedAssetPriceSource:
+    """Ensure uploaded assets get a resolvable price source, not just 'csv'/None."""
+
+    def _read_app_source(self):
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def test_resolve_price_source_function_exists(self):
+        """app.py must define _resolve_price_source() to auto-detect source info."""
+        src = self._read_app_source()
+        assert 'def _resolve_price_source(' in src, \
+            "app.py must define _resolve_price_source() — without it, uploaded assets won't be fetched daily"
+
+    def test_upload_endpoint_calls_resolve_price_source(self):
+        """api_upload_asset must call _resolve_price_source, not hard-code source='csv'."""
+        src = self._read_app_source()
+        # Find the api_upload_asset function body
+        match = re.search(r'def api_upload_asset\(\).*?(?=\ndef |\Z)', src, re.DOTALL)
+        assert match, "api_upload_asset function not found in app.py"
+        body = match.group(0)
+        assert '_resolve_price_source(' in body, \
+            "api_upload_asset must call _resolve_price_source() to auto-detect source info"
+
+    def test_upload_endpoint_does_not_hardcode_csv_source(self):
+        """api_upload_asset must not hard-code source='csv' in get_or_create_asset call."""
+        src = self._read_app_source()
+        match = re.search(r'def api_upload_asset\(\).*?(?=\ndef |\Z)', src, re.DOTALL)
+        assert match, "api_upload_asset function not found in app.py"
+        body = match.group(0)
+        # The get_or_create_asset call should NOT contain source='csv'
+        assert not re.search(r"get_or_create_asset\([^)]*source\s*=\s*['\"]csv['\"]", body), \
+            "api_upload_asset must not hard-code source='csv' — use _resolve_price_source() instead"
+
+    def test_resolve_price_source_handles_crypto(self):
+        """_resolve_price_source must try CoinGecko for crypto assets."""
+        src = self._read_app_source()
+        match = re.search(r'def _resolve_price_source\(.*?(?=\ndef |\Z)', src, re.DOTALL)
+        assert match, "_resolve_price_source function not found"
+        body = match.group(0)
+        assert 'coingecko' in body.lower(), \
+            "_resolve_price_source must search CoinGecko for crypto assets"
+
+    def test_resolve_price_source_handles_yfinance(self):
+        """_resolve_price_source must use yfinance ticker for stocks/indices."""
+        src = self._read_app_source()
+        match = re.search(r'def _resolve_price_source\(.*?(?=\ndef |\Z)', src, re.DOTALL)
+        assert match, "_resolve_price_source function not found"
+        body = match.group(0)
+        assert 'yfinance' in body, \
+            "_resolve_price_source must return yfinance source for stock/index/metal/commodity assets"
+
+    def test_resolve_price_source_returns_tuple(self):
+        """_resolve_price_source must return (source, source_id) tuple."""
+        src = self._read_app_source()
+        match = re.search(r'def _resolve_price_source\(.*?(?=\ndef |\Z)', src, re.DOTALL)
+        assert match, "_resolve_price_source function not found"
+        body = match.group(0)
+        # Should have multiple return statements returning tuples
+        returns = re.findall(r"return\s+['\"](\w+)['\"],", body)
+        assert len(returns) >= 2, \
+            "_resolve_price_source must return (source, source_id) tuples for different asset types"

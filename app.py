@@ -8289,6 +8289,52 @@ def logout():
     return redirect('https://the-bitcoin-strategy.com/logout')
 
 
+def _resolve_price_source(asset_name, asset_type, ticker=None):
+    """Resolve the daily price source for an asset so the fetcher can keep it updated.
+
+    Returns (source, source_id) tuple.
+    For crypto: searches CoinGecko by name/ticker to find the coingecko ID.
+    For stocks/indices/metals/commodities: uses the yfinance ticker.
+    Falls back to ('csv', None) if resolution fails.
+    """
+    import urllib.request
+    import urllib.parse
+
+    # yfinance-based assets: use ticker directly
+    if asset_type in ('stock', 'index', 'metal', 'commodity'):
+        if ticker:
+            return 'yfinance', ticker
+        return 'csv', None
+
+    # Crypto/crypto_agg: search CoinGecko for the source_id
+    if asset_type in ('crypto', 'crypto_agg'):
+        try:
+            search_term = ticker or asset_name
+            search_url = f"https://api.coingecko.com/api/v3/search?query={urllib.parse.quote(search_term)}"
+            headers = {'User-Agent': 'BacktestingEngine/1.0'}
+            if COINGECKO_API_KEY:
+                headers['x-cg-demo-api-key'] = COINGECKO_API_KEY
+            req = urllib.request.Request(search_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                coins = json.loads(resp.read()).get('coins', [])
+                # Try exact symbol match first (case-insensitive)
+                if ticker:
+                    for coin in coins:
+                        if coin.get('symbol', '').upper() == ticker.upper():
+                            return 'coingecko', coin['id']
+                # Try exact name match (case-insensitive)
+                for coin in coins:
+                    if coin.get('name', '').lower() == asset_name.lower():
+                        return 'coingecko', coin['id']
+                # Fallback: first result
+                if coins:
+                    return 'coingecko', coins[0]['id']
+        except Exception:
+            pass
+
+    return 'csv', None
+
+
 @app.route('/api/upload-asset', methods=['POST'])
 def api_upload_asset():
     """Admin-only: upload a new asset CSV file."""
@@ -8324,10 +8370,13 @@ def api_upload_asset():
         os.unlink(tmp_path)
         return jsonify(error=f'Failed to parse CSV: {str(e)}'), 400
 
+    # Resolve price source so the daily fetcher can keep data up-to-date
+    source, source_id = _resolve_price_source(asset_name, asset_type, asset_ticker)
+
     # Persist price data
     if _USE_PRICE_DB:
         asset_id = price_db.get_or_create_asset(
-            asset_name, category=asset_type, source='csv', source_id=None,
+            asset_name, category=asset_type, source=source, source_id=source_id,
             ticker=asset_ticker)
         price_db.upsert_prices(asset_id, df)
         os.unlink(tmp_path)
