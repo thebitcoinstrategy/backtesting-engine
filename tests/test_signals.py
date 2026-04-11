@@ -1445,3 +1445,60 @@ class TestUploadedAssetPriceSource:
         returns = re.findall(r"return\s+['\"](\w+)['\"],", body)
         assert len(returns) >= 2, \
             "_resolve_price_source must return (source, source_id) tuples for different asset types"
+
+
+# ---------------------------------------------------------------------------
+# Crypto market cap aggregates must be fetched daily via CoinGecko /global
+# endpoint. These are not individual coins — they need a separate fetch path.
+# ---------------------------------------------------------------------------
+
+class TestCryptoAggregatesFetcher:
+    """Ensure crypto market cap aggregates (Total, Total3, Others, etc.)
+    are fetched by the daily cron via coingecko_global source type."""
+
+    def _read_fetcher_source(self):
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fetch_prices.py")
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def test_fetch_crypto_aggregates_function_exists(self):
+        """fetch_prices.py must define fetch_crypto_aggregates()."""
+        src = self._read_fetcher_source()
+        assert 'def fetch_crypto_aggregates(' in src, \
+            "fetch_prices.py must define fetch_crypto_aggregates() for market cap aggregate data"
+
+    def test_aggregates_use_global_endpoint(self):
+        """fetch_crypto_aggregates must use CoinGecko /global endpoint."""
+        src = self._read_fetcher_source()
+        match = re.search(r'def fetch_crypto_aggregates\(.*?(?=\ndef |\Z)', src, re.DOTALL)
+        assert match, "fetch_crypto_aggregates function not found"
+        body = match.group(0)
+        assert '/global' in body, \
+            "fetch_crypto_aggregates must use CoinGecko /global endpoint"
+
+    def test_aggregates_compute_stablecoin_cap(self):
+        """fetch_crypto_aggregates must compute stablecoin market cap (for TotalES/Total3ES)."""
+        src = self._read_fetcher_source()
+        match = re.search(r'def fetch_crypto_aggregates\(.*?(?=\ndef |\Z)', src, re.DOTALL)
+        assert match, "fetch_crypto_aggregates function not found"
+        body = match.group(0)
+        assert 'stablecoin' in body.lower() or 'stable' in body.lower(), \
+            "fetch_crypto_aggregates must compute stablecoin market cap"
+
+    def test_main_fetches_coingecko_global_assets(self):
+        """main() must fetch assets with source='coingecko_global'."""
+        src = self._read_fetcher_source()
+        match = re.search(r'def main\(\).*?(?=\ndef |\Z)', src, re.DOTALL)
+        assert match, "main function not found"
+        body = match.group(0)
+        assert 'coingecko_global' in body, \
+            "main() must handle coingecko_global source type for aggregate assets"
+
+    def test_all_five_aggregate_formulas_defined(self):
+        """CRYPTO_AGG_FORMULAS must cover all 5 aggregate types."""
+        src = self._read_fetcher_source()
+        assert 'CRYPTO_AGG_FORMULAS' in src, \
+            "fetch_prices.py must define CRYPTO_AGG_FORMULAS dict"
+        for key in ['total', 'total_es', 'total3', 'total3_es', 'others']:
+            assert f'"{key}"' in src or f"'{key}'" in src, \
+                f"CRYPTO_AGG_FORMULAS must include '{key}' formula"

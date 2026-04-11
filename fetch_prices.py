@@ -122,6 +122,68 @@ def fetch_yfinance(ticker, period="5d"):
 
 
 # ---------------------------------------------------------------------------
+# CoinGecko global market cap aggregates
+# ---------------------------------------------------------------------------
+
+# Maps source_id to how to compute market cap from /global data.
+# Each entry is (description, compute_fn) where compute_fn takes (total, btc_cap, eth_cap, stablecoin_cap, top10_cap).
+CRYPTO_AGG_FORMULAS = {
+    "total":     lambda total, btc, eth, stable, top10: total,
+    "total_es":  lambda total, btc, eth, stable, top10: total - stable,
+    "total3":    lambda total, btc, eth, stable, top10: total - btc - eth,
+    "total3_es": lambda total, btc, eth, stable, top10: total - btc - eth - stable,
+    "others":    lambda total, btc, eth, stable, top10: total - top10,
+}
+
+
+def fetch_crypto_aggregates():
+    """Fetch current crypto market cap aggregates from CoinGecko /global + /coins/categories.
+
+    Returns dict mapping source_id -> DataFrame with single row (yesterday's date + close value),
+    or empty dict on failure. Uses yesterday's date since market cap is a snapshot, not a daily close.
+    """
+    headers = {"User-Agent": "BacktestingEngine/1.0"}
+    if COINGECKO_API_KEY:
+        headers["x-cg-demo-api-key"] = COINGECKO_API_KEY
+
+    # 1. Get total market cap and top coin percentages
+    resp = requests.get(f"{COINGECKO_BASE}/global", headers=headers, timeout=15)
+    resp.raise_for_status()
+    gdata = resp.json().get("data", {})
+    total = gdata.get("total_market_cap", {}).get("usd", 0)
+    if not total:
+        return {}
+
+    pcts = gdata.get("market_cap_percentage", {})
+    btc_cap = total * pcts.get("btc", 0) / 100
+    eth_cap = total * pcts.get("eth", 0) / 100
+    # Top 10 by market cap percentage
+    sorted_pcts = sorted(pcts.values(), reverse=True)
+    top10_pct = sum(sorted_pcts[:10])
+    top10_cap = total * top10_pct / 100
+
+    # 2. Get stablecoin market cap from categories
+    time.sleep(5)
+    resp2 = requests.get(f"{COINGECKO_BASE}/coins/categories", headers=headers, timeout=15)
+    resp2.raise_for_status()
+    stablecoin_cap = 0
+    for cat in resp2.json():
+        if cat.get("name") == "Stablecoins" and cat.get("market_cap"):
+            stablecoin_cap = cat["market_cap"]
+            break
+
+    # 3. Compute each aggregate and return as single-row DataFrames
+    yesterday = pd.Timestamp.now(tz="UTC").normalize() - pd.Timedelta(days=1)
+    result = {}
+    for source_id, formula in CRYPTO_AGG_FORMULAS.items():
+        value = formula(total, btc_cap, eth_cap, stablecoin_cap, top10_cap)
+        df = pd.DataFrame({"close": [value]}, index=pd.DatetimeIndex([yesterday], name="date"))
+        result[source_id] = df
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 SIGNAL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "_asset_signal")
@@ -210,6 +272,26 @@ def main():
             log.exception("Failed to fetch %s (coingecko:%s)", asset["name"], asset["source_id"])
             errors += 1
         time.sleep(5)  # conservative rate limit (safe without API key too)
+
+    # Fetch crypto market cap aggregates (Total, Total3, Others, etc.)
+    agg_assets = [a for a in assets if a["source"] == "coingecko_global" and a.get("source_id")]
+    if agg_assets:
+        log.info("Fetching %d crypto aggregate assets...", len(agg_assets))
+        try:
+            agg_data = fetch_crypto_aggregates()
+            for asset in agg_assets:
+                sid = asset["source_id"]
+                if sid in agg_data and not agg_data[sid].empty:
+                    price_db.upsert_prices(asset["id"], agg_data[sid])
+                    log.info("Updated %s: latest=%s, value=%.0f",
+                             asset["name"], agg_data[sid].index[-1].date(),
+                             agg_data[sid]["close"].iloc[-1])
+                    updated += 1
+                else:
+                    log.warning("No aggregate data for %s (source_id=%s)", asset["name"], sid)
+        except Exception:
+            log.exception("Failed to fetch crypto aggregates")
+            errors += 1
 
     # Signal Flask workers to reload ASSETS
     try:
