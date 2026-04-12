@@ -1003,6 +1003,16 @@ HTML = """\
             border-color: var(--accent);
             border-bottom-color: var(--bg-elevated);
         }
+        /* Trade history table */
+        .trade-history-wrap { max-height:500px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; }
+        .trade-history-table { width:100%; border-collapse:collapse; font-family:'JetBrains Mono',monospace; font-size:0.78em; }
+        .trade-history-table thead { position:sticky; top:0; z-index:1; }
+        .trade-history-table th { background:var(--bg-elevated); color:var(--text-dim); padding:8px 10px; text-align:left; font-weight:500; border-bottom:1px solid var(--border); white-space:nowrap; }
+        .trade-history-table td { padding:6px 10px; border-bottom:1px solid var(--border); white-space:nowrap; color:var(--text); }
+        .trade-history-table tbody tr:hover { background:var(--bg-elevated); }
+        .trade-dir { padding:2px 6px; border-radius:4px; font-size:0.85em; font-weight:600; text-transform:uppercase; letter-spacing:0.03em; }
+        .trade-dir-long { background:rgba(34,197,94,0.12); color:var(--green); }
+        .trade-dir-short { background:rgba(239,68,68,0.12); color:var(--red); }
         /* Chart tools */
         .lw-measure-label {
             position: absolute; z-index: 5; pointer-events: none;
@@ -2105,10 +2115,11 @@ HTML = """\
                     </div>
                 </details>
                 {% endif %}
-                {% if price_json %}
+                {% if best %}
                 <div class="chart-tabs">
                     <button class="chart-tab active" onclick="switchChartTab('backtest', this)">Backtest Chart</button>
-                    <button class="chart-tab" onclick="switchChartTab('livechart', this)">Live Chart</button>
+                    {% if price_json %}<button class="chart-tab" onclick="switchChartTab('livechart', this)">Live Chart</button>{% endif %}
+                    {% if best.trade_history %}<button class="chart-tab" onclick="switchChartTab('trades', this)">Trade History</button>{% endif %}
                 </div>
                 {% endif %}
                 <div id="backtest-chart-tab">
@@ -2146,6 +2157,40 @@ HTML = """\
                     ind2Label: {{ ind2_label|tojson }}
                 };
                 </script>
+                {% endif %}
+                {% if best and best.trade_history %}
+                <div id="trades-tab" style="display:none">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                        <span style="font-size:0.85em;color:var(--text-dim)">{{ best.trade_history|length }} trades</span>
+                        <button onclick="downloadTradesCsv()" class="action-btn" style="padding:4px 12px;font-size:0.78em">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12h10"/></svg>Download CSV
+                        </button>
+                    </div>
+                    <div class="trade-history-wrap">
+                    <table class="trade-history-table">
+                        <thead>
+                            <tr><th>#</th><th>Direction</th><th>Entry Date</th><th>Exit Date</th><th>Entry Price</th><th>Exit Price</th><th>Return %</th><th>Duration</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for t in best.trade_history %}
+                            <tr class="{{ 'trade-win' if t.return_pct > 0 else 'trade-loss' if t.return_pct < 0 else '' }}">
+                                <td>{{ loop.index }}</td>
+                                <td><span class="trade-dir trade-dir-{{ t.direction|lower }}">{{ t.direction }}</span></td>
+                                <td>{{ t.entry_date }}</td>
+                                <td>{{ t.exit_date }}</td>
+                                <td>{{ "${:,.2f}".format(t.entry_price) if t.entry_price >= 1 else "${:,.4f}".format(t.entry_price) }}</td>
+                                <td>{{ "${:,.2f}".format(t.exit_price) if t.exit_price >= 1 else "${:,.4f}".format(t.exit_price) }}</td>
+                                <td style="color:{{ 'var(--green)' if t.return_pct > 0 else 'var(--red)' if t.return_pct < 0 else 'var(--text-dim)' }}">{{ "{:+.2f}".format(t.return_pct) }}%</td>
+                                <td>{{ t.duration }}d</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                    <script>
+                    var __tradeHistory = {{ best.trade_history|tojson }};
+                    </script>
+                </div>
                 {% endif %}
                 {% if best %}
                 <div id="best-params" data-ind1-period="{{ best.get('ind1_period', '') }}" data-ind2-period="{{ best.get('ind2_period', '') }}"
@@ -6138,6 +6183,15 @@ DETAIL_HTML = """\
         }
         .chart-tab:hover { color: var(--text); background: var(--bg-elevated); }
         .chart-tab.active { background: var(--bg-elevated); color: var(--text); border-bottom-color: var(--bg-elevated); }
+        .trade-history-wrap { max-height:500px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; }
+        .trade-history-table { width:100%; border-collapse:collapse; font-family:'JetBrains Mono',monospace; font-size:0.78em; }
+        .trade-history-table thead { position:sticky; top:0; z-index:1; }
+        .trade-history-table th { background:var(--bg-elevated); color:var(--text-dim); padding:8px 10px; text-align:left; font-weight:500; border-bottom:1px solid var(--border); white-space:nowrap; }
+        .trade-history-table td { padding:6px 10px; border-bottom:1px solid var(--border); white-space:nowrap; color:var(--text); }
+        .trade-history-table tbody tr:hover { background:var(--bg-elevated); }
+        .trade-dir { padding:2px 6px; border-radius:4px; font-size:0.85em; font-weight:600; text-transform:uppercase; letter-spacing:0.03em; }
+        .trade-dir-long { background:rgba(34,197,94,0.12); color:var(--green); }
+        .trade-dir-short { background:rgba(239,68,68,0.12); color:var(--red); }
         .lw-measure-label {
             position: absolute; z-index: 5; pointer-events: none;
             background: rgba(22,25,34,0.92); border: 1px solid var(--border-hover);

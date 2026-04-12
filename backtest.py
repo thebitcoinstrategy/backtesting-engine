@@ -555,7 +555,7 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
     yearly = _yearly_returns(df["equity"])
     best_year = max(yearly.items(), key=lambda x: x[1]) if yearly else (None, 0)
     worst_year = min(yearly.items(), key=lambda x: x[1]) if yearly else (None, 0)
-    tstats = _trade_stats(df["equity"], df["position"])
+    tstats = _trade_stats(df["equity"], df["position"], df["close"])
     time_in_market = (df["position"] != 0).sum() / len(df) * 100
 
     pos_diff = df["position"].diff().fillna(0)
@@ -584,6 +584,7 @@ def run_oscillator_strategy(df, osc_name, osc_period, buy_threshold, sell_thresh
         "avg_loss": tstats["avg_loss"],
         "profit_factor": tstats["profit_factor"],
         "avg_trade_duration": tstats["avg_trade_duration"],
+        "trade_history": tstats["trade_history"],
         "time_in_market": time_in_market,
         "best_year": best_year,
         "worst_year": worst_year,
@@ -837,13 +838,17 @@ def _yearly_returns(equity_series):
     return years
 
 
-def _trade_stats(equity_series, position_series):
-    """Compute trade-level statistics from equity and position series."""
+def _trade_stats(equity_series, position_series, price_series=None):
+    """Compute trade-level statistics from equity and position series.
+    If price_series is provided, also builds a detailed trade history list."""
     pos = position_series.values
     eq = equity_series.values
+    dates = equity_series.index
+    prices = price_series.values if price_series is not None else None
     # Find trade boundaries (where position changes)
     changes = np.where(np.diff(pos, prepend=pos[0] - 1) != 0)[0]
     trades = []
+    trade_history = []
     for i in range(len(changes)):
         start = changes[i]
         end = changes[i + 1] if i + 1 < len(changes) else len(pos)
@@ -853,10 +858,25 @@ def _trade_stats(equity_series, position_series):
         exit_eq = eq[end - 1]
         if entry_eq > 0:
             ret = (exit_eq / entry_eq - 1) * 100
-            trades.append({"return": ret, "days": end - start})
+            duration = end - start
+            trades.append({"return": ret, "days": duration})
+            if prices is not None:
+                direction = "Long" if pos[start] > 0 else "Short"
+                exit_idx = end - 1
+                trade_history.append({
+                    "entry_date": str(dates[start].date()),
+                    "exit_date": str(dates[exit_idx].date()),
+                    "entry_price": float(prices[start]),
+                    "exit_price": float(prices[exit_idx]),
+                    "return_pct": round(ret, 2),
+                    "duration": duration,
+                    "direction": direction,
+                })
+    empty_stats = {"win_rate": 0, "avg_win": 0, "avg_loss": 0,
+                   "profit_factor": 0, "avg_trade_duration": 0,
+                   "trade_history": trade_history}
     if not trades:
-        return {"win_rate": 0, "avg_win": 0, "avg_loss": 0,
-                "profit_factor": 0, "avg_trade_duration": 0}
+        return empty_stats
     wins = [t for t in trades if t["return"] > 0]
     losses = [t for t in trades if t["return"] <= 0]
     win_rate = len(wins) / len(trades) * 100
@@ -867,7 +887,8 @@ def _trade_stats(equity_series, position_series):
     profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
     avg_duration = np.mean([t["days"] for t in trades])
     return {"win_rate": win_rate, "avg_win": avg_win, "avg_loss": avg_loss,
-            "profit_factor": profit_factor, "avg_trade_duration": avg_duration}
+            "profit_factor": profit_factor, "avg_trade_duration": avg_duration,
+            "trade_history": trade_history}
 
 
 # --- Core Strategy Functions ---
@@ -979,7 +1000,7 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
     yearly = _yearly_returns(df["equity"])
     best_year = max(yearly.items(), key=lambda x: x[1]) if yearly else (None, 0)
     worst_year = min(yearly.items(), key=lambda x: x[1]) if yearly else (None, 0)
-    tstats = _trade_stats(df["equity"], df["position"])
+    tstats = _trade_stats(df["equity"], df["position"], df["close"])
     time_in_market = (df["position"] != 0).sum() / len(df) * 100
 
     pos_diff = df["position"].diff().fillna(0)
@@ -1011,6 +1032,7 @@ def run_strategy(df, ind1_name, ind1_period, ind2_name, ind2_period,
         "avg_loss": tstats["avg_loss"],
         "profit_factor": tstats["profit_factor"],
         "avg_trade_duration": tstats["avg_trade_duration"],
+        "trade_history": tstats["trade_history"],
         "time_in_market": time_in_market,
         "best_year": best_year,
         "worst_year": worst_year,

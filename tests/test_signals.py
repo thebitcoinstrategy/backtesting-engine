@@ -1502,3 +1502,70 @@ class TestCryptoAggregatesFetcher:
         for key in ['total', 'total_es', 'total3', 'total3_es', 'others']:
             assert f'"{key}"' in src or f"'{key}'" in src, \
                 f"CRYPTO_AGG_FORMULAS must include '{key}' formula"
+
+
+# ---------------------------------------------------------------------------
+# Trade History feature: run_strategy must return detailed trade list
+# ---------------------------------------------------------------------------
+
+class TestTradeHistory:
+    """Verify that run_strategy returns a trade_history list with correct fields."""
+
+    def _make_df(self, prices):
+        dates = pd.date_range("2025-01-01", periods=len(prices), freq="D", tz="UTC")
+        return pd.DataFrame({"close": prices}, index=dates)
+
+    def test_trade_history_returned(self):
+        """run_strategy must include trade_history key in its result."""
+        prices = [10] * 5 + [20] * 10 + [10] * 5
+        df = self._make_df(prices)
+        result = bt.run_strategy(df, "price", None, "sma", 3, 10000)
+        assert "trade_history" in result, "run_strategy must return trade_history"
+        assert isinstance(result["trade_history"], list)
+
+    def test_trade_history_fields(self):
+        """Each trade in trade_history must have the required fields."""
+        prices = [10] * 5 + [20] * 10 + [10] * 5
+        df = self._make_df(prices)
+        result = bt.run_strategy(df, "price", None, "sma", 3, 10000)
+        assert len(result["trade_history"]) > 0, "Should have at least one trade"
+        required = {"entry_date", "exit_date", "entry_price", "exit_price",
+                    "return_pct", "duration", "direction"}
+        for trade in result["trade_history"]:
+            missing = required - set(trade.keys())
+            assert not missing, f"Trade missing fields: {missing}"
+
+    def test_trade_history_direction(self):
+        """Long-cash exposure should produce Long trades, short-cash should produce Short trades."""
+        prices = [10] * 5 + [20] * 10 + [10] * 5
+        df = self._make_df(prices)
+        result_long = bt.run_strategy(df, "price", None, "sma", 3, 10000, exposure="long-cash")
+        for t in result_long["trade_history"]:
+            assert t["direction"] == "Long"
+        result_short = bt.run_strategy(df, "price", None, "sma", 3, 10000, exposure="short-cash")
+        for t in result_short["trade_history"]:
+            assert t["direction"] == "Short"
+
+    def test_trade_history_count_matches_trades(self):
+        """Number of trades in history should be consistent with aggregate trade count."""
+        prices = list(range(10, 30)) + list(range(30, 10, -1)) + list(range(10, 25))
+        df = self._make_df(prices)
+        result = bt.run_strategy(df, "price", None, "sma", 5, 10000)
+        assert len(result["trade_history"]) > 0, "Should have trades"
+
+    def test_trade_history_tab_in_html(self):
+        """The app.py HTML template must include the Trade History tab button."""
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app.py')
+        with open(app_path, 'r', encoding='utf-8') as f:
+            src = f.read()
+        assert "Trade History" in src, "app.py must contain Trade History tab"
+        assert "trade-history-table" in src, "app.py must contain trade-history-table class"
+        assert "downloadTradesCsv" in src, "app.py must reference downloadTradesCsv function"
+
+    def test_trade_history_csv_download_in_chartjs(self):
+        """chart.js must contain the downloadTradesCsv function."""
+        js_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               'static', 'js', 'chart.js')
+        with open(js_path, 'r', encoding='utf-8') as f:
+            src = f.read()
+        assert "function downloadTradesCsv" in src, "chart.js must define downloadTradesCsv"

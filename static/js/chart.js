@@ -63,9 +63,10 @@ document.addEventListener('visibilitychange', function() {
 function switchChartTab(tab, btn) {
     var bt = document.getElementById('backtest-chart-tab');
     var lw = document.getElementById('livechart-tab');
-    if (!bt || !lw) return;
-    bt.style.display = tab === 'backtest' ? '' : 'none';
-    lw.style.display = tab === 'livechart' ? '' : 'none';
+    var tr = document.getElementById('trades-tab');
+    if (bt) bt.style.display = tab === 'backtest' ? '' : 'none';
+    if (lw) lw.style.display = tab === 'livechart' ? '' : 'none';
+    if (tr) tr.style.display = tab === 'trades' ? '' : 'none';
     var tabs = btn.parentElement.querySelectorAll('.chart-tab');
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
     btn.classList.add('active');
@@ -79,18 +80,25 @@ function switchChartTab(tab, btn) {
     }
     // Update URL with view parameter
     var url = new URL(window.location);
-    if (tab === 'livechart') {
-        url.searchParams.set('view', 'livechart');
-    } else {
+    if (tab === 'backtest') {
         url.searchParams.delete('view');
+    } else {
+        url.searchParams.set('view', tab);
     }
     history.replaceState(null, '', url.toString());
 }
 function activateViewFromURL() {
     var params = new URLSearchParams(window.location.search);
-    if (params.get('view') === 'livechart') {
+    var view = params.get('view');
+    if (view) {
         var tabs = document.querySelectorAll('.chart-tab');
-        if (tabs.length >= 2) switchChartTab('livechart', tabs[1]);
+        for (var i = 0; i < tabs.length; i++) {
+            var onclick = tabs[i].getAttribute('onclick') || '';
+            if (onclick.indexOf("'" + view + "'") !== -1) {
+                switchChartTab(view, tabs[i]);
+                break;
+            }
+        }
     }
 }
 function downloadChart() {
@@ -103,6 +111,24 @@ function downloadChart() {
     a.href = img.src;
     a.download = assetName + '_backtest.png';
     a.click();
+}
+function downloadTradesCsv() {
+    if (typeof __tradeHistory === 'undefined' || !__tradeHistory.length) return;
+    var rows = [['#','Direction','Entry Date','Exit Date','Entry Price','Exit Price','Return %','Duration (days)']];
+    for (var i = 0; i < __tradeHistory.length; i++) {
+        var t = __tradeHistory[i];
+        rows.push([i+1, t.direction, t.entry_date, t.exit_date, t.entry_price, t.exit_price, t.return_pct, t.duration]);
+    }
+    var csv = rows.map(function(r) { return r.join(','); }).join('\n');
+    var blob = new Blob([csv], {type: 'text/csv'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    var asset = document.getElementById('asset');
+    var assetName = asset ? asset.value : (typeof __lwAsset !== 'undefined' ? __lwAsset : 'backtest');
+    a.download = assetName + '_trade_history.csv';
+    a.click();
+    URL.revokeObjectURL(url);
 }
 function loadLWChart() {
     var container = document.getElementById('lw-chart-container');
