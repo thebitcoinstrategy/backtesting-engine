@@ -1579,3 +1579,11 @@ class TestTradeHistory:
         with open(js_path, 'r', encoding='utf-8') as f:
             src = f.read()
         assert "function downloadTradesCsv" in src, "chart.js must define downloadTradesCsv"
+
+    def test_detail_page_injects_trade_history_for_old_backtests(self):
+        """Detail page must dynamically inject trade history for cached HTML without it."""
+        app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app.py')
+        with open(app_path, 'r', encoding='utf-8') as f:
+            src = f.read()
+        assert "'trades-tab' not in cached" in src, \
+            "Detail page must check for missing trades-tab and inject it dynamically"

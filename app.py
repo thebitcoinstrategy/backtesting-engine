@@ -9053,6 +9053,79 @@ def backtest_detail(bt_id):
                        f'    ind2Label: {json_mod.dumps(_ind2_lbl)}\n'
                        f'}};\n</script>')
             cached = re.sub(r'<script>\s*(?:var __lwAsset\s*=.*?)?(?:var __lwVsAsset\s*=.*?)?var __lwData\s*=\s*\{.*?\};\s*</script>', _new_lw, cached, flags=re.DOTALL)
+        # Inject trade history tab for older saved backtests that don't have it
+        if 'trades-tab' not in cached and not _df_all.empty:
+            _exposure = bt_params.get('exposure', 'long-cash')
+            _reverse = bt_params.get('reverse', '') in ('1', 'true', 'True', True)
+            _fee = float(bt_params.get('fee', 0.1) or 0.1) / 100
+            _fin = float(bt_params.get('financing_rate', 0) or 0) / 100
+            _long_lev = float(bt_params.get('long_leverage', 1) or 1)
+            _short_lev = float(bt_params.get('short_leverage', 1) or 1)
+            _lev_mode = bt_params.get('lev_mode', 'rebalance')
+            _sizing = bt_params.get('sizing', 'compound')
+            _cash = float(bt_params.get('initial_cash', 10000) or 10000)
+            _tf = bt_params.get('timeframe', 'daily')
+            _ppy = 52 if _tf == 'weekly' else 365
+            _df_strat = _df_all.copy()
+            if _tf == 'weekly':
+                _df_strat = bt.resample_to_weekly(_df_strat)
+            _ed = bt_params.get('end_date', '')
+            if _ed:
+                _df_strat = _df_strat[_df_strat.index <= pd_mod.Timestamp(_ed, tz="UTC")]
+            _osc = bt_params.get('signal_type', 'crossover') != 'crossover'
+            if _osc:
+                _osc_name = bt_params.get('osc_name', 'rsi')
+                _osc_period = int(bt_params.get('osc_period', 14) or 14)
+                _buy_thr = float(bt_params.get('buy_threshold', 30) or 30)
+                _sell_thr = float(bt_params.get('sell_threshold', 70) or 70)
+                _res = bt.run_oscillator_strategy(_df_strat, _osc_name, _osc_period,
+                    _buy_thr, _sell_thr, _cash, _fee, _exposure, _long_lev, _short_lev,
+                    _lev_mode, _reverse, _sizing, start_date=_sd, periods_per_year=_ppy,
+                    financing_rate=_fin)
+            else:
+                _ind1_name_s = bt_params.get('ind1_name', 'price')
+                _res = bt.run_strategy(_df_strat, _ind1_name_s, _p1, _ind2_name, _p2,
+                    _cash, _fee, _exposure, _long_lev, _short_lev, _lev_mode, _reverse,
+                    _sizing, start_date=_sd, periods_per_year=_ppy, financing_rate=_fin)
+            _trades = _res.get('trade_history', [])
+            if _trades:
+                _rows_html = ''
+                for _idx, _t in enumerate(_trades, 1):
+                    _ep = _t['entry_price']
+                    _xp = _t['exit_price']
+                    _ep_fmt = f'${_ep:,.4f}' if _ep < 1 else f'${_ep:,.2f}'
+                    _xp_fmt = f'${_xp:,.4f}' if _xp < 1 else f'${_xp:,.2f}'
+                    _ret = _t['return_pct']
+                    _color = 'var(--green)' if _ret > 0 else ('var(--red)' if _ret < 0 else 'var(--text-dim)')
+                    _cls = 'trade-win' if _ret > 0 else ('trade-loss' if _ret < 0 else '')
+                    _rows_html += (f'<tr class="{_cls}"><td>{_idx}</td>'
+                        f'<td><span class="trade-dir trade-dir-{_t["direction"].lower()}">{_t["direction"]}</span></td>'
+                        f'<td>{_t["entry_date"]}</td><td>{_t["exit_date"]}</td>'
+                        f'<td>{_ep_fmt}</td><td>{_xp_fmt}</td>'
+                        f'<td style="color:{_color}">{_ret:+.2f}%</td><td>{_t["duration"]}d</td></tr>')
+                _trades_html = (
+                    f'<div id="trades-tab" style="display:none">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+                    f'<span style="font-size:0.85em;color:var(--text-dim)">{len(_trades)} trades</span>'
+                    f'<button onclick="downloadTradesCsv()" class="action-btn" style="padding:4px 12px;font-size:0.78em">'
+                    f'<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" '
+                    f'stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px">'
+                    f'<path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12h10"/></svg>Download CSV</button></div>'
+                    f'<div class="trade-history-wrap"><table class="trade-history-table"><thead>'
+                    f'<tr><th>#</th><th>Direction</th><th>Entry Date</th><th>Exit Date</th>'
+                    f'<th>Entry Price</th><th>Exit Price</th><th>Return %</th><th>Duration</th></tr>'
+                    f'</thead><tbody>{_rows_html}</tbody></table></div>'
+                    f'<script>var __tradeHistory = {json_mod.dumps(_trades)};</script></div>')
+                # Add Trade History tab button
+                cached = cached.replace(
+                    "onclick=\"switchChartTab('livechart', this)\">Live Chart</button>",
+                    "onclick=\"switchChartTab('livechart', this)\">Live Chart</button>"
+                    "<button class=\"chart-tab\" onclick=\"switchChartTab('trades', this)\">Trade History</button>")
+                # Insert trades tab div before best-params or at end of livechart section
+                if '<div id="best-params"' in cached:
+                    cached = cached.replace('<div id="best-params"', _trades_html + '<div id="best-params"')
+                else:
+                    cached += _trades_html
     except Exception:
         pass  # If fresh data injection fails, keep original cached HTML
 
