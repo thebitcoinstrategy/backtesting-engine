@@ -4521,7 +4521,7 @@ def _run_post_handler(cancel_event, rid=None):
             thumb_ax.plot(short_levs, short_sweep, color=t["accent"], linewidth=1.5)
             thumb_ax.scatter([best_short_lev], [best_short_ann], color=t["accent"], s=40, zorder=5)
         if p.exposure != "short-cash":
-            thumb_ax.axhline(y=bh_ann, color=t["muted"], linestyle="--", linewidth=1, alpha=0.7)
+            thumb_ax.axhline(y=bh_ref, color=t["muted"], linestyle="--", linewidth=1, alpha=0.7)
         thumb_ax.set_xlabel("")
         thumb_ax.grid(True, which="major", alpha=0.3, color=t["grid"])
         thumb_ax.tick_params(labelsize=7)
@@ -4957,10 +4957,10 @@ def _run_post_handler(cancel_event, rid=None):
         # Generate small sweep thumbnail
         thumb_fig, thumb_ax = plt.subplots(1, 1, figsize=(6, 2.5), dpi=100)
         bt._apply_dark_theme(thumb_fig, [thumb_ax], p.theme)
-        thumb_ax.plot(periods, annualized_returns, color=t["blue"], linewidth=1.5)
-        thumb_ax.scatter([best_period], [best_ann], color=t["accent"], s=40, zorder=5)
+        thumb_ax.plot(periods, sweep_values, color=t["blue"], linewidth=1.5)
+        thumb_ax.scatter([best_period], [best_val], color=t["accent"], s=40, zorder=5)
         if p.exposure != "short-cash":
-            thumb_ax.axhline(y=bh_annualized, color=t["muted"], linestyle="--", linewidth=1, alpha=0.7)
+            thumb_ax.axhline(y=bh_ref, color=t["muted"], linestyle="--", linewidth=1, alpha=0.7)
         thumb_ax.grid(True, which="major", alpha=0.3, color=t["grid"])
         thumb_ax.tick_params(labelsize=7)
         thumb_ax.set_xlabel("")
