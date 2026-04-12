@@ -868,8 +868,8 @@ def _trade_stats(equity_series, position_series, price_series=None):
                     "exit_date": str(dates[exit_idx].date()),
                     "entry_price": float(prices[start]),
                     "exit_price": float(prices[exit_idx]),
-                    "return_pct": round(ret, 2),
-                    "duration": duration,
+                    "return_pct": round(float(ret), 2),
+                    "duration": int(duration),
                     "direction": direction,
                 })
     empty_stats = {"win_rate": 0, "avg_win": 0, "avg_loss": 0,
