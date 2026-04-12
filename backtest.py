@@ -1081,7 +1081,7 @@ def sweep_periods(df, ind1_name, ind1_period, ind2_name, ind2_period,
                   initial_cash, fee=0.001, exposure="long-cash",
                   long_leverage=1, short_leverage=1, lev_mode="rebalance",
                   sizing="compound", start_date=None, periods_per_year=365,
-                  financing_rate=0):
+                  financing_rate=0, optimize_metric="total_return"):
     """Sweep one indicator's period across a range. sweep_target: 'ind1' or 'ind2'."""
     results = []
     for period in range(sweep_min, sweep_max + 1):
@@ -1092,7 +1092,8 @@ def sweep_periods(df, ind1_name, ind1_period, ind2_name, ind2_period,
                          sizing=sizing, start_date=start_date, periods_per_year=periods_per_year,
                          financing_rate=financing_rate)
         results.append(r)
-    results.sort(key=lambda r: r["total_return"], reverse=True)
+    sort_key = "sharpe" if optimize_metric == "sharpe" else "total_return"
+    results.sort(key=lambda r: r[sort_key], reverse=True)
     return results
 
 

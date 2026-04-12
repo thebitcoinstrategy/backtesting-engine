@@ -163,12 +163,12 @@ def _cache_key(form_params):
         relevant.update(["ind1_name", "period1", "ind2_name", "period2"])
 
     if mode == "sweep-lev":
-        relevant.update(["lev_min", "lev_max", "lev_step", "lev_mode"])
+        relevant.update(["lev_min", "lev_max", "lev_step", "lev_mode", "optimize_metric"])
         # exposure is forced to long-short in code, don't include
     elif mode == "sweep":
-        relevant.update(["range_min", "range_max", "step", "exposure", "long_leverage", "short_leverage", "lev_mode"])
+        relevant.update(["range_min", "range_max", "step", "exposure", "long_leverage", "short_leverage", "lev_mode", "optimize_metric"])
     elif mode == "heatmap":
-        relevant.update(["range_min", "range_max", "step", "exposure", "long_leverage", "short_leverage", "lev_mode"])
+        relevant.update(["range_min", "range_max", "step", "exposure", "long_leverage", "short_leverage", "lev_mode", "optimize_metric"])
     elif mode == "regression":
         relevant.update(["osc_name", "osc_period", "forward_days", "range_min", "range_max"])
     elif mode == "dca":
@@ -176,7 +176,7 @@ def _cache_key(form_params):
                          "dca_signal_period", "dca_max_multiplier", "dca_show_lump_sum", "dca_reverse"])
     elif mode == "rolling":
         relevant.update(["range_min", "range_max", "step", "exposure", "long_leverage", "short_leverage",
-                         "lev_mode", "window_size", "step_size", "rolling_metric"])
+                         "lev_mode", "window_size", "step_size", "optimize_metric"])
     else:  # backtest
         relevant.update(["exposure", "long_leverage", "short_leverage", "lev_mode"])
 
@@ -1488,7 +1488,13 @@ HTML = """\
                         </div>
                     </div>
                     <input type="hidden" name="step_size" value="0.5">
-                    <input type="hidden" name="rolling_metric" id="rolling-metric-hidden" value="{{ p.rolling_metric }}">
+                    <div class="form-group hidden" id="optimize-metric-group" style="margin-top:8px">
+                        <label>Optimize for</label>
+                        <select name="optimize_metric">
+                            <option value="total_return" {{ 'selected' if p.optimize_metric == 'total_return' }}>Annualized Return</option>
+                            <option value="sharpe" {{ 'selected' if p.optimize_metric == 'sharpe' }}>Sharpe Ratio</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="form-section">
                     <div class="section-title">Asset</div>
@@ -1782,14 +1788,6 @@ HTML = """\
                                 {% for y in [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4] %}
                                 <option value="{{ y }}" {{ 'selected' if p.window_size == y }}>{{ y }} yr{{ 's' if y > 1 }}</option>
                                 {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-group hidden" id="rolling-metric-group">
-                            <label>Metric</label>
-                            <select name="rolling_metric">
-                                <option value="total_return" {{ 'selected' if p.rolling_metric == 'total_return' }}>Total Return</option>
-                                <option value="alpha" {{ 'selected' if p.rolling_metric == 'alpha' }}>Relative Alpha</option>
-                                <option value="sharpe" {{ 'selected' if p.rolling_metric == 'sharpe' }}>Sharpe Ratio</option>
                             </select>
                         </div>
                         <div class="form-group" style="min-width:auto">
@@ -2478,13 +2476,15 @@ function toggleFields() {
     }
 
     var isRolling = mode === 'rolling';
+    var isOptimizer = mode === 'sweep' || mode === 'heatmap' || mode === 'sweep-lev' || isRolling;
     var windowGroup = document.getElementById('window-size-group');
-    var metricGroup = document.getElementById('rolling-metric-group');
+    var optimizeGroup = document.getElementById('optimize-metric-group');
     var cashGroup = document.getElementById('initial-cash-group');
-    if (isRolling) { windowGroup.classList.remove('hidden'); metricGroup.classList.remove('hidden'); cashGroup.classList.add('hidden'); }
-    else { windowGroup.classList.add('hidden'); metricGroup.classList.add('hidden'); cashGroup.classList.remove('hidden'); }
+    if (isRolling) { windowGroup.classList.remove('hidden'); cashGroup.classList.add('hidden'); }
+    else { windowGroup.classList.add('hidden'); cashGroup.classList.remove('hidden'); }
+    if (isOptimizer) { optimizeGroup.classList.remove('hidden'); } else { optimizeGroup.classList.add('hidden'); }
     windowGroup.querySelector('select').disabled = !isRolling;
-    metricGroup.querySelector('select').disabled = !isRolling;
+    optimizeGroup.querySelector('select').disabled = !isOptimizer;
     // Don't auto-adjust window size here — it would override URL params on submit.
     // Auto-adjust only runs on asset change (onAssetChange) and initial page load.
 
@@ -3480,7 +3480,10 @@ class Params:
             # Rolling window params
             self.window_size = float(form.get("window_size", 4))
             self.step_size = float(form.get("step_size", 0.5))
-            self.rolling_metric = form.get("rolling_metric", "total_return")
+            # Unified optimize metric (backward compat: fall back to rolling_metric)
+            self.optimize_metric = form.get("optimize_metric") or form.get("rolling_metric", "total_return")
+            if self.optimize_metric not in ("total_return", "sharpe"):
+                self.optimize_metric = "total_return"
         else:
             self.asset = DEFAULT_ASSET
             self.vs_asset = None
@@ -3527,7 +3530,7 @@ class Params:
             # Rolling window defaults
             self.window_size = 4
             self.step_size = 0.5
-            self.rolling_metric = "total_return"
+            self.optimize_metric = "total_return"
 
 
 # Load data once at startup
@@ -4076,6 +4079,10 @@ def _run_post_handler(cancel_event, rid=None):
 
     p = Params(request.form)
     t = bt._get_theme(p.theme)
+    # Metric display helpers for optimizer modes
+    _opt_label = {"total_return": "Annualized Return (%)", "sharpe": "Sharpe Ratio"}
+    _opt_fmt = {"total_return": "{:.1f}%", "sharpe": "{:.2f}"}
+    _opt_cell_fmt = {"total_return": "{:.0f}", "sharpe": "{:.2f}"}
     is_oscillator = p.signal_type == "oscillator"
     is_ratio = bool(p.vs_asset and p.vs_asset in ASSETS)
     import pandas as pd_mod
@@ -4382,7 +4389,11 @@ def _run_post_handler(cancel_event, rid=None):
             p1_str = p.ind1_period if p.ind1_period else "?"
             title_label = f"{p.ind1_name.upper()}({p1_str})/{p.ind2_name.upper()}({ind2_period_val})"
 
-        def _sweep_ann(ll, sl):
+        _is_sharpe = p.optimize_metric == "sharpe"
+        _m_label = _opt_label[p.optimize_metric]
+        _m_fmt = _opt_fmt[p.optimize_metric]
+
+        def _sweep_metric(ll, sl):
             _apply_fin = bt._should_apply_financing(fin_rate, p.exposure, ll, sl, p.sizing)
             _fdl = bt._financing_daily_rate(ll, fin_rate, periods_per_year) if _apply_fin else 0.0
             _fds = bt._financing_daily_rate(sl, fin_rate, periods_per_year) if _apply_fin else 0.0
@@ -4411,6 +4422,10 @@ def _run_post_handler(cancel_event, rid=None):
                     _fr = bt._financing_daily_rate(leverage, fin_rate, periods_per_year)
                     strat_ret -= position_base.values * _fr
                 equity_arr, _ = bt._compute_equity_with_liquidation(strat_ret, p.initial_cash)
+            if _is_sharpe:
+                eq_rets = pd_mod.Series(equity_arr).pct_change().fillna(0)
+                _std = eq_rets.std()
+                return (eq_rets.mean() / _std * np.sqrt(periods_per_year)) if _std > 0 else 0.0
             equity_final = equity_arr[-1] if len(equity_arr) > 0 else p.initial_cash
             total_ret = (equity_final / p.initial_cash - 1) * 100
             return bt._annualized_return(total_ret, n_days, periods_per_year)
@@ -4421,13 +4436,13 @@ def _run_post_handler(cancel_event, rid=None):
             check_cancelled(cancel_event)
             if rid:
                 update_progress(rid, li, n_lev * 2, f"Leverage sweep {li+1}/{n_lev*2}")
-            long_sweep_full.append(_sweep_ann(lv, 0))
+            long_sweep_full.append(_sweep_metric(lv, 0))
         short_sweep_full = []
         for li, lv in enumerate(lev_values):
             check_cancelled(cancel_event)
             if rid:
                 update_progress(rid, n_lev + li, n_lev * 2, f"Leverage sweep {n_lev+li+1}/{n_lev*2}")
-            short_sweep_full.append(_sweep_ann(0, lv))
+            short_sweep_full.append(_sweep_metric(0, lv))
 
         def _trim_flatline(values, levs):
             if len(values) < 3:
@@ -4448,7 +4463,12 @@ def _run_post_handler(cancel_event, rid=None):
         best_short_ann = short_sweep[best_short_idx]
 
         bh_total = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
-        bh_ann = bt._annualized_return(bh_total, n_days, periods_per_year)
+        bh_ann_ret = bt._annualized_return(bh_total, n_days, periods_per_year)
+        if _is_sharpe:
+            bh_returns = df["close"].pct_change().fillna(0)
+            bh_ref = (bh_returns.mean() / bh_returns.std() * np.sqrt(periods_per_year)) if bh_returns.std() > 0 else 0.0
+        else:
+            bh_ref = bh_ann_ret
 
         asset_title = asset_display
         tf_label = " (Weekly)" if is_weekly else ""
@@ -4467,18 +4487,18 @@ def _run_post_handler(cancel_event, rid=None):
             all_levs.extend(short_levs)
         x_min, x_max = min(all_levs), max(all_levs)
         if p.exposure != "short-cash":
-            ax.plot([x_min, x_max], [bh_ann, bh_ann], color=t["muted"], linestyle="--", linewidth=1,
-                    label=f"Buy & Hold ({bh_ann:.1f}%)")
+            ax.plot([x_min, x_max], [bh_ref, bh_ref], color=t["muted"], linestyle="--", linewidth=1,
+                    label=f"Buy & Hold ({_m_fmt.format(bh_ref)})")
         ax.set_xlim(x_min, x_max)
         from matplotlib.ticker import MultipleLocator
         ax.xaxis.set_major_locator(MultipleLocator(0.25))
         ax.set_xlabel("Leverage")
-        ax.set_ylabel("Annualized Return (%)")
+        ax.set_ylabel(_m_label)
         title_parts = []
         if show_long:
-            title_parts.append(f"Best Long: {best_long_lev:.2f}x ({best_long_ann:.1f}%)")
+            title_parts.append(f"Best Long: {best_long_lev:.2f}x ({_m_fmt.format(best_long_ann)})")
         if show_short:
-            title_parts.append(f"Best Short: {best_short_lev:.2f}x ({best_short_ann:.1f}%)")
+            title_parts.append(f"Best Short: {best_short_lev:.2f}x ({_m_fmt.format(best_short_ann)})")
         ax.set_title(f"{asset_title}{tf_label} {title_label} \u2014 Leverage Sweep | {p.exposure}\n"
                      f"{' | '.join(title_parts)}")
         ax.legend(loc="best", fontsize=9, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["price"])
@@ -4572,7 +4592,7 @@ def _run_post_handler(cancel_event, rid=None):
             progress_callback=_rolling_cb)
 
         # Consistency score
-        score, score_label = bt.compute_consistency_score(fixed_results, p.rolling_metric)
+        score, score_label = bt.compute_consistency_score(fixed_results, p.optimize_metric)
 
         # Strategy label
         if p.ind1_name != "price":
@@ -4582,18 +4602,15 @@ def _run_post_handler(cancel_event, rid=None):
 
         # Common charts
         chart_timeline = bt.generate_rolling_timeline_chart(
-            fixed_results, p.rolling_metric, strategy_label, score, score_label, p.theme)
-        # Always generate alpha timeline (even if rolling_metric is already alpha)
-        if p.rolling_metric != "alpha":
-            chart_timeline_alpha = bt.generate_rolling_timeline_chart(
-                fixed_results, "alpha", strategy_label, score, score_label, p.theme)
-        else:
-            chart_timeline_alpha = chart_timeline
+            fixed_results, p.optimize_metric, strategy_label, score, score_label, p.theme)
+        # Always generate alpha timeline as a separate tab
+        chart_timeline_alpha = bt.generate_rolling_timeline_chart(
+            fixed_results, "alpha", strategy_label, score, score_label, p.theme)
 
 
         is_dual = p.ind1_name != "price"
         metric_names = {"total_return": "Return %", "alpha": "Relative Alpha %", "sharpe": "Sharpe"}
-        metric_display = metric_names.get(p.rolling_metric, p.rolling_metric)
+        metric_display = metric_names.get(p.optimize_metric, p.optimize_metric)
 
         if is_dual:
             # Dual indicator: animated heatmap over time
@@ -4604,7 +4621,7 @@ def _run_post_handler(cancel_event, rid=None):
                 p.range_min, p.range_max, p.step,
                 p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage,
                 p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate,
-                metric=p.rolling_metric, progress_callback=_dual_cb)
+                metric=p.optimize_metric, progress_callback=_dual_cb)
 
             # Plotly JSON for animated heatmap
             periods_anim = dual_sweep["periods"]
@@ -4647,7 +4664,7 @@ def _run_post_handler(cancel_event, rid=None):
                                                 },
                                 rolling_is_dual=True, rolling_plotly_data=plotly_data,
                                 rolling_score=score, rolling_score_label=score_label,
-                                rolling_metric=p.rolling_metric, rolling_windows=len(windows),
+                                optimize_metric=p.optimize_metric, rolling_windows=len(windows),
                                 rolling_strategy=strategy_label,
                                 rolling_thumb=rolling_thumb,
                                 best=None, table_rows=None, col_header=col_header,
@@ -4661,12 +4678,12 @@ def _run_post_handler(cancel_event, rid=None):
                 "ind2", p.range_min, p.range_max, p.step,
                 p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage,
                 p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate,
-                metric=p.rolling_metric, progress_callback=_sweep_cb)
+                metric=p.optimize_metric, progress_callback=_sweep_cb)
 
             sweep_ind_label = f"{p.ind2_name.upper()} Period"
-            chart_heatmap = bt.generate_rolling_heatmap(sweep_data, p.rolling_metric, strategy_label, p.theme,
+            chart_heatmap = bt.generate_rolling_heatmap(sweep_data, p.optimize_metric, strategy_label, p.theme,
                                                          selected_period=p.ind2_period, sweep_ind_label=sweep_ind_label)
-            chart_heatmap_norm = bt.generate_rolling_heatmap(sweep_data, p.rolling_metric, strategy_label, p.theme,
+            chart_heatmap_norm = bt.generate_rolling_heatmap(sweep_data, p.optimize_metric, strategy_label, p.theme,
                                                               selected_period=p.ind2_period, sweep_ind_label=sweep_ind_label,
                                                               normalize_rows=True)
 
@@ -4678,7 +4695,7 @@ def _run_post_handler(cancel_event, rid=None):
                                                 "timeline_alpha": chart_timeline_alpha,
                                                 },
                                 rolling_score=score, rolling_score_label=score_label,
-                                rolling_metric=p.rolling_metric, rolling_windows=len(windows),
+                                optimize_metric=p.optimize_metric, rolling_windows=len(windows),
                                 rolling_strategy=strategy_label,
                                 rolling_thumb=rolling_thumb,
                                 best=None, table_rows=None, col_header=col_header,
@@ -4769,16 +4786,30 @@ def _run_post_handler(cancel_event, rid=None):
                     equity_arr, _ = bt._compute_equity_with_liquidation(strat_return.values, p.initial_cash)
                 equity_final = equity_arr[-1] if len(equity_arr) > 0 else p.initial_cash
                 total_ret = (equity_final / p.initial_cash - 1) * 100
-                ann = bt._annualized_return(total_ret, n_days, periods_per_year)
-                matrix[i, j] = ann
-                if ann > best_ann:
-                    best_ann = ann
+                if p.optimize_metric == "sharpe":
+                    eq_rets = pd_mod.Series(equity_arr).pct_change().fillna(0)
+                    _std = eq_rets.std()
+                    val = (eq_rets.mean() / _std * np.sqrt(periods_per_year)) if _std > 0 else 0.0
+                else:
+                    val = bt._annualized_return(total_ret, n_days, periods_per_year)
+                matrix[i, j] = val
+                if val > best_ann:
+                    best_ann = val
                     best_p1 = p1
                     best_p2 = p2
 
+        _is_sharpe = p.optimize_metric == "sharpe"
+        _m_label = _opt_label[p.optimize_metric]
+        _m_fmt = _opt_fmt[p.optimize_metric]
+        _m_cell = _opt_cell_fmt[p.optimize_metric]
         # df is already trimmed to start_date; use it for buy-and-hold and chart display
         bh_total = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
-        bh_ann = bt._annualized_return(bh_total, n_days, periods_per_year)
+        bh_ann_ret = bt._annualized_return(bh_total, n_days, periods_per_year)
+        if _is_sharpe:
+            bh_returns = df["close"].pct_change().fillna(0)
+            bh_ref = (bh_returns.mean() / bh_returns.std() * np.sqrt(periods_per_year)) if bh_returns.std() > 0 else 0.0
+        else:
+            bh_ref = bh_ann_ret
 
         tf_label = " (Weekly)" if is_weekly else ""
         fig, ax = plt.subplots(figsize=(14, 12), dpi=150)
@@ -4799,11 +4830,11 @@ def _run_post_handler(cancel_event, rid=None):
         else:
             ax.set_xlabel(f"{ind2_upper} Period ({period_unit})")
             ax.set_ylabel(f"{ind1_upper} Period ({period_unit})")
-        ax.set_title(f"{asset_title}{tf_label} {ind1_upper}/{ind2_upper} Crossover \u2014 Annualized Return % (step={p.step})\n"
-                     f"Best: {ind1_upper}({best_p1})/{ind2_upper}({best_p2}) = {best_ann:.1f}% | "
-                     f"B&H: {bh_ann:.1f}% | {p.exposure}")
+        ax.set_title(f"{asset_title}{tf_label} {ind1_upper}/{ind2_upper} Crossover \u2014 {_m_label} (step={p.step})\n"
+                     f"Best: {ind1_upper}({best_p1})/{ind2_upper}({best_p2}) = {_m_fmt.format(best_ann)} | "
+                     f"B&H: {_m_fmt.format(bh_ref)} | {p.exposure}")
         cbar = fig.colorbar(im, ax=ax, shrink=0.8)
-        cbar.set_label("Annualized Return (%)", color=t["muted"])
+        cbar.set_label(_m_label, color=t["muted"])
         cbar.ax.yaxis.set_tick_params(color=t["muted"])
         cbar.outline.set_edgecolor(t["grid"])
         for label in cbar.ax.get_yticklabels():
@@ -4814,7 +4845,7 @@ def _run_post_handler(cancel_event, rid=None):
                     val = matrix[i, j]
                     if not np.isnan(val):
                         color = "black" if abs(val - np.nanmean(matrix)) < np.nanstd(matrix) else "white"
-                        ax.text(j, i, f"{val:.0f}", ha="center", va="center",
+                        ax.text(j, i, _m_cell.format(val), ha="center", va="center",
                                 fontsize=max(4, min(7, 150 // n)), color=color)
         plt.tight_layout()
 
@@ -4865,7 +4896,10 @@ def _run_post_handler(cancel_event, rid=None):
 
         n_days = len(df)
         periods = list(range(p.range_min, p.range_max + 1))
-        annualized_returns = []
+        sweep_values = []
+        _is_sharpe = p.optimize_metric == "sharpe"
+        _m_label = _opt_label[p.optimize_metric]
+        _m_fmt = _opt_fmt[p.optimize_metric]
 
         n_sweep = len(periods)
         for si, period in enumerate(periods):
@@ -4874,14 +4908,19 @@ def _run_post_handler(cancel_event, rid=None):
                 update_progress(rid, si, n_sweep, f"Sweep {si+1}/{n_sweep}")
             result = bt.run_strategy(df_full, p.ind1_name, p.ind1_period, p.ind2_name, period,
                                       p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year, financing_rate=fin_rate)
-            ann = bt._annualized_return(result["total_return"], n_days, periods_per_year)
-            annualized_returns.append(ann)
+            if _is_sharpe:
+                sweep_values.append(result["sharpe"])
+            else:
+                sweep_values.append(bt._annualized_return(result["total_return"], n_days, periods_per_year))
 
         bh_total = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
         bh_annualized = bt._annualized_return(bh_total, n_days, periods_per_year)
-        best_idx = np.argmax(annualized_returns)
+        bh_returns = df["close"].pct_change().fillna(0)
+        bh_sharpe = (bh_returns.mean() / bh_returns.std() * np.sqrt(periods_per_year)) if bh_returns.std() > 0 else 0.0
+        bh_ref = bh_sharpe if _is_sharpe else bh_annualized
+        best_idx = np.argmax(sweep_values)
         best_period = periods[best_idx]
-        best_ann = annualized_returns[best_idx]
+        best_val = sweep_values[best_idx]
 
         ind2_upper = p.ind2_name.upper()
         if p.ind1_name != "price":
@@ -4892,19 +4931,19 @@ def _run_post_handler(cancel_event, rid=None):
 
         fig, ax = plt.subplots(figsize=(14, 7), dpi=150)
         bt._apply_dark_theme(fig, ax, p.theme)
-        ax.plot(periods, annualized_returns, color=t["blue"], linewidth=1)
+        ax.plot(periods, sweep_values, color=t["blue"], linewidth=1)
         if p.exposure != "short-cash":
-            ax.axhline(y=bh_annualized, color=t["muted"], linestyle="--", linewidth=1,
-                        label=f"Buy & Hold ({bh_annualized:.1f}%)")
-        ax.scatter([best_period], [best_ann], color=t["accent"], s=60, zorder=5,
-                    label=f"Best: {best_label} ({best_ann:.1f}%)")
+            ax.axhline(y=bh_ref, color=t["muted"], linestyle="--", linewidth=1,
+                        label=f"Buy & Hold ({_m_fmt.format(bh_ref)})")
+        ax.scatter([best_period], [best_val], color=t["accent"], s=60, zorder=5,
+                    label=f"Best: {best_label} ({_m_fmt.format(best_val)})")
         period_unit = "weeks" if is_weekly else "days"
         ax.set_xlabel(f"{ind2_upper} Period ({period_unit})")
-        ax.set_ylabel("Annualized Return (%)")
+        ax.set_ylabel(_m_label)
         asset_title = asset_display
         tf_label = " (Weekly)" if is_weekly else ""
         title_prefix = f"{ind1_label_str} vs " if p.ind1_name != "price" else ""
-        ax.set_title(f"{asset_title}{tf_label} \u2014 Annualized Return by {title_prefix}{ind2_upper} Period ({p.range_min}-{p.range_max}) | {p.exposure}")
+        ax.set_title(f"{asset_title}{tf_label} \u2014 {_m_label} by {title_prefix}{ind2_upper} Period ({p.range_min}-{p.range_max}) | {p.exposure}")
         ax.legend(loc="best", fontsize=9, facecolor=t["panel"], edgecolor=t["grid"], labelcolor=t["price"])
         ax.grid(True, alpha=0.3, color=t["grid"])
         plt.tight_layout()
@@ -4955,7 +4994,7 @@ def _run_post_handler(cancel_event, rid=None):
                                         "ind2", p.range_min, p.range_max,
                                         p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage, p.lev_mode,
                                         sizing=p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year,
-                                        financing_rate=fin_rate)
+                                        financing_rate=fin_rate, optimize_metric=p.optimize_metric)
             # For same-type crossover, filter invalid combos
             if p.ind1_name != "price" and p.ind1_name == p.ind2_name and p.ind1_period is not None:
                 results = [r for r in results if r["ind2_period"] > p.ind1_period]

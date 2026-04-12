@@ -1097,7 +1097,7 @@ class TestRollingWindowAnalysis:
             src = f.read()
         assert "self.window_size" in src, "Params must parse window_size"
         assert "self.step_size" in src, "Params must parse step_size"
-        assert "self.rolling_metric" in src, "Params must parse rolling_metric"
+        assert "self.optimize_metric" in src, "Params must parse optimize_metric"
 
     def test_rolling_mode_has_save_publish_buttons(self):
         """Rolling mode results must include save/publish action buttons."""
@@ -1587,3 +1587,80 @@ class TestTradeHistory:
             src = f.read()
         assert "'trades-tab' not in cached" in src, \
             "Detail page must check for missing trades-tab and inject it dynamically"
+
+
+# ---------------------------------------------------------------------------
+# Optimize metric dropdown: unified across sweep, heatmap, sweep-lev, rolling
+# ---------------------------------------------------------------------------
+
+class TestOptimizeMetric:
+    """Verify the optimize_metric feature works across all optimizer modes."""
+
+    def _read_app(self):
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app.py')
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read()
+
+    def test_optimize_metric_dropdown_in_html(self):
+        """The app.py template must have the optimize-metric-group dropdown."""
+        src = self._read_app()
+        assert 'optimize-metric-group' in src, "HTML must contain optimize-metric-group"
+        assert 'name="optimize_metric"' in src, "Dropdown must have name=optimize_metric"
+        assert 'Annualized Return' in src, "Dropdown must include Annualized Return option"
+        assert 'Sharpe Ratio' in src, "Dropdown must include Sharpe Ratio option"
+
+    def test_optimize_metric_parsed_in_params(self):
+        """Params class must parse optimize_metric from form data."""
+        src = self._read_app()
+        assert 'self.optimize_metric' in src, "Params must have optimize_metric attribute"
+
+    def test_backward_compat_rolling_metric(self):
+        """Params must fall back to rolling_metric for backward compatibility."""
+        src = self._read_app()
+        assert 'rolling_metric' in src, "Must reference rolling_metric for backward compat"
+
+    def test_sweep_mode_uses_optimize_metric(self):
+        """Sweep mode handler must use optimize_metric for chart axis."""
+        src = self._read_app()
+        # Find sweep mode block
+        sweep_block = re.search(r'if p\.mode == "sweep".*?(?=if p\.mode ==|\Z)', src, re.DOTALL)
+        assert sweep_block, "Sweep mode handler not found"
+        block = sweep_block.group(0)
+        assert 'optimize_metric' in block, "Sweep handler must reference optimize_metric"
+        assert 'result["sharpe"]' in block, "Sweep handler must extract sharpe from result"
+
+    def test_heatmap_mode_uses_optimize_metric(self):
+        """Heatmap mode handler must use optimize_metric for color scale."""
+        src = self._read_app()
+        # Find the heatmap block that contains the matrix computation
+        hm_block = re.search(r'if p\.mode == "heatmap":.*?matrix\[i, j\].*?colorbar', src, re.DOTALL)
+        assert hm_block, "Heatmap mode handler not found"
+        block = hm_block.group(0)
+        assert 'optimize_metric' in block, "Heatmap handler must reference optimize_metric"
+
+    def test_sweep_lev_uses_optimize_metric(self):
+        """Sweep-lev mode handler must use optimize_metric."""
+        src = self._read_app()
+        lev_block = re.search(r'if p\.mode == "sweep-lev".*?(?=if p\.mode ==|\Z)', src, re.DOTALL)
+        assert lev_block, "Sweep-lev mode handler not found"
+        block = lev_block.group(0)
+        assert 'optimize_metric' in block, "Sweep-lev handler must reference optimize_metric"
+
+    def test_sweep_periods_accepts_optimize_metric(self):
+        """sweep_periods() must accept optimize_metric parameter."""
+        prices = list(range(10, 50)) + list(range(50, 10, -1))
+        dates = pd.date_range("2025-01-01", periods=len(prices), freq="D", tz="UTC")
+        df = pd.DataFrame({"close": prices}, index=dates)
+        # Should not raise
+        results = bt.sweep_periods(df, "price", None, "sma", None, "ind2", 3, 8, 10000, optimize_metric="sharpe")
+        assert len(results) > 0
+        # When sorted by sharpe, first result should have highest sharpe
+        sharpes = [r["sharpe"] for r in results]
+        assert results[0]["sharpe"] == max(sharpes), "Results should be sorted by sharpe"
+
+    def test_togglefields_shows_for_all_optimizer_modes(self):
+        """toggleFields JS must show optimize-metric-group for all optimizer modes."""
+        src = self._read_app()
+        assert "isOptimizer" in src, "JS must define isOptimizer variable"
+        assert "'sweep'" in src and "'heatmap'" in src and "'sweep-lev'" in src, \
+            "isOptimizer must check sweep, heatmap, sweep-lev modes"
