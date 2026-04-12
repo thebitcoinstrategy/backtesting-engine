@@ -1535,6 +1535,16 @@ class TestTradeHistory:
             missing = required - set(trade.keys())
             assert not missing, f"Trade missing fields: {missing}"
 
+    def test_trade_history_json_serializable(self):
+        """trade_history must be JSON serializable (no numpy int64/float64)."""
+        import json
+        prices = [10] * 5 + [20] * 10 + [10] * 5
+        df = self._make_df(prices)
+        result = bt.run_strategy(df, "price", None, "sma", 3, 10000)
+        assert len(result["trade_history"]) > 0, "Should have at least one trade"
+        # This will raise TypeError if numpy types leak through
+        json.dumps(result["trade_history"])
+
     def test_trade_history_direction(self):
         """Long-cash exposure should produce Long trades, short-cash should produce Short trades."""
         prices = [10] * 5 + [20] * 10 + [10] * 5
