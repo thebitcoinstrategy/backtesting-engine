@@ -1681,3 +1681,22 @@ class TestOptimizeMetric:
         assert "isOptimizer" in src, "JS must define isOptimizer variable"
         assert "'sweep'" in src and "'heatmap'" in src and "'sweep-lev'" in src, \
             "isOptimizer must check sweep, heatmap, sweep-lev modes"
+
+
+class TestCopperIsMetal:
+    """Copper must be categorized as a metal in both the initial set and reload_assets reset."""
+
+    def test_copper_in_initial_metal_set(self):
+        import re
+        src = open(os.path.join(os.path.dirname(__file__), "..", "app.py"), encoding="utf-8").read()
+        m = re.search(r'_METAL_ASSETS\s*=\s*\{([^}]*)\}', src)
+        assert m, "Could not find _METAL_ASSETS initial definition"
+        assert "Copper" in m.group(1), "Copper must be in initial _METAL_ASSETS set"
+
+    def test_copper_in_reload_metal_reset(self):
+        import re
+        src = open(os.path.join(os.path.dirname(__file__), "..", "app.py"), encoding="utf-8").read()
+        m = re.search(r'_METAL_ASSETS\.update\(\{([^}]*)\}\)', src)
+        assert m, "Could not find _METAL_ASSETS.update() in reload_assets"
+        assert "Copper" in m.group(1), \
+            "reload_assets() must include Copper in the metal reset, otherwise reloads drop it"

@@ -3870,7 +3870,7 @@ def _reload_assets_from_disk():
     _INDEX_ASSETS.clear()
     _INDEX_ASSETS.update({"Dax", "Dow Jones", "Hang Seng", "Nasdaq100", "SP500"})
     _METAL_ASSETS.clear()
-    _METAL_ASSETS.update({"Gold", "Silver", "Palladium"})
+    _METAL_ASSETS.update({"Gold", "Silver", "Palladium", "Copper"})
     _COMMODITY_ASSETS.clear()
     _COMMODITY_ASSETS.update({"Oil (Brent)", "Oil (Wti)"})
     if os.path.exists(_CATEGORIES_FILE):
