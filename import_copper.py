@@ -43,6 +43,11 @@ def fetch_macrotrends_copper(source):
     closes = [float(v) for _, v in rows]
     df = pd.DataFrame({"close": closes}, index=pd.to_datetime(dates, utc=True))
     df.index.name = "date"
+    before = len(df)
+    df = df[df["close"] > 0]
+    dropped = before - len(df)
+    if dropped:
+        print(f"Dropped {dropped} rows with close <= 0 (bad MacroTrends ticks)")
     return df
 
 
