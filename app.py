@@ -1638,6 +1638,7 @@ HTML = """\
                                 <option value="daily" {{ 'selected' if p.dca_frequency=='daily' }}>Daily</option>
                                 <option value="weekly" {{ 'selected' if p.dca_frequency=='weekly' }}>Weekly</option>
                                 <option value="monthly" {{ 'selected' if p.dca_frequency=='monthly' }}>Monthly</option>
+                                <option value="yearly" {{ 'selected' if p.dca_frequency=='yearly' }}>Yearly</option>
                             </select>
                         </div>
                         <div class="form-group">

@@ -1615,7 +1615,7 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
                     reverse=False, periods_per_year=365):
     """Compare constant DCA vs dynamic (signal-adjusted) DCA.
 
-    frequency: 'daily', 'weekly', or 'monthly'
+    frequency: 'daily', 'weekly', 'monthly', or 'yearly'
     Returns dict with equity series and metrics for both strategies + optional lump sum.
     """
     df = df.copy()
@@ -1654,6 +1654,14 @@ def run_dca_compare(df, frequency="daily", amount=100.0, signal_type="oscillator
             if key != last_month:
                 buy_mask[i] = True
                 last_month = key
+        buy_mask = np.array(buy_mask)
+    elif frequency == "yearly":
+        buy_mask = np.zeros(n, dtype=bool)
+        last_year = None
+        for i, dt in enumerate(df.index):
+            if dt.year != last_year:
+                buy_mask[i] = True
+                last_year = dt.year
         buy_mask = np.array(buy_mask)
     else:
         buy_mask = np.ones(n, dtype=bool)

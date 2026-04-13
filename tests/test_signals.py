@@ -1658,6 +1658,23 @@ class TestOptimizeMetric:
         sharpes = [r["sharpe"] for r in results]
         assert results[0]["sharpe"] == max(sharpes), "Results should be sorted by sharpe"
 
+    def test_dca_yearly_frequency(self):
+        """run_dca_compare must support frequency='yearly' (one buy per calendar year)."""
+        dates = pd.date_range("2020-01-01", periods=365 * 4, freq="D", tz="UTC")
+        prices = np.linspace(100, 500, len(dates))
+        df = pd.DataFrame({"close": prices}, index=dates)
+        r = bt.run_dca_compare(df, frequency="yearly", amount=100.0,
+                               signal_type="oscillator", signal_name="rsi", signal_period=14)
+        assert r is not None
+        assert r["frequency"] == "yearly"
+        # 4 years of data => 4 buys
+        assert r["n_buys"] == 4
+
+    def test_app_has_yearly_dca_option(self):
+        """app.py DCA frequency dropdown must include yearly option."""
+        src = self._read_app()
+        assert 'value="yearly"' in src, "DCA dropdown must include yearly option"
+
     def test_togglefields_shows_for_all_optimizer_modes(self):
         """toggleFields JS must show optimize-metric-group for all optimizer modes."""
         src = self._read_app()
