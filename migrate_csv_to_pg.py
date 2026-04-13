@@ -49,6 +49,8 @@ ASSET_CONFIG = {
     "Dow Jones":     {"category": "index",     "source": "yfinance",  "source_id": "^DJI"},
     "Dax":           {"category": "index",     "source": "yfinance",  "source_id": "^GDAXI"},
     "Hang Seng":     {"category": "index",     "source": "yfinance",  "source_id": "^HSI"},
+    # FRED economic series (monthly, linearly interpolated to daily)
+    "US M2":         {"category": "index",     "source": "fred",      "source_id": "M2SL"},
     # Metals — yfinance
     "Gold":          {"category": "metal",     "source": "yfinance",  "source_id": "GC=F"},
     "Silver":        {"category": "metal",     "source": "yfinance",  "source_id": "SI=F"},

@@ -3570,7 +3570,7 @@ def _resolve_asset(name):
 _PRIORITY_ORDER = ["bitcoin", "ethereum", "solana"]
 _CRYPTO_AGG_ASSETS = set()
 _STOCK_ASSETS = {"Apple", "Microsoft", "Amazon", "Alphabet", "Tesla", "Nvidia", "Meta", "Netflix", "Coinbase", "Strategy"}
-_INDEX_ASSETS = {"Dax", "Dow Jones", "Hang Seng", "Nasdaq100", "SP500"}
+_INDEX_ASSETS = {"Dax", "Dow Jones", "Hang Seng", "Nasdaq100", "SP500", "US M2"}
 _METAL_ASSETS = {"Gold", "Silver", "Palladium", "Copper"}
 _METAL_ORDER = ["Gold", "Silver", "Palladium", "Copper"]
 _COMMODITY_ASSETS = {"Oil (Brent)", "Oil (Wti)"}
@@ -3605,7 +3605,7 @@ ASSET_LOGOS = {
     "Bittensor": "bittensor-tao-logo.png",
     "Dax": "dax-logo.svg", "Dow Jones": "dowjones-logo.svg",
     "Hang Seng": "hangseng-logo.svg", "Nasdaq100": "nasdaq-logo.svg",
-    "SP500": "sp500-logo.svg",
+    "SP500": "sp500-logo.svg", "US M2": "us-m2-logo.svg",
     "Gold": "gold-logo.svg", "Silver": "silver-logo.svg", "Palladium": "palladium-logo.svg", "Copper": "copper-logo.svg",
     "Oil (Brent)": "oil-brent-logo.svg", "Oil (Wti)": "oil-wti-logo.svg",
     "Apple": "apple-logo.png", "Microsoft": "microsoft-logo.png", "Amazon": "amazon-logo.png",
@@ -3871,7 +3871,7 @@ def _reload_assets_from_disk():
     _STOCK_ASSETS.clear()
     _STOCK_ASSETS.update({"Apple", "Microsoft", "Amazon", "Alphabet", "Tesla", "Nvidia", "Meta", "Netflix", "Coinbase", "Strategy"})
     _INDEX_ASSETS.clear()
-    _INDEX_ASSETS.update({"Dax", "Dow Jones", "Hang Seng", "Nasdaq100", "SP500"})
+    _INDEX_ASSETS.update({"Dax", "Dow Jones", "Hang Seng", "Nasdaq100", "SP500", "US M2"})
     _METAL_ASSETS.clear()
     _METAL_ASSETS.update({"Gold", "Silver", "Palladium", "Copper"})
     _COMMODITY_ASSETS.clear()
@@ -3895,7 +3895,7 @@ def _reload_assets_from_disk():
         "Hyperliquid": "hyperliquid-logo.png", "Bittensor": "bittensor-tao-logo.png",
         "Dax": "dax-logo.svg", "Dow Jones": "dowjones-logo.svg",
         "Hang Seng": "hangseng-logo.svg", "Nasdaq100": "nasdaq-logo.svg",
-        "SP500": "sp500-logo.svg",
+        "SP500": "sp500-logo.svg", "US M2": "us-m2-logo.svg",
         "Gold": "gold-logo.svg", "Silver": "silver-logo.svg", "Palladium": "palladium-logo.svg", "Copper": "copper-logo.svg",
         "Oil (Brent)": "oil-brent-logo.svg", "Oil (Wti)": "oil-wti-logo.svg",
         "Apple": "apple-logo.png", "Microsoft": "microsoft-logo.png", "Amazon": "amazon-logo.png",

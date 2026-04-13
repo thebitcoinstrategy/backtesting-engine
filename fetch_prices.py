@@ -122,6 +122,44 @@ def fetch_yfinance(ticker, period="5d"):
 
 
 # ---------------------------------------------------------------------------
+# FRED (Federal Reserve Economic Data)
+# ---------------------------------------------------------------------------
+def fetch_fred(series_id):
+    """Fetch a FRED economic series and interpolate to daily frequency.
+
+    FRED series are typically monthly or weekly. We fetch the full series
+    (tiny — under 1000 points for M2SL) and linearly interpolate gaps so
+    the backtesting engine sees a daily series like everything else.
+
+    Returns DataFrame with DatetimeIndex(UTC) + 'close' column.
+    """
+    from io import StringIO
+
+    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+    r = requests.get(url, headers={"User-Agent": "BacktestingEngine/1.0"}, timeout=30)
+    r.raise_for_status()
+
+    raw = pd.read_csv(StringIO(r.text))
+    date_col = raw.columns[0]
+    val_col = raw.columns[1]
+    raw[date_col] = pd.to_datetime(raw[date_col], utc=True)
+    raw["close"] = pd.to_numeric(raw[val_col], errors="coerce")
+    raw = raw[raw["close"].notna() & (raw["close"] > 0)]
+    raw = raw.set_index(date_col).sort_index()
+
+    if raw.empty:
+        return pd.DataFrame(columns=["close"])
+
+    daily_index = pd.date_range(raw.index[0], raw.index[-1], freq="D", tz="UTC")
+    df = raw[["close"]].reindex(daily_index).interpolate(method="linear")
+    df.index.name = "date"
+
+    today = pd.Timestamp.now(tz="UTC").normalize()
+    df = df[df.index < today]
+    return df
+
+
+# ---------------------------------------------------------------------------
 # CoinGecko global market cap aggregates
 # ---------------------------------------------------------------------------
 
@@ -272,6 +310,23 @@ def main():
             log.exception("Failed to fetch %s (coingecko:%s)", asset["name"], asset["source_id"])
             errors += 1
         time.sleep(5)  # conservative rate limit (safe without API key too)
+
+    # Fetch FRED economic series (M2 money supply, etc.)
+    fred_assets = [a for a in assets if a["source"] == "fred" and a["source_id"]]
+    if fred_assets:
+        log.info("Fetching %d FRED assets...", len(fred_assets))
+        for asset in fred_assets:
+            try:
+                df = fetch_fred(asset["source_id"])
+                if df.empty:
+                    log.warning("No data returned for %s (fred:%s)", asset["name"], asset["source_id"])
+                    continue
+                price_db.upsert_prices(asset["id"], df)
+                log.info("Updated %s: %d rows, latest=%s", asset["name"], len(df), df.index[-1].date())
+                updated += 1
+            except Exception:
+                log.exception("Failed to fetch %s (fred:%s)", asset["name"], asset["source_id"])
+                errors += 1
 
     # Fetch crypto market cap aggregates (Total, Total3, Others, etc.)
     agg_assets = [a for a in assets if a["source"] == "coingecko_global" and a.get("source_id")]
