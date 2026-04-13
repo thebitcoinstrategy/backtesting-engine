@@ -612,6 +612,8 @@ def check_and_send_signals():
 
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
     TELEGRAM_SIGNAL_CHAT_ID = os.environ.get('TELEGRAM_SIGNAL_CHAT_ID', '')
+    # Support comma-separated list so signals can be mirrored to multiple channels.
+    _SIGNAL_CHAT_IDS = [c.strip() for c in TELEGRAM_SIGNAL_CHAT_ID.split(',') if c.strip()]
     SITE_URL = 'https://analytics.the-bitcoin-strategy.com'
 
     # Import backtest engine and database
@@ -685,37 +687,40 @@ def check_and_send_signals():
                     # Truncate caption to Telegram's 1024 char limit
                     caption = message[:1024] if len(message) > 1024 else message
 
-                    # Send via Telegram — photo with caption, fallback to text
-                    sent = False
-                    if chart_png:
-                        try:
-                            import requests as _requests
-                            url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto'
-                            resp = _requests.post(url, data={
-                                'chat_id': TELEGRAM_SIGNAL_CHAT_ID,
-                                'caption': caption,
-                                'parse_mode': 'HTML',
-                            }, files={
-                                'photo': ('signal_chart.png', chart_png, 'image/png')
-                            }, timeout=30)
-                            resp.raise_for_status()
-                            sent = True
-                            log.info("Sent %s signal with chart for backtest %s (%s)", signal, row['id'], asset)
-                        except Exception:
-                            log.exception("sendPhoto failed for %s, falling back to text", asset)
+                    # Send to each configured channel — one failure doesn't block the others.
+                    for _chat_id in _SIGNAL_CHAT_IDS:
+                        sent = False
+                        if chart_png:
+                            try:
+                                import requests as _requests
+                                url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto'
+                                resp = _requests.post(url, data={
+                                    'chat_id': _chat_id,
+                                    'caption': caption,
+                                    'parse_mode': 'HTML',
+                                }, files={
+                                    'photo': ('signal_chart.png', chart_png, 'image/png')
+                                }, timeout=30)
+                                resp.raise_for_status()
+                                sent = True
+                                log.info("Sent %s signal with chart to %s for backtest %s (%s)", signal, _chat_id, row['id'], asset)
+                            except Exception:
+                                log.exception("sendPhoto failed for %s -> %s, falling back to text", asset, _chat_id)
 
-                    if not sent:
-                        # Fallback: plain text message
-                        url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
-                        payload = _json.dumps({
-                            'chat_id': TELEGRAM_SIGNAL_CHAT_ID,
-                            'text': message,
-                            'parse_mode': 'HTML',
-                            'disable_web_page_preview': False
-                        }).encode('utf-8')
-                        req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
-                        urllib.request.urlopen(req, timeout=15)
-                        log.info("Sent %s signal (text-only) for backtest %s (%s)", signal, row['id'], asset)
+                        if not sent:
+                            try:
+                                url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
+                                payload = _json.dumps({
+                                    'chat_id': _chat_id,
+                                    'text': message,
+                                    'parse_mode': 'HTML',
+                                    'disable_web_page_preview': False
+                                }).encode('utf-8')
+                                req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+                                urllib.request.urlopen(req, timeout=15)
+                                log.info("Sent %s signal (text-only) to %s for backtest %s (%s)", signal, _chat_id, row['id'], asset)
+                            except Exception:
+                                log.exception("sendMessage failed for %s -> %s", asset, _chat_id)
 
                 except Exception:
                     log.exception("Failed to check signals for backtest %s", row.get('id', '?'))
