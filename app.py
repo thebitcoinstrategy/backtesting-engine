@@ -3572,6 +3572,7 @@ _CRYPTO_AGG_ASSETS = set()
 _STOCK_ASSETS = {"Apple", "Microsoft", "Amazon", "Alphabet", "Tesla", "Nvidia", "Meta", "Netflix", "Coinbase", "Strategy"}
 _INDEX_ASSETS = {"Dax", "Dow Jones", "Hang Seng", "Nasdaq100", "SP500"}
 _METAL_ASSETS = {"Gold", "Silver", "Palladium", "Copper"}
+_METAL_ORDER = ["Gold", "Silver", "Palladium", "Copper"]
 _COMMODITY_ASSETS = {"Oil (Brent)", "Oil (Wti)"}
 
 # Load custom category assignments (from uploaded assets)
@@ -3590,7 +3591,8 @@ OTHER_ASSETS = [a for a in ASSET_NAMES if a not in _PRIORITY_ORDER and a not in 
 CRYPTO_AGG_ASSETS = [a for a in ASSET_NAMES if a in _CRYPTO_AGG_ASSETS]
 STOCK_ASSETS = [a for a in ASSET_NAMES if a in _STOCK_ASSETS]
 INDEX_ASSETS = [a for a in ASSET_NAMES if a in _INDEX_ASSETS]
-METAL_ASSETS = [a for a in ASSET_NAMES if a in _METAL_ASSETS]
+METAL_ASSETS = [a for a in _METAL_ORDER if a in _METAL_ASSETS and a in ASSET_NAMES] + \
+               [a for a in ASSET_NAMES if a in _METAL_ASSETS and a not in _METAL_ORDER]
 COMMODITY_ASSETS = [a for a in ASSET_NAMES if a in _COMMODITY_ASSETS]
 DEFAULT_ASSET = "bitcoin" if "bitcoin" in ASSETS else ASSET_NAMES[0]
 ASSET_LOGOS = {
@@ -3604,7 +3606,7 @@ ASSET_LOGOS = {
     "Dax": "dax-logo.svg", "Dow Jones": "dowjones-logo.svg",
     "Hang Seng": "hangseng-logo.svg", "Nasdaq100": "nasdaq-logo.svg",
     "SP500": "sp500-logo.svg",
-    "Gold": "gold-logo.svg", "Silver": "silver-logo.svg", "Palladium": "palladium-logo.svg",
+    "Gold": "gold-logo.svg", "Silver": "silver-logo.svg", "Palladium": "palladium-logo.svg", "Copper": "copper-logo.svg",
     "Oil (Brent)": "oil-brent-logo.svg", "Oil (Wti)": "oil-wti-logo.svg",
     "Apple": "apple-logo.png", "Microsoft": "microsoft-logo.png", "Amazon": "amazon-logo.png",
     "Alphabet": "alphabet-logo.png", "Tesla": "tesla-logo.png", "Nvidia": "nvidia-logo.png",
@@ -3739,7 +3741,8 @@ def _rebuild_asset_lists():
     CRYPTO_AGG_ASSETS = [a for a in ASSET_NAMES if a in _CRYPTO_AGG_ASSETS]
     STOCK_ASSETS = [a for a in ASSET_NAMES if a in _STOCK_ASSETS]
     INDEX_ASSETS = [a for a in ASSET_NAMES if a in _INDEX_ASSETS]
-    METAL_ASSETS = [a for a in ASSET_NAMES if a in _METAL_ASSETS]
+    METAL_ASSETS = [a for a in _METAL_ORDER if a in _METAL_ASSETS and a in ASSET_NAMES] + \
+                   [a for a in ASSET_NAMES if a in _METAL_ASSETS and a not in _METAL_ORDER]
     COMMODITY_ASSETS = [a for a in ASSET_NAMES if a in _COMMODITY_ASSETS]
 
 
@@ -3893,7 +3896,7 @@ def _reload_assets_from_disk():
         "Dax": "dax-logo.svg", "Dow Jones": "dowjones-logo.svg",
         "Hang Seng": "hangseng-logo.svg", "Nasdaq100": "nasdaq-logo.svg",
         "SP500": "sp500-logo.svg",
-        "Gold": "gold-logo.svg", "Silver": "silver-logo.svg", "Palladium": "palladium-logo.svg",
+        "Gold": "gold-logo.svg", "Silver": "silver-logo.svg", "Palladium": "palladium-logo.svg", "Copper": "copper-logo.svg",
         "Oil (Brent)": "oil-brent-logo.svg", "Oil (Wti)": "oil-wti-logo.svg",
         "Apple": "apple-logo.png", "Microsoft": "microsoft-logo.png", "Amazon": "amazon-logo.png",
         "Alphabet": "alphabet-logo.png", "Tesla": "tesla-logo.png", "Nvidia": "nvidia-logo.png",
