@@ -53,6 +53,7 @@ ASSET_CONFIG = {
     "Gold":          {"category": "metal",     "source": "yfinance",  "source_id": "GC=F"},
     "Silver":        {"category": "metal",     "source": "yfinance",  "source_id": "SI=F"},
     "Palladium":     {"category": "metal",     "source": "yfinance",  "source_id": "PA=F"},
+    "Copper":        {"category": "metal",     "source": "yfinance",  "source_id": "HG=F"},
     # Commodities — yfinance
     "Oil (Brent)":   {"category": "commodity", "source": "yfinance",  "source_id": "BZ=F"},
     "Oil (Wti)":     {"category": "commodity", "source": "yfinance",  "source_id": "CL=F"},

@@ -3571,7 +3571,7 @@ _PRIORITY_ORDER = ["bitcoin", "ethereum", "solana"]
 _CRYPTO_AGG_ASSETS = set()
 _STOCK_ASSETS = {"Apple", "Microsoft", "Amazon", "Alphabet", "Tesla", "Nvidia", "Meta", "Netflix", "Coinbase", "Strategy"}
 _INDEX_ASSETS = {"Dax", "Dow Jones", "Hang Seng", "Nasdaq100", "SP500"}
-_METAL_ASSETS = {"Gold", "Silver", "Palladium"}
+_METAL_ASSETS = {"Gold", "Silver", "Palladium", "Copper"}
 _COMMODITY_ASSETS = {"Oil (Brent)", "Oil (Wti)"}
 
 # Load custom category assignments (from uploaded assets)
