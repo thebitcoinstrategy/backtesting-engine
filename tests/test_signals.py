@@ -1055,6 +1055,19 @@ class TestRollingWindowAnalysis:
         score, label = bt.compute_consistency_score(fake_results, "total_return")
         assert 20 <= score <= 60, f"Mixed results should score 20-60, got {score}"
 
+    def test_generate_rolling_windows_weekday_only(self):
+        """Regression: weekday-only series (e.g. BTC/Nasdaq ratio, ~252/yr) must
+        not raise 'No valid windows'. Inferred periods_per_year should adapt to
+        the series' actual trading density."""
+        import pytest
+        dates = pd.date_range('2014-01-01', periods=int(10 * 365), freq='B', tz='UTC')
+        np.random.seed(1)
+        prices = 100 * np.exp(np.cumsum(np.random.randn(len(dates)) * 0.01))
+        df = pd.DataFrame({'close': prices}, index=dates)
+        # With hardcoded 365/yr this would discard every window; auto-infer fixes it.
+        windows = bt.generate_rolling_windows(df, window_years=4, step_years=1)
+        assert len(windows) > 0, "Weekday-only ratio series must produce valid windows"
+
     def test_generate_rolling_windows_respects_start_end_date(self):
         """Windows should be constrained by start_date and end_date."""
         df = self._make_df(years=10)

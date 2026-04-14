@@ -1125,11 +1125,16 @@ def sweep_sma_periods(df, sma_min, sma_max, initial_cash, mode, fast_sma, fee=0.
 
 # --- Rolling Window Analysis ---
 
-def generate_rolling_windows(df, window_years, step_years, periods_per_year=365,
+def generate_rolling_windows(df, window_years, step_years, periods_per_year=None,
                              start_date=None, end_date=None):
     """Generate (start, end) date pairs for rolling windows across the dataset.
     start_date/end_date constrain which windows are generated.
+    periods_per_year: if None, inferred from the df's actual trading density
+    (so weekday-only series like BTC/Nasdaq ratios use ~252/yr automatically).
     Raises ValueError if dataset is shorter than one window."""
+    if periods_per_year is None:
+        span_days = (df.index.max() - df.index.min()).days
+        periods_per_year = (len(df) / (span_days / 365.25)) if span_days > 0 else 365
     data_start = df.index.min()
     data_end = df.index.max()
     if start_date is not None:
