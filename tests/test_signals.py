@@ -1646,6 +1646,20 @@ class TestOptimizeMetric:
         block = lev_block.group(0)
         assert 'optimize_metric' in block, "Sweep-lev handler must reference optimize_metric"
 
+    def test_sweep_lev_no_undefined_sweep_ann(self):
+        """Regression: commit 4261596 renamed _sweep_ann -> _sweep_metric but missed
+        the call site at `combined_ann = _sweep_ann(...)`, causing NameError on every
+        sweep-lev run ("Error loading results"). The handler must only reference the
+        locally defined helper `_sweep_metric`."""
+        src = self._read_app()
+        lev_block = re.search(r'if p\.mode == "sweep-lev".*?(?=if p\.mode ==|\Z)', src, re.DOTALL)
+        assert lev_block, "Sweep-lev mode handler not found"
+        block = lev_block.group(0)
+        assert "_sweep_ann(" not in block, \
+            "Sweep-lev handler references undefined _sweep_ann (should be _sweep_metric)"
+        assert "_sweep_metric(" in block, \
+            "Sweep-lev handler must call _sweep_metric"
+
     def test_sweep_periods_accepts_optimize_metric(self):
         """sweep_periods() must accept optimize_metric parameter."""
         prices = list(range(10, 50)) + list(range(50, 10, -1))

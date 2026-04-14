@@ -4540,7 +4540,7 @@ def _run_post_handler(cancel_event, rid=None):
                                        p.initial_cash, fee, p.exposure, best_long_lev, best_short_lev, p.lev_mode, p.reverse, p.sizing, start_date=warmup_start_date, periods_per_year=periods_per_year, financing_rate=fin_rate)
         best = _enrich_best(best_result, df, periods_per_year)
 
-        combined_ann = _sweep_ann(best_long_lev, best_short_lev)
+        combined_ann = _sweep_metric(best_long_lev, best_short_lev)
         lev_sweep_info = {
             "best_long_lev": best_long_lev,
             "best_long_ann": best_long_ann,
