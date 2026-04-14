@@ -4678,7 +4678,7 @@ def _run_post_handler(cancel_event, rid=None):
             # Single indicator (price vs MA): heatmap sweep of ind2 period
             _sweep_cb = (lambda cur, tot: update_progress(rid, cur, tot, f"Rolling sweep window {cur+1}/{tot}")) if rid else None
             sweep_data = bt.rolling_window_sweep(
-                df_full, windows, p.ind1_name, p.ind1_period, p.ind2_name,
+                df_full, windows, p.ind1_name, p.ind1_period, p.ind2_name, p.ind2_period,
                 "ind2", p.range_min, p.range_max, p.step,
                 p.initial_cash, fee, p.exposure, p.long_leverage, p.short_leverage,
                 p.lev_mode, p.reverse, p.sizing, periods_per_year, fin_rate,

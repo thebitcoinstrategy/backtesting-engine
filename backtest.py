@@ -1281,7 +1281,7 @@ def compute_consistency_score(window_results, metric="total_return"):
     return score, label
 
 
-def rolling_window_sweep(df, windows, ind1_name, ind1_period, ind2_name,
+def rolling_window_sweep(df, windows, ind1_name, ind1_period, ind2_name, ind2_period,
                          sweep_target, sweep_min, sweep_max, sweep_step,
                          initial_cash, fee=0.001, exposure="long-cash",
                          long_leverage=1, short_leverage=1, lev_mode="rebalance",

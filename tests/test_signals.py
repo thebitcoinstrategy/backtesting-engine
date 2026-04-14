@@ -1030,8 +1030,14 @@ class TestRollingWindowAnalysis:
         """Sweep matrix should be (n_windows, n_periods)."""
         df = self._make_df(years=6)
         windows = bt.generate_rolling_windows(df, 2, 1)
-        sweep = bt.rolling_window_sweep(df, windows, 'price', None, 'sma',
+        sweep = bt.rolling_window_sweep(df, windows, 'price', None, 'sma', None,
                                          'ind2', 10, 100, 10, 10000)
+        # Regression: also exercise sweep_target="ind1" to ensure the non-swept
+        # branch doesn't reference an undefined ind2_period (previously latent
+        # NameError because the signature was missing that parameter).
+        sweep_ind1 = bt.rolling_window_sweep(df, windows, 'sma', None, 'sma', 50,
+                                              'ind1', 10, 30, 10, 10000)
+        assert sweep_ind1["matrix"].shape[0] == len(windows)
         expected_periods = list(range(10, 101, 10))
         assert sweep["periods"] == expected_periods
         assert sweep["matrix"].shape == (len(windows), len(expected_periods))
